@@ -2,13 +2,14 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bike, Building2, Car, ChevronDown, FileBadge, FileText, Fuel, Globe, IdCard, KeyRound, LayoutDashboard, LogOut, Menu, Moon, Paperclip,
-  BarChart3, Bell, SlidersHorizontal, BellRing, FileSpreadsheet, Receipt, Wallet, FilePen, MessagesSquare, CalendarDays, CalendarX2, HandCoins, RefreshCw, ScrollText, Settings, Shield, ShieldBan, Sun, User, UserPlus, Users, Wrench, X, Handshake, ClipboardList, MonitorSmartphone, History,
+  Activity, ScanFace, Star, RefreshCcw, Radar, MapPinned, BarChart3, Bell, SlidersHorizontal, BellRing, FileSpreadsheet, Receipt, Wallet, FilePen, MessagesSquare, CalendarDays, CalendarX2, HandCoins, RefreshCw, ScrollText, Settings, Shield, ShieldBan, Sun, User, UserPlus, Users, Wrench, X, Handshake, ClipboardList, MonitorSmartphone, History,
 } from 'lucide-react';
 import { get, patch, post } from './api';
 import { useAuth } from './auth';
 import { LANGS, useI18n } from './i18n';
 import { cx } from './ui/kit';
 import { NotificationBell } from './ui/bell';
+import { SyncButton } from './pages/performance/Sync';
 
 type Item = { to: string; label: string; perm: string[]; icon?: ReactNode; badge?: string[]; end?: boolean; children?: Item[] };
 type Section = { key: string; label: string; items: Item[] };
@@ -27,6 +28,8 @@ function useSections(): Section[] {
       i('/admin/rider-applicants', 'nav.applicants', 'applicants.view', <UserPlus />),
       i('/admin/leaves', 'nav.leaves', 'leaves.view', <CalendarDays />),
       i('/admin/absences', 'nav.absences', 'absences.view', <CalendarX2 />),
+      i('/admin/live', 'nav.live', 'live_riders.view', <Radar />, undefined, undefined, true),
+      i('/admin/live/report', 'nav.live_report', 'live_riders.view', <MapPinned />),
       i('/admin/riders/docs', 'nav.rider_documents', ['id_documents.view', 'driving_licenses.view', 'health_certs.view', 'driver_cards.view', 'ajeer_permits.view'], <IdCard />,
         ['id', 'license', 'health', 'driver_card', 'ajeer'], [
           i('/admin/riders/id-documents', 'docs.id', 'id_documents.view', undefined, ['id']),
@@ -58,6 +61,10 @@ function useSections(): Section[] {
       i('/admin/transport-licenses', 'nav.transport_licenses', 'transport_licenses.view', <ScrollText />, ['transport_licenses']),
     ] },
     { key: 'performance', label: t('nav.performance'), items: [
+      i('/admin/performance', 'nav.daily_performance', 'performance.view', <Activity />),
+      i('/admin/branding', 'nav.branding', 'performance.view', <ScanFace />),
+      i('/admin/rider-ratings', 'nav.ratings', 'ratings.view', <Star />),
+      i('/admin/sync', 'nav.sync', 'sync.view', <RefreshCcw />),
       i('/admin/companies', 'nav.companies', 'companies.view', <Building2 />),
       i('/admin/contracts', 'nav.contracts', 'contracts.view', <Handshake />),
     ] },
@@ -229,6 +236,7 @@ export function AdminLayout() {
           <div className="ms-auto flex items-center gap-1">
             <LangPicker />
             <ThemeToggle />
+            <SyncButton />
             <NotificationBell />
             <div className="relative" ref={menuBox}>
               <button onClick={() => setMenu(!menu)} aria-expanded={menu} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800">

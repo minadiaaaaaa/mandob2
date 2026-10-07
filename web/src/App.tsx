@@ -32,6 +32,11 @@ import { ChangeRequests } from './pages/ops/Requests';
 import { IssuesInbox } from './pages/ops/Issues';
 import { Billing, FinesImport, FinesList, Wallet } from './pages/finance/Finance';
 import { NotificationPrefs, NotificationsLog, ReportsIndex, ReportView } from './pages/reports/Reports';
+import { PerformanceForm, PerformanceImport, PerformanceList, PerformanceView, Scorecard, ScorecardRider } from './pages/performance/Performance';
+import { RatingsImport, RatingsList } from './pages/performance/Ratings';
+import { BrandingImport, BrandingList, BrandingView } from './pages/performance/Branding';
+import { ExtensionPage, SyncScreen } from './pages/performance/Sync';
+import { LiveBoard, LiveReport, RiderDay } from './pages/ops/Live';
 
 // A screen opened by a direct link without its permission.
 function Guard({ perm, children }: { perm: string[]; children: ReactNode }) {
@@ -169,6 +174,24 @@ export default function App() {
         <Route path="finance/fines/import" element={g('finance.import', <FinesImport />)} />
         <Route path="finance/wallet" element={g('finance.view', <Wallet />)} />
         <Route path="finance/billing" element={g('finance.view', <Billing />)} />
+
+        <Route path="performance" element={g('performance.view', <PerformanceList />)} />
+        <Route path="performance/new" element={g('performance.create', <PerformanceForm />)} />
+        <Route path="performance/import" element={g('performance.import', <PerformanceImport />)} />
+        <Route path="performance/riders" element={g('performance.view', <Scorecard />)} />
+        <Route path="performance/riders/:id" element={g('performance.view', <ScorecardRider />)} />
+        <Route path="performance/:id" element={g('performance.view', <PerformanceView />)} />
+        <Route path="performance/:id/edit" element={g('performance.update', <PerformanceForm />)} />
+        <Route path="branding" element={g('performance.view', <BrandingList />)} />
+        <Route path="branding/import" element={g('performance.import', <BrandingImport />)} />
+        <Route path="branding/:id" element={g('performance.view', <BrandingView />)} />
+        <Route path="rider-ratings" element={g('ratings.view', <RatingsList />)} />
+        <Route path="rider-ratings/import" element={g('ratings.import', <RatingsImport />)} />
+        <Route path="sync" element={g('sync.view', <SyncScreen />)} />
+        <Route path="sync/extension" element={g('sync.view', <ExtensionPage />)} />
+        <Route path="live" element={g('live_riders.view', <LiveBoard />)} />
+        <Route path="live/report" element={g('live_riders.view', <LiveReport />)} />
+        <Route path="live/riders/:id" element={g('live_riders.view', <RiderDay />)} />
 
         <Route path="companies" element={g('companies.view', <CompaniesList />)} />
         <Route path="companies/new" element={g('companies.create', <CompanyForm />)} />

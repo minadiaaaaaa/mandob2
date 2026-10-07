@@ -43,7 +43,7 @@ body {
 @media (prefers-reduced-motion: reduce) { .fade-in, .pop-in, .slide-in, .skeleton { animation: none; } }
 
 /* Numbers and dates are always Latin digits, whatever the language. */
-.num { font-variant-numeric: tabular-nums; unicode-bidi: isolate; direction: ltr; display: inline-block; }
+.num { font-variant-numeric: tabular-nums; unicode-bidi: isolate; direction: ltr; display: inline-block; white-space: nowrap; }
 
 /* In the components layer so utilities (w-auto, ps-8 …) can still override it. */
 @layer components {
