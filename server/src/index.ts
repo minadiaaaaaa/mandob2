@@ -21,6 +21,8 @@ import { docsRouter } from './routes/docs.js';
 import { leavesRouter } from './routes/leaves.js';
 import { absencesRouter } from './routes/absences.js';
 import { advancesRouter } from './routes/advances.js';
+import { requestsRouter } from './routes/requests.js';
+import { issuesRouter } from './routes/issues.js';
 
 const app = express();
 app.set('trust proxy', process.env.TRUST_PROXY === '1');
@@ -60,6 +62,8 @@ app.use('/api', docsRouter);
 app.use('/api', leavesRouter);
 app.use('/api', absencesRouter);
 app.use('/api', advancesRouter);
+app.use('/api', requestsRouter);
+app.use('/api', issuesRouter);
 app.use('/api/attachments', attachmentsRouter);
 app.use('/api/scans', scansRouter);
 app.use('/api', (_req, res) => res.status(404).json({ error: 'not_found' }));

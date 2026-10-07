@@ -28,6 +28,8 @@ import { AlertsList, RenewalForm, RenewalsList, RenewalView } from './pages/docs
 import { LeaveForm, LeaveSettings, LeavesList, LeaveView } from './pages/ops/Leaves';
 import { AbsencesImport, AbsencesList } from './pages/ops/Absences';
 import { AdvanceForm, AdvancesDue, AdvancesList, AdvanceView } from './pages/ops/Advances';
+import { ChangeRequests } from './pages/ops/Requests';
+import { IssuesInbox } from './pages/ops/Issues';
 
 // A screen opened by a direct link without its permission.
 function Guard({ perm, children }: { perm: string[]; children: ReactNode }) {
@@ -91,6 +93,9 @@ export default function App() {
         <Route path="leaves/:id/edit" element={g('leaves.update', <LeaveForm />)} />
         <Route path="absences" element={g('absences.view', <AbsencesList />)} />
         <Route path="absences/import" element={g('absences.import', <AbsencesImport />)} />
+        <Route path="rider-change-requests" element={g('rider_portal.view_requests', <ChangeRequests />)} />
+        <Route path="rider-issues" element={g('rider_portal.view_issues', <IssuesInbox />)} />
+        <Route path="rider-issues/:id" element={g('rider_portal.view_issues', <IssuesInbox />)} />
         <Route path="advances" element={g('advances.view', <AdvancesList />)} />
         <Route path="advances/new" element={g('advances.create', <AdvanceForm />)} />
         <Route path="advances/due" element={g('advance_installments.view', <AdvancesDue />)} />

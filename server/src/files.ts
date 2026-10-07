@@ -1,7 +1,7 @@
 import { Router, type Request } from 'express';
 import multer from 'multer';
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, unlinkSync, writeFileSync, existsSync } from 'node:fs';
+import { copyFileSync, mkdirSync, unlinkSync, writeFileSync, existsSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { STORAGE_DIR, exec, one, q, settingInt } from './db.js';
 import { HttpError, fail } from './http.js';
@@ -36,6 +36,37 @@ export async function storeFile(file: Express.Multer.File, allowed = DOC_MIME) {
   const stored = `${sub}/${randomBytes(12).toString('hex')}${ext}`;
   writeFileSync(join(STORAGE_DIR, stored), file.buffer);
   return stored;
+}
+
+// Conversation files: any type except programs and scripts, up to 25 MB.
+const BLOCKED = /\.(exe|msi|bat|cmd|com|scr|ps1|vbs|vbe|js|jse|wsf|wsh|sh|jar|apk|dll|cpl|hta|lnk|reg|php|py|pl)$/i;
+export async function attachAny(req: Request | null, entityType: string, entityId: string | number, file: Express.Multer.File, attachmentType: string | null, uploadedBy: number | null) {
+  const name = Buffer.from(file.originalname, 'latin1').toString('utf8');
+  if (BLOCKED.test(name)) fail(415, 'file_type_not_allowed');
+  if (file.size > 25 * 1024 * 1024) fail(413, 'file_too_large', { max: 25 });
+  const sub = new Date().toISOString().slice(0, 7);
+  mkdirSync(join(STORAGE_DIR, sub), { recursive: true });
+  const ext = (extname(name).toLowerCase().match(/^\.[a-z0-9]{1,8}$/) ?? [''])[0];
+  const stored = `${sub}/${randomBytes(12).toString('hex')}${ext}`;
+  writeFileSync(join(STORAGE_DIR, stored), file.buffer);
+  const r = await exec('INSERT INTO attachments (entity_type, entity_id, attachment_type, file_name, stored_name, mime, size, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [entityType, String(entityId), attachmentType, name, stored, file.mimetype || 'application/octet-stream', file.size, uploadedBy]);
+  if (req) await audit(req, { action: 'attachment.upload', entity_type: entityType, entity_id: entityId, details: name });
+  return r.insertId;
+}
+
+// A copy of an attachment on another record (an approved request's file becomes the document's file).
+export async function copyAttachment(id: number, entityType: string, entityId: string | number, attachmentType: string | null, uploadedBy: number | null) {
+  const a = await one<any>('SELECT * FROM attachments WHERE id = ?', [id]);
+  if (!a || !existsSync(join(STORAGE_DIR, a.stored_name))) return null;
+  const sub = new Date().toISOString().slice(0, 7);
+  mkdirSync(join(STORAGE_DIR, sub), { recursive: true });
+  const stored = `${sub}/${randomBytes(12).toString('hex')}${extname(a.stored_name)}`;
+  copyFileSync(join(STORAGE_DIR, a.stored_name), join(STORAGE_DIR, stored));
+  await exec('UPDATE attachments SET is_current = 0 WHERE entity_type = ? AND entity_id = ? AND attachment_type <=> ?', [entityType, String(entityId), attachmentType]);
+  const r = await exec('INSERT INTO attachments (entity_type, entity_id, attachment_type, file_name, stored_name, mime, size, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [entityType, String(entityId), attachmentType, a.file_name, stored, a.mime, a.size, uploadedBy]);
+  return r.insertId;
 }
 
 // Saves an attachment. A new file of the same type becomes the current one; the older ones stay as history.
@@ -99,10 +130,18 @@ attachmentsRouter.get('/:id/file', can('attachments.download', 'attachments.view
   const download = req.query.download === '1';
   if (download && !has(req, 'attachments.download')) fail(403, 'forbidden', { perm: 'attachments.download' });
   const name = (req.query.name as string) || a.file_name;
-  res.setHeader('Content-Type', a.mime);
-  res.setHeader('Content-Disposition', `${download ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(name.endsWith(extname(a.file_name)) ? name : name + extname(a.file_name))}`);
-  res.sendFile(join(STORAGE_DIR, a.stored_name));
+  sendStored(res, a, download, name);
 });
+
+// Only types that cannot run scripts open in the browser; anything else (HTML, SVG…) is always downloaded.
+const INLINE = /^(image\/(jpeg|png|webp|gif)|application\/pdf|audio\/[\w.+-]+|video\/[\w.+-]+|text\/plain)$/;
+export function sendStored(res: import('express').Response, a: { mime: string; file_name: string; stored_name: string }, download: boolean, name = a.file_name) {
+  const inline = !download && INLINE.test(a.mime);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Type', INLINE.test(a.mime) ? a.mime : 'application/octet-stream');
+  res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(name.endsWith(extname(a.file_name)) ? name : name + extname(a.file_name))}`);
+  res.sendFile(join(STORAGE_DIR, a.stored_name));
+}
 
 attachmentsRouter.delete('/:id', can('attachments.delete'), async (req, res) => {
   const a = await one<any>('SELECT entity_type FROM attachments WHERE id = ?', [req.params.id]);
