@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-soft: color-mix(in oklab, var(--brand) 12%, transparent);
+  --font-sans: var(--font-ui);
+}
+
+:root {
+  --brand: #0f766e;
+  --font-ui: "Inter", "IBM Plex Sans Arabic", system-ui, sans-serif;
+  color-scheme: light;
+}
+:root[lang="ar"] { --font-ui: "IBM Plex Sans Arabic", "Inter", system-ui, sans-serif; }
+:root[lang="ur"] { --font-ui: "Noto Naskh Arabic", "IBM Plex Sans Arabic", system-ui, sans-serif; }
+:root[lang="bn"] { --font-ui: "Noto Sans Bengali", "Inter", system-ui, sans-serif; }
+:root.dark { color-scheme: dark; }
+
+body {
+  @apply bg-zinc-50 text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-100;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Numbers and dates are always Latin digits, whatever the language. */
+.num { font-variant-numeric: tabular-nums; unicode-bidi: isolate; direction: ltr; display: inline-block; }
+
+/* In the components layer so utilities (w-auto, ps-8 …) can still override it. */
+@layer components {
+.input {
+  @apply w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none transition
+    placeholder:text-zinc-400 focus:border-brand focus:ring-2 focus:ring-brand/20
+    disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500
+    dark:border-zinc-700 dark:bg-zinc-900 dark:disabled:bg-zinc-800;
+}
+.input[aria-invalid="true"] { @apply border-red-500 focus:ring-red-500/20; }
+}
+
+.scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+.scroll-thin::-webkit-scrollbar-thumb { @apply rounded-full bg-zinc-300 dark:bg-zinc-700; }
+
+@media print {
+  .no-print { display: none !important; }
+}

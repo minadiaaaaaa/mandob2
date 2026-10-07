@@ -1,0 +1,12 @@
+{
+  "name": "logistics-services-platform",
+  "private": true,
+  "scripts": {
+    "setup": "pnpm -C server install && pnpm -C web install",
+    "dev": "node dev.mjs",
+    "build": "pnpm -C web build",
+    "start": "pnpm -C server start",
+    "typecheck": "pnpm -C server typecheck && pnpm -C web typecheck",
+    "smoke": "node server/test/smoke.mjs"
+  }
+}
