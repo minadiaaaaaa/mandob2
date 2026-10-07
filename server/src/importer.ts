@@ -20,13 +20,14 @@ export type ImportDef = {
   matchOn: string;                        // translation key shown in the preview
   maxRows?: number;
   options?: string[];                     // extra switches the screen sends, e.g. create_riders
+  values?: string[];                      // extra values the screen sends, e.g. the day a file is for
   parse(r: Row, ctx: Ctx): Promise<Parsed | string>;   // a string is a problem code
   existing(items: Parsed[], ctx: Ctx): Promise<Map<string, any>>;
   check?(item: Parsed, existing: any, ctx: Ctx): Promise<string | null>; // a code turns the row into a problem
   write(item: Parsed, existing: any, ctx: Ctx): Promise<'inserted' | 'replaced' | 'skipped' | string>;
   counts?(items: Parsed[], existing: Map<string, any>, ctx: Ctx): Promise<Record<string, number>>;
 };
-export type Ctx = { req: Request; mode: 'skip' | 'replace'; options: Record<string, boolean>; present: Set<string>; cache: Map<string, any>; result: Record<string, number> };
+export type Ctx = { req: Request; mode: 'skip' | 'replace'; options: Record<string, boolean>; values: Record<string, string>; present: Set<string>; cache: Map<string, any>; result: Record<string, number> };
 
 const LANGS = ['ar', 'en', 'bn', 'ur'];
 const norm = (s: string) => latinDigits(String(s)).toLowerCase().replace(/[\s_\-.()/:]+/g, '');
@@ -95,7 +96,7 @@ export const cellNum = (v: any) => {
 };
 
 // ---------- the preview store: valid for 30 minutes ----------
-const previews = new Map<string, { user: number; def: string; items: Parsed[]; mode: 'skip' | 'replace'; options: Record<string, boolean>; present: Set<string>; at: number }>();
+const previews = new Map<string, { user: number; def: string; items: Parsed[]; mode: 'skip' | 'replace'; options: Record<string, boolean>; values: Record<string, string>; present: Set<string>; at: number }>();
 const TTL = 30 * 60 * 1000;
 
 export function importRoutes(def: ImportDef) {
@@ -119,6 +120,7 @@ export function importRoutes(def: ImportDef) {
     if (req.file!.size > 5 * 1024 * 1024 * 4) fail(413, 'file_too_large');
     const mode = req.body.mode === 'replace' ? 'replace' : 'skip';
     const options = Object.fromEntries((def.options ?? []).map((o) => [o, req.body[o] === '1' || req.body[o] === 'true']));
+    const values = Object.fromEntries((def.values ?? []).map((v) => [v, String(req.body[v] ?? '').slice(0, 100)]));
     const { rows, headers } = readSheet(req.file!.buffer);
     const { map, unknown, duplicate } = headerMap(def, headers);
     const present = new Set(Object.values(map));
@@ -127,7 +129,7 @@ export function importRoutes(def: ImportDef) {
     const max = def.maxRows ?? 5000;
     if (rows.length > max) fail(422, 'too_many_rows', { max });
 
-    const ctx: Ctx = { req, mode, options, present, cache: new Map(), result: {} };
+    const ctx: Ctx = { req, mode, options, values, present, cache: new Map(), result: {} };
     const items: Parsed[] = [];
     const problems: { line: number; reason: string }[] = [];
     const seen = new Set<string>();
@@ -152,7 +154,7 @@ export function importRoutes(def: ImportDef) {
     }
     const isNew = items.filter((it) => !existing.has(it.key)).length;
     const token = randomBytes(12).toString('hex');
-    previews.set(token, { user: req.user!.id, def: def.name, items, mode, options, present, at: Date.now() });
+    previews.set(token, { user: req.user!.id, def: def.name, items, mode, options, values, present, at: Date.now() });
     for (const [k, v] of previews) if (Date.now() - v.at > TTL) previews.delete(k);
     const fields = Object.keys(def.columns);
     res.json({
@@ -173,7 +175,7 @@ export function importRoutes(def: ImportDef) {
     const p = previews.get(req.body.token);
     if (!p || p.user !== req.user!.id || p.def !== def.name || Date.now() - p.at > TTL) fail(410, 'preview_expired');
     previews.delete(req.body.token);
-    const ctx: Ctx = { req, mode: p!.mode, options: p!.options, present: p!.present, cache: new Map(), result: {} };
+    const ctx: Ctx = { req, mode: p!.mode, options: p!.options, values: p!.values, present: p!.present, cache: new Map(), result: {} };
     const result: Record<string, number> = { inserted: 0, replaced: 0, skipped: 0, failed: 0 };
     ctx.result = result;
     await tx(async () => {
@@ -188,4 +190,36 @@ export function importRoutes(def: ImportDef) {
   });
 
   return r;
+}
+
+// The same definition run in one step, for rows that arrive from the sync (report tables sent by the extension).
+// Problems are counted, not shown; existing rows follow `mode`.
+export async function ingestRows(def: ImportDef, req: Request, rows: Row[], mode: 'skip' | 'replace', options: Record<string, boolean> = {}, values: Record<string, string> = {}) {
+  const headers = [...new Set(rows.flatMap((r) => Object.keys(r)))];
+  const { map } = headerMap(def, headers);
+  const present = new Set(Object.values(map));
+  const missing = def.requiredColumns.filter((g) => !g.some((f) => present.has(f)));
+  if (missing.length) throw new HttpError(422, 'missing_required_column', { columns: missing.map((g) => g.join(' / ')) });
+  const ctx: Ctx = { req, mode, options, values, present, cache: new Map(), result: {} };
+  const result: Record<string, number> = { read: rows.length, inserted: 0, replaced: 0, skipped: 0, failed: 0, problems: 0 };
+  ctx.result = result;
+  const items: Parsed[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const raw: Row = {};
+    for (const [h, f] of Object.entries(map)) raw[f] = row[h];
+    const p = await def.parse(raw, ctx);
+    if (typeof p === 'string' || seen.has(p.key)) { result.problems++; continue; }
+    seen.add(p.key);
+    items.push(p);
+  }
+  await tx(async () => {
+    const existing = await def.existing(items, ctx);
+    for (const it of items) {
+      if (def.check && (await def.check(it, existing.get(it.key), ctx))) { result.problems++; continue; }
+      const out = await def.write(it, existing.get(it.key), ctx);
+      result[out] = (result[out] ?? 0) + 1;
+    }
+  });
+  return result;
 }

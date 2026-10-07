@@ -38,7 +38,7 @@ export const MATRIX: Record<string, Record<string, string[]>> = {
     performance: ['view', 'create', 'update', 'delete', 'export', 'import'],
     companies: ['view', 'create', 'update', 'delete', 'activate', 'deactivate'],
     contracts: ['view', 'create', 'update', 'delete', 'activate', 'deactivate'],
-    sync: ['view', 'run', 'update', 'upload'],
+    sync: ['view', 'run', 'update', 'upload', 'manage_session'],
     ratings: ['view', 'create', 'update', 'delete', 'export', 'import'],
   },
   reports: {

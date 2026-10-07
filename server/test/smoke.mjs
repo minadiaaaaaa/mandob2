@@ -340,7 +340,7 @@ console.log('ch8 ok');
 // --- ch9 dashboard, reports, notifications
 const dash = ok(await api('GET', '/dashboard'), 'dashboard');
 assert.ok(dash.alerts.expired >= 1); assert.equal(dash.figures.vehicles.total, 3); assert.ok(dash.charts.doc_kinds.length > 3);
-assert.equal(dash.charts.deliveries, null, 'a part that cannot load is null; the rest still show');
+assert.ok(Array.isArray(dash.charts.deliveries), 'every part loads on its own');
 assert.ok(dash.events.length > 0);
 const rv = ok(await api('GET', '/reports/riders?search=4000001'), 'report');
 assert.equal(rv.total, 1, 'digits match the rider number');
@@ -359,6 +359,58 @@ ok(await api('PUT', '/notifications/preferences/oil_change', { in_app: false }),
 const prefs = await api('GET', '/notifications/preferences');
 assert.equal(prefs._body.find((p) => p.category === 'oil_change').customised, true);
 console.log('ch9 ok');
+
+// --- ch6 performance, scorecard, ratings, branding, sync and the live board
+const pr = ok(await api('POST', '/performance', { rider_id: 4000001, work_date: '2026-09-01', completed: 18, notified: 20, planned_hours: 10, actual_hours: 9.5, attendance_rate: 95, acceptance_rate: 0.97, lost_hours: 0.5 }), 'perf');
+assert.equal((await api('GET', `/performance/${pr.id}`)).attendance_rate, 0.95, 'rates are kept as a fraction');
+assert.equal((await api('POST', '/performance', { rider_id: 4000001, work_date: '2026-09-01' })).fields?.work_date, 'perf_day_taken');
+let pf = new FormData(); pf.append('file', new Blob(['Rider Id,Completed Orders,Attendance Rate,Acceptance Rate,Lost Hours,No Shows,Contract Name\n4000001,8,0.6,0.9,0,0,Riyadh 3PL\n4000002,16,0.99,0.99,0,0,Night Contract\n5550001,3,,,,,\n'], { type: 'text/csv' }), 'p.csv');
+pf.append('mode', 'skip'); pf.append('day', '2026-09-02'); pf.append('create_contracts', '1'); pf.append('company_id', String(co.id));
+const ppv = ok(await api('POST', '/performance-import/preview', pf), 'perf preview');
+assert.equal(ppv.extra.unknown_riders, 1); assert.equal(ppv.extra.new_rows, 3);
+const prun = ok(await api('POST', '/performance-import/run', { token: ppv.token }), 'perf run');
+assert.equal(prun.inserted, 2); assert.equal(prun.contracts_created, 1);
+assert.equal((await api('GET', '/performance?from=2026-09-01&to=2026-09-02')).stats.records, 3);
+const sc = ok(await api('GET', '/performance-scorecard?from=2026-09-01&to=2026-09-02'), 'scorecard');
+const mo = sc.rows.find((r) => r.id === 4000001);
+// 13 orders a day → 1 point, attendance 77.5% → 0, acceptance 93.5% → 1: two points is weak
+assert.equal(mo.grade, 'weak'); assert.equal(mo.points, 2); assert.ok(mo.reasons.includes('low_attendance'));
+assert.ok(['negligent', 'weak', 'fair', 'strong'].includes(sc.rows[0].grade));
+assert.equal((await api('GET', '/performance-scorecard/4000002?from=2026-09-02&to=2026-09-02')).score.grade, 'strong');
+let rf = new FormData(); rf.append('file', new Blob(['rider_id,Month,Segment,Gross orders,Completed,Completed in time,Failed by rider\n4000001,2026-09,B,204,200,196,2\n4000002,2026-9,A,100,100,100,0\nx,2026-09,,,,,\n'], { type: 'text/csv' }), 'r.csv');
+const rpv = ok(await api('POST', '/ratings/import/preview', rf), 'ratings preview');
+ok(await api('POST', '/ratings/import/run', { token: rpv.token }), 'ratings run');
+const rtl = ok(await api('GET', '/ratings?month=2026-09'), 'ratings');
+const m1 = rtl.rows.find((r) => r.rider_id === 4000001);
+assert.equal(m1.on_time, 0.98); assert.equal(m1.fail_rate_score, 0.9902); assert.equal(m1.final_score, 0.9851, 'the worked example of the guide');
+assert.equal(rtl.ladder.find((l) => l.segment === 'B').n, 1);
+let bf = new FormData(); bf.append('file', new Blob(['Rider Id,Created At,Photo\n4000001,2026-09-02 08:10:00,https://example.com/a.jpg\n4000002,2026-09-02 08:12:00,https://example.com/b.jpg\n'], { type: 'text/csv' }), 'b.csv'); bf.append('mode', 'skip');
+const bpv = ok(await api('POST', '/branding-import/preview', bf), 'brand preview');
+ok(await api('POST', '/branding-import/run', { token: bpv.token }), 'brand run');
+let bl = await api('GET', '/branding');
+assert.equal(bl.stats.photos, 2); assert.equal(bl.stats.queue, 2); assert.equal(bl.tools.face, 'unavailable');
+ok(await api('PATCH', `/branding/${bl.rows[0].id}`, { card_review: 'not_visible', card_note: 'no vest' }), 'card review');
+ok(await api('POST', '/branding/mark-fine', { ids: bl.rows.map((r) => r.id) }), 'mark rest fine');
+bl = await api('GET', '/branding');
+assert.deepEqual(bl.rows.map((r) => r.card_review).sort(), ['not_visible', 'visible'], 'a judged photo does not change');
+assert.equal((await api('GET', '/sync/extension.zip', undefined, true)).headers.get('content-type'), 'application/zip');
+const tok = ok(await api('POST', '/sync/token'), 'token').token;
+const ingest = (body, t = tok) => fetch(base + '/api/sync/ingest', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${t}` }, body: JSON.stringify(body) }).then(async (r) => ({ s: r.status, ...(await r.json()) }));
+assert.equal((await ingest({ source: 'daily_performance', day: '2026-09-03', rows: [{ 'Rider Id': '4000002', 'Completed Orders': '12' }] }, 'wrong')).error, 'token_refused');
+assert.equal((await ingest({ source: 'daily_performance', day: '2099-01-01', rows: [{ 'Rider Id': '1' }] })).error, 'report_shows_today');
+const ig = await ingest({ source: 'daily_performance', day: '2026-09-03', rows: [{ 'Rider Id': '4000002', 'Completed Orders': '12', 'Attendance Rate': '97%' }] });
+assert.equal(ig.inserted, 1);
+const runs = await api('GET', '/sync/runs?source=daily_performance');
+assert.equal(runs.rows[0].status, 'succeeded'); assert.equal(runs.rows[0].trigger_type, 'extension');
+const sy = await api('GET', '/sync');
+assert.equal(sy.session.state, 'extension');
+const sr = ok(await api('POST', '/sync/run', {}), 'sync now');
+assert.equal(sr.runs[0].status, 'needs_sign_in', 'no browser on the server');
+assert.equal((await ingest({ source: 'live', rows: [{ 'Rider Id': '4000001', Name: 'M', Status: 'Working', Lat: '24.7136', Lng: '46.6753', Completed: '4', 'Active Orders': '0', Wallet: '600' }] })).read, 1);
+const lb = ok(await api('GET', '/live'), 'live');
+assert.equal(lb.stats.board, 1); assert.equal(lb.stats.wallet, 1, 'wallet over the limit');
+assert.equal((await api('GET', '/live/riders/4000001')).points, 1);
+console.log('ch6 ok');
 
 // --- the new role can open nothing
 cookie = '';

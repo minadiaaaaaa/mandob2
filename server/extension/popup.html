@@ -1,0 +1,28 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  body { font: 13px system-ui, sans-serif; width: 320px; margin: 0; padding: 12px; color: #18181b; }
+  h1 { font-size: 14px; margin: 0 0 8px; } label { display: block; margin: 8px 0 2px; color: #52525b; font-size: 12px; }
+  input, select, button { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #d4d4d8; border-radius: 6px; font: inherit; }
+  button { background: #0f766e; color: #fff; border: 0; margin-top: 10px; cursor: pointer; } button:disabled { opacity: .5; cursor: default; }
+  button.ghost { background: #f4f4f5; color: #18181b; } #state { margin-top: 10px; padding: 8px; border-radius: 6px; background: #f4f4f5; white-space: pre-wrap; }
+  details { margin-top: 10px; } summary { cursor: pointer; color: #52525b; }
+</style></head><body>
+  <h1>Send report to the platform</h1>
+  <label for="source">Source</label>
+  <select id="source">
+    <option value="daily_performance">Daily performance</option><option value="branding_photos">Branding verification photos</option>
+    <option value="monthly_ratings">Rider monthly ratings</option><option value="fines">Fines</option><option value="wallet">Wallet</option>
+    <option value="absences">Absences</option><option value="live">Live rider board</option>
+  </select>
+  <label for="day">The report's day (one past day)</label>
+  <input id="day" type="date">
+  <button id="capture">Capture</button>
+  <button id="send" disabled>Send to the system</button>
+  <div id="state">Open the report page, set it to one past day, then Capture.</div>
+  <details><summary>Connection settings</summary>
+    <label for="url">Ingest address</label><input id="url" placeholder="https://…/api/sync/ingest">
+    <label for="token">Token</label><input id="token" type="password">
+    <button id="save" class="ghost">Save</button>
+  </details>
+  <script src="popup.js"></script>
+</body></html>
