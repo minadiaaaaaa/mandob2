@@ -24,6 +24,7 @@ import {
 import { CompaniesList, CompanyForm, CompanyView, ContractForm, ContractsList, ContractView } from './pages/performance/Companies';
 import { BlockedIps, Profile, RoleEdit, RolesList, RoleView, SessionsList, UserForm, UsersList, UserView } from './pages/admin/Access';
 import { AttachmentsIndex, AuditLog, LoginAttempts, Settings } from './pages/system/System';
+import { AlertsList, RenewalForm, RenewalsList, RenewalView } from './pages/docs/Renewals';
 
 // A screen opened by a direct link without its permission.
 function Guard({ perm, children }: { perm: string[]; children: ReactNode }) {
@@ -133,6 +134,10 @@ export default function App() {
         <Route path="oil-changes/:id" element={g('oil_changes.view', <OilScheduleView />)} />
         <Route path="oil-changes/:id/edit" element={g('oil_changes.update', <OilScheduleForm />)} />
 
+        <Route path="alerts" element={g('alerts.view', <AlertsList />)} />
+        <Route path="renewals" element={g('renewals.view', <RenewalsList />)} />
+        <Route path="renewals/new" element={g('renewals.create', <RenewalForm />)} />
+        <Route path="renewals/:id" element={g('renewals.view', <RenewalView />)} />
         <Route path="transport-licenses" element={g('transport_licenses.view', <LicensesList />)} />
         <Route path="transport-licenses/new" element={g('transport_licenses.create', <LicenseForm />)} />
         <Route path="transport-licenses/:id" element={g('transport_licenses.view', <LicenseView />)} />

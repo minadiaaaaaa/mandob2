@@ -177,6 +177,41 @@ assert.ok(logs.total > 10);
 const la = await api('GET', '/logs/login');
 assert.ok(la.stats.failed >= 2);
 
+// --- ch5: expiry alerts and the renewal log
+const al = ok(await api('GET', '/alerts?kind=operation_card'), 'alerts');
+assert.equal(al.total, 1, 'one row per operation card');
+assert.ok(al.rows[0].owner.includes('1234') && al.rows[0].owner.includes('5678'), 'the card row names all its plates');
+const alAll = ok(await api('GET', '/alerts?status=expired'), 'alerts expired');
+assert.ok(alAll.rows.every((x) => x.days_left < 0));
+assert.equal(alAll.stats.documents, (await api('GET', '/alerts')).stats.documents, 'cards ignore the status filter');
+assert.equal((await api('GET', '/alerts/export', undefined, true)).status, 200);
+const scanFor = async () => { const f = new FormData(); f.append('file', new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'scan.png'); return ok(await api('POST', '/scans', f), 'scan').token; };
+const noScan = await api('POST', '/renewals', { kind: 'operation_card', doc_id: v2.card_id, new_expiry: '2027-10-20' });
+assert.equal(noScan.fields?.scan, 'renewal_scan_required');
+let scan = await scanFor();
+const shorter = await api('POST', '/renewals', { kind: 'operation_card', doc_id: v2.card_id, new_expiry: '2026-01-01', scan });
+assert.equal(shorter.fields?.new_expiry, 'renewal_shortens');
+const rc = ok(await api('POST', '/renewals', { kind: 'operation_card', doc_id: v2.card_id, new_expiry: '2027-10-20', cost: 150, scan }), 'renew card');
+const rcv = await api('GET', `/renewals/${rc.id}`);
+assert.equal(rcv.new_doc_id, null, 'operation cards are renewed in place');
+assert.equal((await api('GET', `/operation-cards/${v2.card_id}`)).expiry_date, '2027-10-20');
+const health = (await api('GET', '/renewals/documents?kind=health'))._body[0];
+scan = await scanFor();
+const sameNo = await api('POST', '/renewals', { kind: 'health', doc_id: health.id, new_expiry: '2027-10-10', scan });
+assert.equal(sameNo.fields?.new_number, 'renewal_number_needed', 'the old certificate keeps its number');
+const rh = ok(await api('POST', '/renewals', { kind: 'health', doc_id: health.id, new_expiry: '2027-10-10', new_number: 'H-2', scan }), 'renew health');
+const rhv = await api('GET', `/renewals/${rh.id}`);
+assert.ok(rhv.new_doc_id && rhv.new_doc_id !== health.id, 'a new current record replaces the old one');
+assert.equal((await api('GET', '/riders/4000001')).documents.health.doc_number, 'H-2');
+const gone = await api('POST', '/renewals', { kind: 'health', doc_id: health.id, new_expiry: '2028-10-10', new_number: 'H-3', scan: await scanFor() });
+assert.equal(gone.error, 'renewal_doc_gone', 'the archived record cannot be renewed again');
+ok(await api('POST', '/renewals', { kind: 'health', doc_id: rhv.new_doc_id, new_expiry: '2028-10-10', new_number: 'H-3', scan: await scanFor() }), 'renew again');
+assert.equal((await api('GET', `/renewals/${rh.id}`)).chain.length, 2, 'the document chain follows the replaced records');
+const rl = ok(await api('GET', '/renewals?kind=health'), 'renewal log');
+assert.equal(rl.total, 2);
+assert.ok(rl.stats.total >= 4 && rl.stats.cost >= 150);
+console.log('ch5 ok');
+
 // --- the new role can open nothing
 cookie = '';
 ch = await api('GET', '/auth/challenge');

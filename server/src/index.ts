@@ -16,6 +16,7 @@ import { applicantsRouter } from './routes/applicants.js';
 import { fleetRouter } from './routes/fleet.js';
 import { fleet2Router } from './routes/fleet2.js';
 import { systemRouter } from './routes/system.js';
+import { docsRouter } from './routes/docs.js';
 
 const app = express();
 app.set('trust proxy', process.env.TRUST_PROXY === '1');
@@ -51,6 +52,7 @@ app.use('/api', applicantsRouter);
 app.use('/api', fleetRouter);
 app.use('/api', fleet2Router);
 app.use('/api', systemRouter);
+app.use('/api', docsRouter);
 app.use('/api/attachments', attachmentsRouter);
 app.use('/api/scans', scansRouter);
 app.use('/api', (_req, res) => res.status(404).json({ error: 'not_found' }));

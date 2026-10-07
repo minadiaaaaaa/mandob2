@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bike, Building2, Car, ChevronDown, FileBadge, FileText, Fuel, Globe, IdCard, KeyRound, LayoutDashboard, LogOut, Menu, Moon, Paperclip,
-  ScrollText, Settings, Shield, ShieldBan, Sun, User, UserPlus, Users, Wrench, X, Handshake, ClipboardList, MonitorSmartphone, History,
+  BellRing, RefreshCw, ScrollText, Settings, Shield, ShieldBan, Sun, User, UserPlus, Users, Wrench, X, Handshake, ClipboardList, MonitorSmartphone, History,
 } from 'lucide-react';
 import { get, patch, post } from './api';
 import { useAuth } from './auth';
@@ -12,6 +12,7 @@ import { cx } from './ui/kit';
 type Item = { to: string; label: string; perm: string[]; icon?: ReactNode; badge?: string[]; end?: boolean; children?: Item[] };
 type Section = { key: string; label: string; items: Item[] };
 type Badges = Record<string, { expired: number; soon: number }>;
+const ALL_BADGES = ['id', 'license', 'health', 'driver_card', 'ajeer', 'operation_cards', 'vehicle_registrations', 'insurance_policies', 'vehicle_insurance', 'transport_licenses', 'oil_changes'];
 
 // Sections ordered by how often they are used each day (guide 1.3). Items without permission do not appear.
 function useSections(): Section[] {
@@ -46,6 +47,8 @@ function useSections(): Section[] {
       i('/admin/oil-changes', 'nav.oil_changes', 'oil_changes.view', <Wrench />, ['oil_changes']),
     ] },
     { key: 'docs', label: t('nav.documents_renewals'), items: [
+      i('/admin/alerts', 'nav.alerts', 'alerts.view', <BellRing />, ALL_BADGES),
+      i('/admin/renewals', 'nav.renewals', 'renewals.view', <RefreshCw />),
       i('/admin/transport-licenses', 'nav.transport_licenses', 'transport_licenses.view', <ScrollText />, ['transport_licenses']),
     ] },
     { key: 'performance', label: t('nav.performance'), items: [
@@ -106,7 +109,7 @@ function Sidebar({ collapsed, onNavigate, badges }: { collapsed: boolean; onNavi
             {!collapsed && (
               <div className="mb-1 flex items-center px-2.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-500/90">
                 {s.label}
-                <NavBadge keys={items.flatMap((x) => x.badge ?? [])} badges={badges} />
+                <NavBadge keys={[...new Set(items.flatMap((x) => x.badge ?? []))]} badges={badges} />
               </div>
             )}
             <div className="space-y-0.5">
