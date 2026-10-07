@@ -50,8 +50,8 @@ dashboardRouter.get('/dashboard', can('dashboard.view'), async (req, res) => {
       const m = await one<any>('SELECT MAX(month) m FROM monthly_ratings');
       return m?.m ? { month: m.m, rows: await q('SELECT segment k, COUNT(*) n FROM monthly_ratings WHERE month = ? GROUP BY segment ORDER BY segment', [m.m]) } : null;
     }),
-    photos: await part(() => q('SELECT verdict k, COUNT(*) n FROM branding_photos GROUP BY verdict HAVING n > 0')),
-    sync: await part(() => q('SELECT outcome k, COUNT(*) n FROM sync_runs WHERE started_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL 14 DAY) GROUP BY outcome')),
+    photos: await part(() => q(`SELECT CASE WHEN card_review = 'not_visible' THEN 'no_card' ELSE COALESCE(override_result, check_result) END k, COUNT(*) n FROM branding_photos GROUP BY k HAVING n > 0`)),
+    sync: await part(() => q("SELECT status k, COUNT(*) n FROM sync_runs WHERE status <> 'running' AND started_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL 14 DAY) GROUP BY status")),
     expiring: await part(() => q(`SELECT DATE_FORMAT(expiry_date, '%Y-%m') k, COUNT(*) n FROM ${docs} x WHERE expiry_date >= ? AND expiry_date < DATE_ADD(?, INTERVAL 12 MONTH) GROUP BY k ORDER BY k`, [`${day.slice(0, 7)}-01`, `${day.slice(0, 7)}-01`])),
   };
   const events = await part(async () => q(`SELECT id, created_at, action, actor_name, entity_type, entity_id, details, severity FROM audit_log ORDER BY id DESC LIMIT ?`,

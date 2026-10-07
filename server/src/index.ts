@@ -25,10 +25,17 @@ import { requestsRouter } from './routes/requests.js';
 import { issuesRouter } from './routes/issues.js';
 import { financeRouter } from './routes/finance.js';
 import { dashboardRouter } from './routes/dashboard.js';
+import { performanceRouter } from './routes/performance.js';
+import { brandingRouter } from './routes/branding.js';
+import { ingestRouter, syncRouter } from './routes/sync.js';
+import { liveRouter } from './routes/live.js';
 
 const app = express();
 app.set('trust proxy', process.env.TRUST_PROXY === '1');
-app.use(express.json({ limit: '2mb' }));
+// report tables sent to the ingest address can be large; everything else stays small
+const bigJson = express.json({ limit: '25mb' });
+const smallJson = express.json({ limit: '2mb' });
+app.use((req, res, next) => (req.path === '/api/sync/ingest' ? bigJson : smallJson)(req, res, next));
 app.use((req, _res, next) => { req.rid = randomBytes(8).toString('hex'); next(); });
 
 // Before installation every visit goes to the wizard; afterwards the wizard is closed.
@@ -41,6 +48,8 @@ app.use('/api', async (_req: Request, res: Response, next: NextFunction) => {
 });
 
 app.use('/api', publicRouter);
+// the extension's ingest address carries its own token instead of a session
+app.use('/api', ingestRouter);
 app.use('/api', authenticate);
 
 // Maintenance mode blocks every signed-in user except administrators.
@@ -68,6 +77,10 @@ app.use('/api', requestsRouter);
 app.use('/api', issuesRouter);
 app.use('/api', financeRouter);
 app.use('/api', dashboardRouter);
+app.use('/api', performanceRouter);
+app.use('/api', brandingRouter);
+app.use('/api', syncRouter);
+app.use('/api', liveRouter);
 app.use('/api/attachments', attachmentsRouter);
 app.use('/api/scans', scansRouter);
 app.use('/api', (_req, res) => res.status(404).json({ error: 'not_found' }));

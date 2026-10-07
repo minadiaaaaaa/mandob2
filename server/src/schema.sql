@@ -674,3 +674,126 @@ CREATE TABLE IF NOT EXISTS billing (
   INDEX (month),
   FOREIGN KEY (rider_id) REFERENCES riders(id)
 );
+
+-- ======================================================================== chapter 6: performance and sync
+-- 6.1 one row per rider per day, as the delivery company reports it. Empty means "not received", not zero.
+CREATE TABLE IF NOT EXISTS daily_performance (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  rider_id BIGINT NOT NULL,
+  work_date DATE NOT NULL,
+  contract_id INT NULL,
+  batch VARCHAR(50) NULL, tga_status VARCHAR(50) NULL, error_codes VARCHAR(50) NULL,
+  shifts INT NULL, working_days INT NULL,
+  planned_hours DECIMAL(7,2) NULL, actual_hours DECIMAL(7,2) NULL, break_hours DECIMAL(7,2) NULL, lost_hours DECIMAL(7,2) NULL,
+  attendance_rate DECIMAL(7,4) NULL, acceptance_rate DECIMAL(7,4) NULL, contact_rate DECIMAL(7,4) NULL,
+  no_shows INT NULL, no_show_rate DECIMAL(7,4) NULL,
+  notified INT NULL, accepted INT NULL, completed INT NULL, stacked INT NULL, declined INT NULL, cancelled INT NULL,
+  deductions INT NULL, not_accepted INT NULL, manual_undispatched INT NULL, chat_response_rate DECIMAL(7,4) NULL,
+  source ENUM('manual','import','sync') NOT NULL DEFAULT 'manual',
+  created_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY (rider_id, work_date),
+  INDEX (work_date),
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);
+
+-- 6.3 start-of-shift photos: the automatic check and the staff review are kept apart.
+CREATE TABLE IF NOT EXISTS branding_photos (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  rider_id BIGINT NOT NULL,
+  captured_at DATETIME NOT NULL,
+  photo_url VARCHAR(1000) NOT NULL,
+  contract_name VARCHAR(150) NULL,
+  check_result ENUM('pending','fine','blurred','no_face','unreadable','failed') NOT NULL DEFAULT 'pending',
+  override_result ENUM('fine','blurred','no_face','unreadable') NULL,
+  override_by INT NULL,
+  card_review ENUM('none','visible','not_visible','unclear') NOT NULL DEFAULT 'none',
+  card_note VARCHAR(300) NULL,
+  card_by INT NULL, card_at DATETIME NULL,
+  source_review ENUM('none','direct','screen','unclear') NOT NULL DEFAULT 'none',
+  source_by INT NULL, source_at DATETIME NULL,
+  suspect_card TINYINT(1) NOT NULL DEFAULT 0,
+  suspect_screen TINYINT(1) NOT NULL DEFAULT 0,
+  measurements JSON NULL,
+  checked_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY (rider_id, captured_at),
+  INDEX (captured_at),
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);
+
+-- 6.4 the company's monthly rating, and the segment floors it draws city-wide.
+CREATE TABLE IF NOT EXISTS monthly_ratings (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  rider_id BIGINT NOT NULL,
+  month CHAR(7) NOT NULL,
+  segment CHAR(1) NULL,
+  final_score DECIMAL(7,4) NULL, on_time DECIMAL(7,4) NULL, fail_rate_score DECIMAL(7,4) NULL,
+  gross_orders INT NULL, completed INT NULL, completed_in_time INT NULL, failed_by_rider INT NULL,
+  verification_requests INT NULL, verification_success INT NULL, verification_rate DECIMAL(7,4) NULL,
+  city VARCHAR(100) NULL, contract VARCHAR(150) NULL,
+  source ENUM('sync','file','manual') NOT NULL DEFAULT 'file',
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY (rider_id, month),
+  INDEX (month),
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);
+CREATE TABLE IF NOT EXISTS rating_cutoffs (
+  month CHAR(7) NOT NULL,
+  segment CHAR(1) NOT NULL,
+  min_final DECIMAL(7,4) NULL, min_otd DECIMAL(7,4) NULL, min_fr DECIMAL(7,4) NULL,
+  city_riders INT NULL,
+  PRIMARY KEY (month, segment)
+);
+
+-- 6.5 sync: the sources, their runs, and (3.6) the live board read from the platform.
+CREATE TABLE IF NOT EXISTS sync_sources (
+  code VARCHAR(40) PRIMARY KEY,
+  enabled TINYINT(1) NOT NULL DEFAULT 1,
+  sync_from DATE NULL,
+  create_riders TINYINT(1) NOT NULL DEFAULT 0,
+  report_url VARCHAR(500) NULL
+);
+CREATE TABLE IF NOT EXISTS sync_runs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  source VARCHAR(40) NOT NULL,
+  report_day DATE NULL,
+  status ENUM('running','succeeded','failed','skipped','needs_sign_in') NOT NULL DEFAULT 'running',
+  trigger_type ENUM('manual','scheduled','catch_up','extension') NOT NULL DEFAULT 'manual',
+  started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  finished_at DATETIME NULL,
+  rows_read INT NULL, added INT NULL, replaced INT NULL,
+  user_id INT NULL,
+  message VARCHAR(1000) NULL,
+  INDEX (source, report_day), INDEX (started_at)
+);
+CREATE TABLE IF NOT EXISTS live_board (
+  rider_id BIGINT PRIMARY KEY,
+  name VARCHAR(150) NULL,
+  status VARCHAR(40) NULL,
+  seen_at DATETIME NOT NULL,
+  lat DECIMAL(9,6) NULL, lng DECIMAL(9,6) NULL, located_at DATETIME NULL,
+  shift_start VARCHAR(10) NULL, shift_end VARCHAR(10) NULL,
+  worked_min INT NULL, late_min INT NULL, breaks INT NULL, break_min INT NULL,
+  completed INT NULL, cancelled INT NULL, active_orders INT NULL, wallet DECIMAL(12,2) NULL,
+  work_day DATE NULL
+);
+CREATE TABLE IF NOT EXISTS live_points (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  rider_id BIGINT NOT NULL,
+  at DATETIME NOT NULL,
+  work_day DATE NOT NULL,
+  lat DECIMAL(9,6) NOT NULL, lng DECIMAL(9,6) NOT NULL,
+  accuracy INT NULL,
+  status VARCHAR(40) NULL,
+  has_order TINYINT(1) NOT NULL DEFAULT 0,
+  INDEX (rider_id, work_day, at), INDEX (at)
+);
+CREATE TABLE IF NOT EXISTS live_days (
+  rider_id BIGINT NOT NULL,
+  work_day DATE NOT NULL,
+  shifts INT NULL, worked_min INT NULL, late_min INT NULL, breaks INT NULL, break_min INT NULL,
+  completed INT NULL, cancelled INT NULL, wallet DECIMAL(12,2) NULL,
+  PRIMARY KEY (rider_id, work_day)
+);

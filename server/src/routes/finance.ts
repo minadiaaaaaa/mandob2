@@ -105,7 +105,7 @@ financeRouter.delete('/finance/fines/:id', can('finance.manage'), async (req, re
 });
 
 const FINE_STATUS: Record<string, string> = { open: 'open', outstanding: 'open', disputed: 'disputed', waived: 'waived', dropped: 'waived', deducted: 'deducted' };
-const fineImport: ImportDef = {
+export const fineImport: ImportDef = {
   name: 'fines', perm: 'finance.import', matchOn: 'fin.match_fine', options: ['create_riders'], maxRows: 20000,
   columns: {
     rider_id: ['riders.rider_id', 'rider id', 'rider_id', 'riderid'], date: ['fin.date', 'date', 'fine date', 'violation date'],
@@ -196,7 +196,7 @@ financeRouter.get('/finance/wallet/export', can('finance.view'), async (req, res
 });
 
 // One file carries either balances or entries; the headings tell which.
-const walletImport: ImportDef = {
+export const walletImport: ImportDef = {
   name: 'wallet', perm: 'finance.import', matchOn: 'fin.match_wallet', options: ['create_riders'], maxRows: 50000,
   columns: {
     rider_id: ['riders.rider_id', 'rider id', 'rider_id', 'riderid'], balance: ['fin.balance', 'balance', 'wallet balance'],
