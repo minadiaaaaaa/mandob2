@@ -21,7 +21,9 @@ const MODULE_OF: Record<string, string> = {
   rider_doc_driver_card: 'driver_cards', rider_doc_ajeer: 'ajeer_permits',
   vehicle: 'vehicles', transport_license: 'transport_licenses', operation_card: 'operation_cards',
   vehicle_registration: 'vehicle_registrations', insurance_policy: 'insurance_policies', vehicle_insurance: 'vehicle_insurance',
-  fuel_card: 'fuel_cards', oil_change: 'oil_changes', renewal: 'renewals', advance: 'advances',
+  fuel_card: 'fuel_cards', oil_change: 'oil_changes', renewal: 'renewals', advance: 'advances', leave: 'leaves', absence: 'absences',
+  // a full permission where the module has no "view"
+  change_request: 'rider_portal.view_requests', issue_message: 'rider_portal.view_issues',
 };
 
 export async function storeFile(file: Express.Multer.File, allowed = DOC_MIME) {
@@ -62,7 +64,8 @@ export async function removeAttachment(id: number) {
 function checkModule(req: Request, entityType: string) {
   const mod = MODULE_OF[entityType];
   if (!mod) fail(400, 'invalid');
-  if (!has(req, `${mod}.view`)) throw new HttpError(403, 'forbidden', { perm: `${mod}.view` });
+  const perm = mod.includes('.') ? mod : `${mod}.view`;
+  if (!has(req, perm)) throw new HttpError(403, 'forbidden', { perm });
 }
 
 export const attachmentsRouter = Router();

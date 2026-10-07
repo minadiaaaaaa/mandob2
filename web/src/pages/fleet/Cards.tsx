@@ -5,7 +5,7 @@ import { del, download, get, patch, post } from '../../api';
 import { useAuth } from '../../auth';
 import { fmtNum, useI18n } from '../../i18n';
 import { Alert, Badge, Button, Card, Details, Field, IconButton, Loading, PageHeader, StatCard, StatGrid, toneIf, useAction, useUi, type Tone } from '../../ui/kit';
-import { Combo, ComboInput, Grid, SaveBar, SelectInput, TextArea, TextInput, useForm, type ComboOption } from '../../ui/forms';
+import { Combo, ComboInput, Grid, RiderInput, SaveBar, SelectInput, TextArea, TextInput, useForm, type ComboOption } from '../../ui/forms';
 import { DataTable, FilterBar, FilterNumber, FilterSelect, useList, type Column } from '../../ui/table';
 import { Attachments, ScanUpload, type Scan } from '../../ui/files';
 import { ImportWizard } from '../../ui/importer';
@@ -284,7 +284,6 @@ export function RegistrationForm() {
   const [scan, setScan] = useState<Scan | null>(null);
   const [loaded, setLoaded] = useState<any>(id ? null : {});
   const vehicles = useVehicleOptions();
-  const riders = useOptions<any>('/riders-options');
   useEffect(() => { if (id) get(`/vehicle-registrations/${id}`).then((g) => { setLoaded(g); form.reset(Object.fromEntries(Object.keys(R_EMPTY).map((k) => [k, g[k] ?? '']))); }); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!loaded) return <Loading />;
   const submit = async (e: React.FormEvent) => {
@@ -303,7 +302,7 @@ export function RegistrationForm() {
             <TextInput form={form} name="serial" label={t('regs.serial')} required dir="ltr" maxLength={30} />
             <TextInput form={form} name="owner" label={t('regs.owner')} required maxLength={150} />
             <TextInput form={form} name="owner_id_no" label={t('regs.owner_id')} dir="ltr" />
-            <ComboInput form={form} name="user_rider_id" label={t('regs.user_is_rider')} options={riders.map((r: any) => ({ value: r.id, label: r.full_name, sub: `#${r.id}`, search: `${r.id} ${r.national_id ?? ''}` }))} />
+            <RiderInput form={form} name="user_rider_id" label={t('regs.user_is_rider')} />
             <TextInput form={form} name="user_name" label={t('regs.user')} hint={t('regs.user_hint')} />
             <TextInput form={form} name="user_id_no" label={t('regs.user_id')} dir="ltr" />
             <TextInput form={form} name="issue_date" label={t('regs.issue_date')} type="date" />

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bike, Building2, Car, ChevronDown, FileBadge, FileText, Fuel, Globe, IdCard, KeyRound, LayoutDashboard, LogOut, Menu, Moon, Paperclip,
-  BellRing, RefreshCw, ScrollText, Settings, Shield, ShieldBan, Sun, User, UserPlus, Users, Wrench, X, Handshake, ClipboardList, MonitorSmartphone, History,
+  BellRing, CalendarDays, CalendarX2, HandCoins, RefreshCw, ScrollText, Settings, Shield, ShieldBan, Sun, User, UserPlus, Users, Wrench, X, Handshake, ClipboardList, MonitorSmartphone, History,
 } from 'lucide-react';
 import { get, patch, post } from './api';
 import { useAuth } from './auth';
@@ -24,6 +24,8 @@ function useSections(): Section[] {
     { key: 'riders', label: t('nav.riders'), items: [
       i('/admin/riders', 'nav.rider_list', 'riders.view', <Users />, undefined, undefined, true),
       i('/admin/rider-applicants', 'nav.applicants', 'applicants.view', <UserPlus />),
+      i('/admin/leaves', 'nav.leaves', 'leaves.view', <CalendarDays />),
+      i('/admin/absences', 'nav.absences', 'absences.view', <CalendarX2 />),
       i('/admin/riders/docs', 'nav.rider_documents', ['id_documents.view', 'driving_licenses.view', 'health_certs.view', 'driver_cards.view', 'ajeer_permits.view'], <IdCard />,
         ['id', 'license', 'health', 'driver_card', 'ajeer'], [
           i('/admin/riders/id-documents', 'docs.id', 'id_documents.view', undefined, ['id']),
@@ -32,6 +34,7 @@ function useSections(): Section[] {
           i('/admin/riders/driver-cards', 'docs.driver_card', 'driver_cards.view', undefined, ['driver_card']),
           i('/admin/riders/ajeer-permits', 'docs.ajeer', 'ajeer_permits.view', undefined, ['ajeer']),
         ]),
+      i('/admin/advances', 'nav.advances', 'advances.view', <HandCoins />),
     ] },
     { key: 'fleet', label: t('nav.fleet'), items: [
       i('/admin/vehicles', 'nav.vehicles', 'vehicles.view', <Car />),

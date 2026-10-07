@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, X } from 'lucide-react';
-import { ApiError } from '../api';
+import { ApiError, get } from '../api';
 import { useI18n } from '../i18n';
 import { Button, Checkbox, cx, Field, useErrorText, useUi } from './kit';
 
@@ -97,9 +97,9 @@ export function SaveBar({ form, label, onCancel, editing = true, extra = 0 }: { 
 export type ComboOption = { value: string | number; label: string; sub?: string; disabled?: boolean; note?: string; search?: string };
 const fold = (s: string) => s.replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x660)).replace(/[أإآ]/g, 'ا').replace(/\s+/g, '').toLowerCase();
 
-export function Combo({ value, onChange, options, placeholder, disabled, countLabel, clearTitle, invalid }: {
+export function Combo({ value, onChange, options, placeholder, disabled, countLabel, clearTitle, invalid, onSearch }: {
   value: string | number | null | undefined; onChange: (v: string | number | null) => void; options: ComboOption[]; placeholder?: string; disabled?: boolean;
-  countLabel?: (shown: number, total: number) => string; clearTitle?: string; invalid?: boolean;
+  countLabel?: (shown: number, total: number) => string; clearTitle?: string; invalid?: boolean; onSearch?: (term: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [term, setTerm] = useState('');
@@ -129,7 +129,7 @@ export function Combo({ value, onChange, options, placeholder, disabled, countLa
         <input className="min-w-0 flex-1 bg-transparent px-3 py-2 outline-none" disabled={disabled}
           placeholder={cur ? cur.label : placeholder} value={open ? term : cur?.label ?? ''}
           onFocus={() => { setOpen(true); setHi(0); }}
-          onChange={(e) => { setTerm(e.target.value); setOpen(true); setHi(0); }}
+          onChange={(e) => { setTerm(e.target.value); setOpen(true); setHi(0); onSearch?.(e.target.value); }}
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown') { e.preventDefault(); setHi((h) => Math.min(h + 1, shown.length - 1)); }
             else if (e.key === 'ArrowUp') { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)); }
@@ -161,6 +161,50 @@ export function ComboInput({ form, name, label, required, hint, disabled, classN
       <Combo value={form.values[name]} onChange={(v) => form.set(name, v ?? '')} options={options} placeholder={placeholder} disabled={disabled} countLabel={countLabel} invalid={!!err} />
     </Field>
   );
+}
+
+// Riders are searched on the server (name, alias, rider id, mobile, ID number); the first 30 matches are listed.
+type RiderOpt = { id: number; full_name: string; national_id: string | null; phone: string | null; company_name: string | null; status: string };
+export function RiderPicker({ value, onChange, activeOnly, disabled, invalid, placeholder }: {
+  value: string | number | null | undefined; onChange: (id: number | null, rider: RiderOpt | null) => void; activeOnly?: boolean; disabled?: boolean; invalid?: boolean; placeholder?: string;
+}) {
+  const { t } = useI18n();
+  const [term, setTerm] = useState('');
+  const [rows, setRows] = useState<RiderOpt[]>([]);
+  const [picked, setPicked] = useState<RiderOpt | null>(null);
+  useEffect(() => {
+    const h = setTimeout(() => {
+      get<RiderOpt[]>('/riders-options', { search: term, active: activeOnly ? 1 : undefined }).then(setRows).catch(() => setRows([]));
+    }, 200);
+    return () => clearTimeout(h);
+  }, [term, activeOnly]);
+  // the chosen rider stays labelled even when a later search no longer lists them
+  useEffect(() => {
+    if (value && picked?.id !== Number(value)) {
+      get<RiderOpt[]>('/riders-options', { search: String(value) }).then((rs) => setPicked(rs.find((x) => String(x.id) === String(value)) ?? null)).catch(() => {});
+    }
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  const all = picked && !rows.some((r) => r.id === picked.id) ? [picked, ...rows] : rows;
+  const options = all.map((r) => ({ value: r.id, label: r.full_name, sub: [`#${r.id}`, r.national_id, r.company_name].filter(Boolean).join(' · '), search: `${r.id} ${r.national_id ?? ''} ${r.phone ?? ''}` }));
+  return (
+    <Combo value={value} options={options} disabled={disabled} invalid={invalid} placeholder={placeholder ?? t('pick.rider_hint')} onSearch={setTerm} clearTitle={t('common.clear')}
+      countLabel={(n) => (n >= 30 ? t('pick.first_30') : '')}
+      onChange={(v) => { const r = all.find((x) => String(x.id) === String(v)) ?? null; setPicked(r); onChange(v == null ? null : Number(v), r); }} />
+  );
+}
+export function RiderInput({ form, name, label, required, hint, disabled, className, activeOnly }: Base & { activeOnly?: boolean }) {
+  const err = useFieldError(form)(name);
+  return (
+    <Field label={label} required={required} error={err} hint={hint} className={className}>
+      <RiderPicker value={form.values[name]} onChange={(id) => form.set(name, id ?? '')} activeOnly={activeOnly} disabled={disabled} invalid={!!err} />
+    </Field>
+  );
+}
+
+// A table filter on one rider, searched on the server. `name` lets the filter bar know it is in use.
+export function RiderFilter({ list, name = 'rider' }: { list: { query: Record<string, string | undefined>; set: (k: string, v: string | null) => void }; name?: string }) {
+  const { t } = useI18n();
+  return <div className="w-60"><RiderPicker value={list.query[name]} onChange={(id) => list.set(name, id ? String(id) : null)} placeholder={t('adv.rider')} /></div>;
 }
 
 export const Grid = ({ children, cols = 2 }: { children: ReactNode; cols?: 2 | 3 | 4 }) => (

@@ -324,10 +324,12 @@ ridersRouter.get('/riders-vehicle-options', can('riders.view'), async (_req, res
   res.json(await q(`SELECT v.id, v.plate, v.plate_en, v.maker, v.model, v.vehicle_type, a.rider_id holder_id, r.full_name holder_name
     FROM vehicles v LEFT JOIN vehicle_assignments a ON a.vehicle_id = v.id AND a.is_current = 1 LEFT JOIN riders r ON r.id = a.rider_id ORDER BY v.plate`));
 });
-ridersRouter.get('/riders-options', can('riders.view', 'vehicle_assignments.view', 'fuel_cards.view', 'vehicle_registrations.view'), async (req, res) => {
+ridersRouter.get('/riders-options', can('riders.view', 'vehicle_assignments.view', 'fuel_cards.view', 'vehicle_registrations.view', 'leaves.create', 'advances.create', 'rider_portal.manage_issues', 'absences.view', 'advances.view'), async (req, res) => {
   const s = `%${req.query.search ?? ''}%`;
+  // ?active=1 leaves out riders whose service has ended
+  const active = req.query.active ? "AND r.status <> 'terminated'" : '';
   res.json(await q(`SELECT r.id, r.full_name, r.alias, r.national_id, r.phone, r.status, co.name company_name FROM riders r LEFT JOIN companies co ON co.id = r.company_id
-    WHERE r.full_name LIKE ? OR r.alias LIKE ? OR CAST(r.id AS CHAR) LIKE ? OR r.phone LIKE ? OR r.national_id LIKE ? ORDER BY r.full_name LIMIT 30`, [s, s, s, s, s]));
+    WHERE (r.full_name LIKE ? OR r.alias LIKE ? OR CAST(r.id AS CHAR) LIKE ? OR r.phone LIKE ? OR r.national_id LIKE ?) ${active} ORDER BY r.full_name LIMIT 30`, [s, s, s, s, s]));
 });
 
 // ---------- the five document follow-up screens ----------

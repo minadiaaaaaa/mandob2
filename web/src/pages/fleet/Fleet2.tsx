@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Ban, Eye, FileUp, History, Pencil, Plus, RotateCw, Square, StopCircle, Trash2, Unlock } from 'lucide-react';
 import { del, download, get, patch, post } from '../../api';
 import { useAuth } from '../../auth';
 import { fmtDateTime, fmtMoney, fmtNum, useI18n } from '../../i18n';
 import { Alert, Badge, Button, Card, Checkbox, Details, Field, IconButton, Loading, PageHeader, StatCard, StatGrid, toneIf, useAction, useErrorText, useUi, type Tone } from '../../ui/kit';
-import { ComboInput, Grid, SaveBar, SelectInput, TextArea, TextInput, useForm } from '../../ui/forms';
+import { ComboInput, Grid, RiderFilter, RiderInput, RiderPicker, SaveBar, SelectInput, TextArea, TextInput, useForm } from '../../ui/forms';
 import { DataTable, FilterBar, FilterDate, FilterNumber, FilterSelect, useList, type Column } from '../../ui/table';
 import { Attachments } from '../../ui/files';
 import { ImportWizard } from '../../ui/importer';
@@ -14,10 +14,6 @@ import { useVehicleOptions } from './Cards';
 
 const VALID3: Record<string, Tone> = { valid: 'green', expired: 'red', cancelled: 'grey' };
 const st3 = (t: (k: string) => string, s: string) => <Badge tone={VALID3[s]}>{t(`reg.status.${s}`)}</Badge>;
-function useRiderOptions() {
-  const rs = useOptions<any>('/riders-options');
-  return useMemo(() => rs.map((r: any) => ({ value: r.id, label: r.full_name, sub: `#${r.id}${r.company_name ? ` · ${r.company_name}` : ''}`, search: `${r.id} ${r.national_id ?? ''} ${r.phone ?? ''}` })), [rs]);
-}
 function DeleteCard({ title, q, path, back }: { title: string; q: string; path: string; back: string }) {
   const { confirm } = useUi();
   const run = useAction();
@@ -415,7 +411,6 @@ export function AssignmentsList() {
   const run = useAction();
   const { confirm } = useUi();
   const list = useList('/vehicle-assignments');
-  const riders = useRiderOptions();
   const vehicles = useVehicleOptions();
   const s = list.stats ?? {};
   const end = async (r: any) => { if (!(await confirm({ title: t('va.end_q'), tone: 'warn' }))) return; if (await run(() => post(`/vehicle-assignments/${r.id}/end`), t('common.saved'))) list.reload(); };
@@ -445,7 +440,7 @@ export function AssignmentsList() {
         <StatCard label={t('va.s.riders_without')} value={fmtNum(s.riders_without)} tone={toneIf(s.riders_without, 'amber')} /><StatCard label={t('va.s.vehicles_without')} value={fmtNum(s.vehicles_without)} tone={toneIf(s.vehicles_without, 'amber')} />
       </StatGrid>
       <FilterBar list={list} placeholder={t('va.search_hint')}>
-        <FilterSelect list={list} name="rider" label={t('va.rider')} options={riders.map((r) => ({ value: r.value, label: r.label }))} />
+        <RiderFilter list={list} name="rider" />
         <FilterSelect list={list} name="vehicle" label={t('va.vehicle')} options={vehicles.map((v) => ({ value: v.value, label: v.label }))} />
         <FilterSelect list={list} name="state" label={t('va.state')} options={[{ value: 'current', label: t('va.current') }, { value: 'ended', label: t('va.ended') }]} />
         <FilterDate list={list} name="from" label={t('common.from_date')} /><FilterDate list={list} name="to" label={t('common.to_date')} />
@@ -460,7 +455,6 @@ export function AssignmentForm() {
   const { t } = useI18n();
   const nav = useNavigate();
   const { toast } = useUi();
-  const riders = useRiderOptions();
   const vehicles = useVehicleOptions();
   const today = new Date().toISOString().slice(0, 10);
   const { form, loaded } = useRecordForm({ rider_id: params.get('rider') ?? '', vehicle_id: '', start_date: today, end_date: '', is_current: '1' }, id ? `/vehicle-assignments/${id}` : null);
@@ -478,7 +472,7 @@ export function AssignmentForm() {
     }}>
       <PageHeader title={id ? t('va.edit') : t('va.new')} back="/admin/vehicle-assignments" />
       <Card><Grid>
-        <ComboInput form={form} name="rider_id" label={t('va.rider')} required options={riders} />
+        <RiderInput form={form} name="rider_id" label={t('va.rider')} required />
         <ComboInput form={form} name="vehicle_id" label={t('va.vehicle')} required options={vehicles} />
         <TextInput form={form} name="start_date" label={t('va.start')} type="date" required />
         <SelectInput form={form} name="is_current" label={t('va.state')} empty={false} options={[{ value: '1', label: t('va.current') }, { value: '0', label: t('va.ended') }]} />
@@ -524,7 +518,6 @@ export function FuelCardsList() {
   const run = useAction();
   const { confirm } = useUi();
   const list = useList('/fuel-cards');
-  const riders = useRiderOptions();
   const vehicles = useVehicleOptions();
   const s = list.stats ?? {};
   const block = async (r: any) => {
@@ -563,7 +556,7 @@ export function FuelCardsList() {
       <FilterBar list={list} placeholder={t('fc.search_hint')}>
         <FilterSelect list={list} name="status" label={t('fc.status')} options={Object.keys(FC_STATUS).map((v) => ({ value: v, label: t(`fc.status.${v}`) }))} />
         <FilterSelect list={list} name="provider" label={t('fc.provider')} options={(list.data?.providers ?? []).map((p: string) => ({ value: p, label: p }))} />
-        <FilterSelect list={list} name="rider" label={t('fc.rider')} options={riders.map((r) => ({ value: r.value, label: r.label }))} />
+        <RiderFilter list={list} name="rider" />
         <FilterSelect list={list} name="vehicle" label={t('fc.vehicle')} options={vehicles.map((v) => ({ value: v.value, label: v.label }))} />
         <FilterSelect list={list} name="assignment" label={t('fc.assignment')} options={[{ value: 'assigned', label: t('fc.assigned') }, { value: 'unassigned', label: t('fc.unassigned') }]} />
         <FilterDate list={list} name="from" label={t('fc.issued_from')} /><FilterDate list={list} name="to" label={t('fc.issued_to')} />
@@ -580,7 +573,6 @@ export function FuelCardForm() {
   const { id } = useParams();
   const { t } = useI18n();
   const nav = useNavigate();
-  const riders = useRiderOptions();
   const vehicles = useVehicleOptions();
   const { form, loaded } = useRecordForm({ number: '', provider: '', status: 'active', issue_date: '', balance: '', monthly_limit: '', rider_id: '', vehicle_id: '' }, id ? `/fuel-cards/${id}` : null);
   const [vehicleTouched, setVehicleTouched] = useState(false);
@@ -602,7 +594,7 @@ export function FuelCardForm() {
         <TextInput form={form} name="issue_date" label={t('fc.issued')} type="date" />
         <TextInput form={form} name="balance" label={t('fc.balance')} required dir="ltr" hint={t('fc.balance_hint')} />
         <TextInput form={form} name="monthly_limit" label={t('fc.monthly_limit')} dir="ltr" hint={t('fc.limit_hint')} />
-        <ComboInput form={form} name="rider_id" label={t('fc.rider')} options={riders} hint={t('fc.rider_hint')} />
+        <RiderInput form={form} name="rider_id" label={t('fc.rider')} hint={t('fc.rider_hint')} />
         <div onFocusCapture={() => setVehicleTouched(true)}><ComboInput form={form} name="vehicle_id" label={t('fc.vehicle')} options={vehicles} /></div>
       </Grid></Card>
       <SaveBar form={form} editing={!!id} label={id ? t('common.save') : t('fc.add')} onCancel={() => nav(-1)} />
@@ -641,13 +633,13 @@ export function FuelCardView() {
 }
 export function FuelCardsBulk() {
   const { t } = useI18n();
-  const riders = useRiderOptions();
+  const names = useRef<Record<string, string>>({});
   const input = (type = 'text') => (v: string, set: (v: string) => void) => <input className="input" type={type} value={v} onChange={(e) => set(e.target.value)} />;
   return <BulkEdit title={t('fc.bulk_title')} back="/admin/fuel-cards" endpoint="/fuel-cards/bulk-edit" fields={[
     { name: 'status', label: t('fc.status'), input: (v, set) => <select className="input" value={v} onChange={(e) => set(e.target.value)}><option value="">{t('common.choose')}</option>{Object.keys(FC_STATUS).map((k) => <option key={k} value={k}>{t(`fc.status.${k}`)}</option>)}</select>, show: (v) => (v ? t(`fc.status.${v}`) : '—') },
     { name: 'provider', label: t('fc.provider'), input: input() },
     { name: 'monthly_limit', label: t('fc.monthly_limit'), input: input('number') },
-    { name: 'rider_id', label: t('fc.rider'), input: (v, set) => <select className="input" value={v} onChange={(e) => set(e.target.value)}><option value="">{t('common.choose')}</option>{riders.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}</select>, show: (v) => riders.find((r) => String(r.value) === v)?.label ?? '—' },
+    { name: 'rider_id', label: t('fc.rider'), input: (v, set) => <RiderPicker value={v} onChange={(id, r) => { if (id && r) names.current[id] = r.full_name; set(id ? String(id) : ''); }} />, show: (v) => (v ? names.current[v] ?? `#${v}` : '—') },
     { name: 'plate', label: t('fc.vehicle_plate'), input: input() },
   ]} />;
 }
