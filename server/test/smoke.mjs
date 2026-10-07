@@ -278,6 +278,25 @@ const advl = await api('GET', '/advances');
 assert.equal(advl.stats.repaid, 666.67);
 console.log('ch3.1-3.3 ok');
 
+// --- ch3.5 conversations (the rider side is tested with the portal)
+const fi = new FormData(); fi.append('rider_id', '4000001'); fi.append('subject', 'Wallet balance'); fi.append('category', 'payment'); fi.append('body', 'مرحباً، بخصوص المحفظة');
+const iss = ok(await api('POST', '/issues', fi), 'issue');
+const bad = new FormData(); bad.append('rider_id', '4000001'); bad.append('subject', 'ab');
+assert.equal((await api('POST', '/issues', bad)).fields?.subject, 'too_short');
+const fm = new FormData(); fm.append('body', 'internal only'); fm.append('internal', '1');
+fm.append('files', new Blob(['<script>alert(1)</script>'], { type: 'text/html' }), 'x.html');
+ok(await api('POST', `/issues/${iss.id}/messages`, fm), 'internal note');
+const fexe = new FormData(); fexe.append('files', new Blob(['MZ'], { type: 'application/octet-stream' }), 'run.exe');
+assert.equal((await api('POST', `/issues/${iss.id}/messages`, fexe)).error, 'file_type_not_allowed');
+let issv = await api('GET', `/issues/${iss.id}`);
+assert.equal(issv.status, 'in_progress'); assert.equal(issv.list.length, 2); assert.equal(issv.list[1].internal, 1);
+const html = await api('GET', `/attachments/${issv.list[1].files[0].id}/file`, undefined, true);
+assert.match(html.headers.get('content-disposition'), /^attachment/, 'an HTML file never opens inline');
+ok(await api('PATCH', `/issues/${iss.id}`, { status: 'resolved', priority: 'urgent' }), 'resolve');
+assert.ok((await api('GET', `/issues/${iss.id}`)).resolved_at);
+assert.equal((await api('GET', '/issues?status=resolved')).total, 1);
+console.log('ch3.5 ok');
+
 // --- the new role can open nothing
 cookie = '';
 ch = await api('GET', '/auth/challenge');

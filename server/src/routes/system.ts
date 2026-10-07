@@ -1,3 +1,4 @@
+import { unreadIssues } from './issues.js';
 import { Router, type Request } from 'express';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -216,5 +217,7 @@ systemRouter.get('/meta/badges', requireUser, async (req, res) => {
       COALESCE(SUM(DATEDIFF(DATE_ADD(last_change, INTERVAL interval_days DAY), ?) BETWEEN 0 AND warn_days),0) soon FROM oil_schedules`, [day, day]);
     out.oil_changes = { expired: Number(r.expired), soon: Number(r.soon) };
   }
+  // conversations with unread rider messages
+  if (has(req, 'rider_portal.view_issues')) out.issues = { expired: await unreadIssues(), soon: 0 };
   res.json(out);
 });
