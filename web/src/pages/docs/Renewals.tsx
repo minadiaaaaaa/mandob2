@@ -4,7 +4,7 @@ import { Eye, ExternalLink, Plus, RefreshCw } from 'lucide-react';
 import { get, post } from '../../api';
 import { useAuth } from '../../auth';
 import { fmtDate, fmtDateTime, fmtMoney, fmtNum, useI18n } from '../../i18n';
-import { Alert, Badge, Button, Card, Details, Field, IconButton, Loading, PageHeader, StatCard, StatGrid, toneIf, useUi, type Tone } from '../../ui/kit';
+import { Alert, Badge, Button, By, Card, Details, Field, IconButton, Loading, PageHeader, StatCard, StatGrid, toneIf, useUi, type Tone } from '../../ui/kit';
 import { Combo, Grid, SaveBar, SelectInput, TextArea, TextInput, useFieldError, useForm } from '../../ui/forms';
 import { DataTable, FilterBar, FilterDate, FilterSelect, useList, type Column } from '../../ui/table';
 import { Attachments, ScanUpload, type Scan } from '../../ui/files';
@@ -212,7 +212,7 @@ export function RenewalView() {
             [t('ren.previous_expiry'), fmtDate(r.previous_expiry)], [t('ren.new_expiry'), fmtDate(r.new_expiry)],
             [t('ren.extended_by'), r.extended_days == null ? null : t('ren.n_days', { n: fmtNum(r.extended_days) })], [t('ren.operation'), t(`ren.op.${r.operation}`)],
             [t('ren.renewal_date'), fmtDate(r.renewal_date)], [t('ren.cost'), r.cost == null ? null : fmtMoney(r.cost)], [t('ren.reference'), r.reference],
-            [t('ren.recorded_by'), r.recorded_by_name && `${r.recorded_by_name} · ${fmtDateTime(r.created_at)}`], [t('common.notes'), r.notes],
+            [t('ren.recorded_by'), r.recorded_by_name && <By name={r.recorded_by_name} at={fmtDateTime(r.created_at)} />], [t('common.notes'), r.notes],
           ]} />
         </Card>
         <Card title={t('ren.chain')}>

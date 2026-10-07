@@ -106,6 +106,10 @@ export function Badge({ tone = 'none', children, className, title }: { tone?: To
   return <span title={title} className={cx('inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset whitespace-nowrap', TONE_BADGE[tone], className)}>{children}</span>;
 }
 
+// A value with Arabic words keeps the page direction; numbers alone are always left to right.
+const ARABIC = /[؀-ۿ]/;
+// "Name · 2026-10-07 20:46": the date stays in order inside right-to-left text.
+export const By = ({ name, at }: { name?: ReactNode; at?: ReactNode }) => <>{name}{name && at ? ' · ' : null}{at && <span className="num">{at}</span>}</>;
 const TONE_BAR: Record<Tone, string> = {
   green: 'before:bg-emerald-500', amber: 'before:bg-amber-500', red: 'before:bg-red-500', blue: 'before:bg-blue-500', grey: 'before:bg-zinc-400', none: 'before:bg-zinc-200 dark:before:bg-zinc-700',
 };
@@ -116,7 +120,7 @@ export function StatCard({ label, value, tone = 'none', sub, onClick, active, ic
       'before:absolute before:inset-y-0 before:start-0 before:w-[3px]', TONE_BAR[tone],
       active ? 'border-brand ring-2 ring-brand/25' : 'border-zinc-200/80 dark:border-zinc-800', onClick && 'cursor-pointer hover:-translate-y-px hover:border-brand/50 hover:shadow-sm')}>
       <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400 [&_svg]:size-3.5">{icon}<span className="truncate">{label}</span></div>
-      <div className={cx('mt-1 text-xl font-semibold tracking-tight num', TONE_TEXT[tone])}>{value}</div>
+      <div className={cx('mt-1 text-xl font-semibold tracking-tight', !ARABIC.test(String(value)) && 'num', TONE_TEXT[tone])}>{value}</div>
       {sub && <div className="mt-0.5 text-xs text-zinc-500">{sub}</div>}
     </Comp>
   );

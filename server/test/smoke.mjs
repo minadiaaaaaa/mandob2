@@ -212,6 +212,72 @@ assert.equal(rl.total, 2);
 assert.ok(rl.stats.total >= 4 && rl.stats.cost >= 150);
 console.log('ch5 ok');
 
+// --- ch3.1 leaves
+const lv = ok(await api('POST', '/leaves', { rider_id: 4000001, start_date: '2026-11-01', end_date: '2026-11-03', leave_type: 'emergency', reason: 'ظرف عائلي' }), 'leave');
+assert.equal(lv.letter_no, 'LV-2026-0001');
+const lvOver = await api('POST', '/leaves', { rider_id: 4000001, start_date: '2026-11-03', end_date: '2026-11-04', leave_type: 'annual', reason: 'x' });
+assert.equal(lvOver.fields?.start_date, 'leave_overlap'); assert.equal(lvOver.params?.letter, 'LV-2026-0001');
+assert.equal((await api('POST', '/leaves', { rider_id: 4000001, start_date: '2026-12-05', end_date: '2026-12-01', leave_type: 'annual', reason: 'x' })).fields?.end_date, 'end_before_start');
+ok(await api('POST', `/leaves/${lv.id}/answer`, { decision: 'approved', note: 'by email' }), 'approve leave');
+assert.equal((await api('POST', `/leaves/${lv.id}/answer`, { decision: 'rejected' })).error, 'leave_already_answered');
+ok(await api('PATCH', `/leaves/${lv.id}`, { start_date: '2026-11-20', reason: 'نص معدل' }), 'edit wording');
+let lvr = await api('GET', `/leaves/${lv.id}`);
+assert.equal(lvr.start_date, '2026-11-01', 'dates are locked after the answer'); assert.equal(lvr.reason, 'نص معدل'); assert.equal(lvr.days, 3);
+assert.equal((await api('DELETE', `/leaves/${lv.id}`)).error, 'leave_answered_cancel_instead');
+const letter = await api('GET', `/leaves/${lv.id}/letter`, undefined, true);
+assert.ok((await letter.text()).includes('محمد أحمد'));
+const doc = await api('GET', `/leaves/${lv.id}/letter?download=doc`, undefined, true);
+assert.match(doc.headers.get('content-type'), /msword/);
+ok(await api('POST', `/leaves/${lv.id}/cancel`, { note: 'withdrawn' }), 'cancel leave');
+const lv2 = ok(await api('POST', '/leaves', { rider_id: 4000001, start_date: '2026-11-02', leave_type: 'sick', reason: 'مرض' }), 'leave after cancel');
+assert.equal(lv2.letter_no, 'LV-2026-0002');
+const lvl = await api('GET', '/leaves');
+assert.equal(lvl.stats.awaiting, 1); assert.equal(lvl.total, 2);
+assert.equal((await api('GET', '/leaves?from=2026-11-03&to=2026-11-30')).total, 1, 'a leave shows when its days overlap the period');
+
+// --- ch3.2 absences import
+const absCsv = 'Rider ID,Absence start,Absence end,Absence number,Reason,Paid,Internal note\n4000001,2026-11-02 00:00,2026-11-02 23:59,A1,VACATION,no,first\n99999999,2026-11-02,,A2,SICKNESS,yes,\n4000001,2026-11-05,,A1,OTHER,,\n';
+let fa = new FormData(); fa.append('file', new Blob([absCsv], { type: 'text/csv' }), 'abs.csv'); fa.append('mode', 'replace');
+let apv = ok(await api('POST', '/absences/import/preview', fa), 'abs preview');
+assert.equal(apv.new, 1); assert.equal(apv.problems, 2, 'unknown rider and duplicate number');
+ok(await api('POST', '/absences/import/run', { token: apv.token }), 'abs run');
+let abl = await api('GET', '/absences');
+assert.equal(abl.total, 1); assert.equal(abl.rows[0].letter_no, 'LV-2026-0002', 'matched with the overlapping leave'); assert.equal(abl.stats.unpaid, 1);
+ok(await api('PATCH', `/absences/${abl.rows[0].id}/note`, { internal_note: 'office note' }), 'abs note');
+fa = new FormData(); fa.append('file', new Blob(['Rider ID,Absence start,Absence end,Absence number,Reason\n4000001,2026-11-02 00:00,2026-11-02 23:59,A1,SICKNESS\n'], { type: 'text/csv' }), 'abs.csv'); fa.append('mode', 'replace');
+apv = ok(await api('POST', '/absences/import/preview', fa), 'abs preview 2');
+assert.equal(apv.replace, 1);
+ok(await api('POST', '/absences/import/run', { token: apv.token }), 'abs run 2');
+abl = await api('GET', '/absences');
+assert.equal(abl.rows[0].reason, 'SICKNESS'); assert.equal(abl.rows[0].internal_note, 'office note', 'replacing keeps the office note');
+assert.equal((await api('GET', '/absences/export', undefined, true)).status, 200);
+
+// --- ch3.3 advances
+const adv = ok(await api('POST', '/advances', { rider_id: 4000002, amount: 1000, installments: 3 }), 'advance');
+assert.match(adv.number, /^ADV-\d{4}-0001$/);
+assert.equal((await api('POST', '/advances', { rider_id: 4000002, amount: 50 })).fields?.rider_id, 'advance_open_exists');
+assert.equal((await api('POST', '/advances', { rider_id: 4000001, amount: 999999 })).fields?.amount, 'advance_over_max');
+assert.equal((await api('POST', `/advances/${adv.id}/disburse`, {})).error, 'advance_wrong_status', 'approval comes before payout');
+ok(await api('POST', `/advances/${adv.id}/approve`), 'approve advance');
+ok(await api('POST', `/advances/${adv.id}/disburse`, { method: 'bank', date: '2026-01-31' }), 'disburse');
+let ad = await api('GET', `/advances/${adv.id}`);
+assert.deepEqual(ad.installments_list.map((i) => [i.due_date, i.amount]), [['2026-02-28', 333.33], ['2026-03-31', 333.33], ['2026-04-30', 333.34]]);
+const [i1, i2, i3] = ad.installments_list;
+assert.equal((await api('POST', `/advance-installments/${i1.id}/repay`, { amount: 400 })).fields?.amount, 'repay_over_remaining');
+ok(await api('POST', `/advance-installments/${i1.id}/repay`, { amount: 100 }), 'part repay');
+assert.equal((await api('GET', `/advances/${adv.id}`)).status, 'repaying');
+ok(await api('POST', `/advance-installments/${i1.id}/repay`, {}), 'repay rest');
+ok(await api('POST', `/advance-installments/${i2.id}/waive`, { reason: 'goodwill' }), 'waive');
+assert.equal((await api('POST', `/advance-installments/${i2.id}/repay`, {})).error, 'installment_closed');
+const due = await api('GET', '/advances/due?window=365');
+assert.equal(due.total, 1); assert.equal(due.stats.overdue, 1, 'overdue instalments always appear');
+ok(await api('POST', `/advance-installments/${i3.id}/repay`, {}), 'repay last');
+ad = await api('GET', `/advances/${adv.id}`);
+assert.equal(ad.status, 'settled'); assert.equal(ad.outstanding, 0);
+const advl = await api('GET', '/advances');
+assert.equal(advl.stats.repaid, 666.67);
+console.log('ch3.1-3.3 ok');
+
 // --- the new role can open nothing
 cookie = '';
 ch = await api('GET', '/auth/challenge');

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, exec, q } from './db.js';
-import { BUILTIN_ROLES } from './perms.js';
+import { ALL_PERMS, BUILTIN_ROLES } from './perms.js';
 
 // [key, default, type, category, description] — the operational keys of "System settings" (guide 11.1.3).
 const SYSTEM: [string, string, string, string, string][] = [
@@ -76,6 +76,8 @@ const OTHER: [string, string, string][] = [
   ['smtp.host', '', 'smtp'], ['smtp.port', '587', 'smtp'], ['smtp.username', '', 'smtp'], ['smtp.password', '', 'smtp'],
   ['smtp.encryption', 'starttls', 'smtp'], ['smtp.sender_name', '', 'smtp'], ['smtp.sender_email', '', 'smtp'], ['smtp.enabled', '0', 'smtp'],
   ['system.installed', '0', 'system'],
+  ['leave.establishment_name', '', 'leaves'], ['leave.default_reason', 'ظروف عائلية طارئة', 'leaves'],
+  ['leave.email_requires_file', '1', 'leaves'], ['leave.auto_stamp', '0', 'leaves'],
 ];
 
 const CITIES: [string, string][] = [
@@ -86,14 +88,25 @@ const CITIES: [string, string][] = [
   ['الباحة', 'Al Baha'], ['عرعر', 'Arar'], ['سكاكا', 'Sakaka'], ['حفر الباطن', 'Hafar Al Batin'],
 ];
 
-export async function install(log: (s: string) => void) {
-  const sql = readFileSync(join(ROOT, 'src', 'schema.sql'), 'utf8');
-  await exec(sql);
-  log('tables');
+async function tablesAndSettings() {
+  await exec(readFileSync(join(ROOT, 'src', 'schema.sql'), 'utf8'));
   for (const [k, v, t, c, d] of SYSTEM) {
     await exec('INSERT IGNORE INTO settings (`key`, value, type, category, description) VALUES (?, ?, ?, ?, ?)', [k, v, t, c, d]);
   }
   for (const [k, v, c] of OTHER) await exec('INSERT IGNORE INTO settings (`key`, value, type, category, editable) VALUES (?, ?, ?, ?, 0)', [k, v, 'text', c]);
+}
+
+// Runs at every start of an installed system: tables and settings added by later versions appear,
+// and the Super Admin keeps every permission. Every statement is idempotent.
+export async function upgrade() {
+  await tablesAndSettings();
+  await exec(`INSERT IGNORE INTO role_permissions (role_id, perm) SELECT r.id, p.perm FROM roles r
+    JOIN JSON_TABLE(?, '$[*]' COLUMNS (perm VARCHAR(80) PATH '$')) p WHERE r.name = 'Super Admin'`, [JSON.stringify(ALL_PERMS)]);
+}
+
+export async function install(log: (s: string) => void) {
+  await tablesAndSettings();
+  log('tables');
   log('settings');
   for (const role of BUILTIN_ROLES) {
     await exec('INSERT IGNORE INTO roles (name, description) VALUES (?, ?)', [role.name, role.description]);

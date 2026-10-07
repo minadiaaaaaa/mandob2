@@ -25,6 +25,9 @@ import { CompaniesList, CompanyForm, CompanyView, ContractForm, ContractsList, C
 import { BlockedIps, Profile, RoleEdit, RolesList, RoleView, SessionsList, UserForm, UsersList, UserView } from './pages/admin/Access';
 import { AttachmentsIndex, AuditLog, LoginAttempts, Settings } from './pages/system/System';
 import { AlertsList, RenewalForm, RenewalsList, RenewalView } from './pages/docs/Renewals';
+import { LeaveForm, LeaveSettings, LeavesList, LeaveView } from './pages/ops/Leaves';
+import { AbsencesImport, AbsencesList } from './pages/ops/Absences';
+import { AdvanceForm, AdvancesDue, AdvancesList, AdvanceView } from './pages/ops/Advances';
 
 // A screen opened by a direct link without its permission.
 function Guard({ perm, children }: { perm: string[]; children: ReactNode }) {
@@ -80,6 +83,18 @@ export default function App() {
         <Route path="rider-applicants/import" element={g('applicants.import', <ApplicantsImport />)} />
         <Route path="rider-applicants/:id" element={g('applicants.view', <ApplicantView />)} />
         <Route path="rider-applicants/:id/edit" element={g('applicants.update', <ApplicantForm />)} />
+
+        <Route path="leaves" element={g('leaves.view', <LeavesList />)} />
+        <Route path="leaves/new" element={g('leaves.create', <LeaveForm />)} />
+        <Route path="leaves/settings" element={g(['leaves.settings', 'leaves.stamp', 'leaves.view'], <LeaveSettings />)} />
+        <Route path="leaves/:id" element={g('leaves.view', <LeaveView />)} />
+        <Route path="leaves/:id/edit" element={g('leaves.update', <LeaveForm />)} />
+        <Route path="absences" element={g('absences.view', <AbsencesList />)} />
+        <Route path="absences/import" element={g('absences.import', <AbsencesImport />)} />
+        <Route path="advances" element={g('advances.view', <AdvancesList />)} />
+        <Route path="advances/new" element={g('advances.create', <AdvanceForm />)} />
+        <Route path="advances/due" element={g('advance_installments.view', <AdvancesDue />)} />
+        <Route path="advances/:id" element={g('advances.view', <AdvanceView />)} />
 
         <Route path="vehicles" element={g('vehicles.view', <VehiclesList />)} />
         <Route path="vehicles/new" element={g('vehicles.create', <VehicleForm />)} />

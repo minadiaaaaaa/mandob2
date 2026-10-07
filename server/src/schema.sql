@@ -447,3 +447,173 @@ CREATE TABLE IF NOT EXISTS secrets (
   encrypted TINYINT(1) NOT NULL DEFAULT 1,
   updated_at DATETIME NULL
 );
+
+-- ======================================================================== phase 2
+-- Notifications (chapter 9). Title and body are translation keys, shown in the reader's language.
+CREATE TABLE IF NOT EXISTS notifications (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NULL,
+  rider_id BIGINT NULL,
+  category ENUM('document_expiry','oil_change','advance_status','installment_due','backup','security','performance','system','general') NOT NULL DEFAULT 'general',
+  severity ENUM('info','warning','critical') NOT NULL DEFAULT 'info',
+  title VARCHAR(120) NOT NULL,
+  body VARCHAR(120) NULL,
+  params JSON NULL,
+  entity_type VARCHAR(40) NULL,
+  entity_id VARCHAR(40) NULL,
+  link VARCHAR(255) NULL,
+  dedupe VARCHAR(190) NULL UNIQUE,
+  read_at DATETIME NULL,
+  emailed_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX (user_id, read_at), INDEX (rider_id, read_at), INDEX (created_at)
+);
+CREATE TABLE IF NOT EXISTS notification_prefs (
+  user_id INT NOT NULL,
+  category VARCHAR(40) NOT NULL,
+  in_app TINYINT(1) NOT NULL DEFAULT 1,
+  email TINYINT(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, category)
+);
+
+-- 3.1 leave requests and their letters. The letter number runs within the year of the leave's start.
+CREATE TABLE IF NOT EXISTS leaves (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  letter_no VARCHAR(20) NOT NULL UNIQUE,
+  seq_year SMALLINT NOT NULL,
+  seq INT NOT NULL,
+  rider_id BIGINT NOT NULL,
+  leave_type ENUM('emergency','annual','sick','unpaid','other') NOT NULL DEFAULT 'emergency',
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  reason VARCHAR(500) NOT NULL,
+  reason_paragraph VARCHAR(1000) NULL,
+  internal_note TEXT NULL,
+  status ENUM('pending','approved','rejected','cancelled') NOT NULL DEFAULT 'pending',
+  answer_note VARCHAR(500) NULL,
+  answered_by INT NULL,
+  answered_at DATETIME NULL,
+  source ENUM('office','rider') NOT NULL DEFAULT 'office',
+  stamped TINYINT(1) NOT NULL DEFAULT 0,
+  created_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY (seq_year, seq),
+  INDEX (rider_id, start_date),
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);
+
+-- 3.2 absences as the delivery company recorded them. Only internal_note belongs to the office.
+CREATE TABLE IF NOT EXISTS rider_absences (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  rider_id BIGINT NOT NULL,
+  external_id VARCHAR(60) NULL UNIQUE,
+  start_at DATETIME NOT NULL,
+  end_at DATETIME NOT NULL,
+  days DECIMAL(7,3) NOT NULL,
+  reason VARCHAR(40) NULL,
+  paid TINYINT(1) NULL,
+  status VARCHAR(40) NULL,
+  contract VARCHAR(150) NULL,
+  company_comment VARCHAR(500) NULL,
+  internal_note VARCHAR(500) NULL,
+  source ENUM('import','sync') NOT NULL DEFAULT 'import',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  INDEX (rider_id, start_at),
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);
+
+-- 3.3 advances and their monthly instalments.
+CREATE TABLE IF NOT EXISTS advances (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  number VARCHAR(20) NOT NULL UNIQUE,
+  seq_year SMALLINT NOT NULL,
+  seq INT NOT NULL,
+  rider_id BIGINT NOT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  installments INT NOT NULL DEFAULT 1,
+  request_date DATE NOT NULL,
+  first_due DATE NULL,
+  deduct_from ENUM('salary','commission','wallet','other') NOT NULL DEFAULT 'salary',
+  reason VARCHAR(500) NULL,
+  notes VARCHAR(500) NULL,
+  status ENUM('pending','approved','rejected','disbursed','repaying','settled','cancelled') NOT NULL DEFAULT 'pending',
+  decided_by INT NULL,
+  decided_at DATETIME NULL,
+  decision_note VARCHAR(500) NULL,
+  payout_method ENUM('cash','bank','wallet','other') NULL,
+  disbursed_on DATE NULL,
+  disbursed_by INT NULL,
+  created_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY (seq_year, seq),
+  INDEX (rider_id, status),
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);
+CREATE TABLE IF NOT EXISTS advance_installments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  advance_id INT NOT NULL,
+  n INT NOT NULL,
+  due_date DATE NOT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  paid DECIMAL(12,2) NOT NULL DEFAULT 0,
+  status ENUM('due','partial','paid','waived') NOT NULL DEFAULT 'due',
+  paid_on DATE NULL,
+  waive_reason VARCHAR(300) NULL,
+  updated_by INT NULL,
+  updated_at DATETIME NULL,
+  UNIQUE KEY (advance_id, n),
+  INDEX (status, due_date),
+  FOREIGN KEY (advance_id) REFERENCES advances(id) ON DELETE CASCADE
+);
+
+-- 3.4 data change requests from the rider portal. payload: the requested values; snapshot: the values when submitted.
+CREATE TABLE IF NOT EXISTS rider_change_requests (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  rider_id BIGINT NOT NULL,
+  type ENUM('contact','photo','document') NOT NULL,
+  doc_type ENUM('id','license','health','driver_card','ajeer','other') NULL,
+  payload JSON NOT NULL,
+  snapshot JSON NULL,
+  rider_note VARCHAR(500) NULL,
+  status ENUM('pending','approved','rejected','cancelled') NOT NULL DEFAULT 'pending',
+  review_note VARCHAR(500) NULL,
+  reviewed_by INT NULL,
+  reviewed_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX (rider_id, status),
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);
+
+-- 3.5 conversations with riders. Unread = messages after the other side's read mark.
+CREATE TABLE IF NOT EXISTS rider_issues (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  rider_id BIGINT NOT NULL,
+  subject VARCHAR(200) NOT NULL,
+  category ENUM('account','performance','attendance','payment','vehicle','app','other') NOT NULL DEFAULT 'other',
+  priority ENUM('low','normal','high','urgent') NOT NULL DEFAULT 'normal',
+  status ENUM('open','in_progress','resolved','closed') NOT NULL DEFAULT 'open',
+  opened_by ENUM('rider','staff') NOT NULL DEFAULT 'rider',
+  assignee_id INT NULL,
+  staff_read_at DATETIME(3) NULL,
+  rider_read_at DATETIME(3) NULL,
+  last_activity_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  resolved_at DATETIME NULL,
+  closed_at DATETIME NULL,
+  created_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX (rider_id), INDEX (status, last_activity_at),
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);
+CREATE TABLE IF NOT EXISTS rider_issue_messages (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  issue_id INT NOT NULL,
+  author ENUM('rider','staff') NOT NULL,
+  user_id INT NULL,
+  body TEXT NULL,
+  internal TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  INDEX (issue_id, id),
+  FOREIGN KEY (issue_id) REFERENCES rider_issues(id) ON DELETE CASCADE
+);
