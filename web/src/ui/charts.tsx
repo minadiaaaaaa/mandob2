@@ -62,3 +62,27 @@ export function Donut({ data, center, empty }: { data: Datum[]; center?: ReactNo
     </div>
   );
 }
+
+// A line over time; the zero line is drawn when the values cross it.
+export function Line({ data, empty, format = fmtNum, height = 160 }: { data: Datum[]; empty?: ReactNode; format?: (n: number) => string; height?: number }) {
+  if (!data.length) return <div className="py-10 text-center text-sm text-zinc-500">{empty}</div>;
+  const W = 600; const H = height; const P = 6;
+  const vals = data.map((d) => d.value);
+  const min = Math.min(0, ...vals); const max = Math.max(0, ...vals);
+  const span = max - min || 1;
+  const x = (i: number) => P + (data.length === 1 ? (W - 2 * P) / 2 : (i * (W - 2 * P)) / (data.length - 1));
+  const y = (v: number) => P + ((max - v) / span) * (H - 2 * P);
+  const pts = data.map((d, i) => `${x(i)},${y(d.value)}`).join(' ');
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full overflow-visible" role="img">
+        {min < 0 && max > 0 && <line x1={0} x2={W} y1={y(0)} y2={y(0)} className="stroke-zinc-300 dark:stroke-zinc-700" strokeDasharray="4 4" />}
+        <polyline points={pts} fill="none" stroke="var(--brand)" strokeWidth={2.5} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        {data.map((d, i) => (
+          <circle key={i} cx={x(i)} cy={y(d.value)} r={4} className={d.value < 0 ? 'fill-red-500' : 'fill-[var(--brand)]'}><title>{`${d.label}: ${format(d.value)}`}</title></circle>
+        ))}
+      </svg>
+      <div className="mt-1 flex justify-between text-[10px] text-zinc-500 num"><span>{data[0].label}</span><span>{data.at(-1)!.label}</span></div>
+    </div>
+  );
+}

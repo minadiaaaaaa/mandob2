@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bike, Building2, Car, ChevronDown, FileBadge, FileText, Fuel, Globe, IdCard, KeyRound, LayoutDashboard, LogOut, Menu, Moon, Paperclip,
-  BellRing, FilePen, MessagesSquare, CalendarDays, CalendarX2, HandCoins, RefreshCw, ScrollText, Settings, Shield, ShieldBan, Sun, User, UserPlus, Users, Wrench, X, Handshake, ClipboardList, MonitorSmartphone, History,
+  BellRing, FileSpreadsheet, Receipt, Wallet, FilePen, MessagesSquare, CalendarDays, CalendarX2, HandCoins, RefreshCw, ScrollText, Settings, Shield, ShieldBan, Sun, User, UserPlus, Users, Wrench, X, Handshake, ClipboardList, MonitorSmartphone, History,
 } from 'lucide-react';
 import { get, patch, post } from './api';
 import { useAuth } from './auth';
@@ -59,6 +59,11 @@ function useSections(): Section[] {
     { key: 'performance', label: t('nav.performance'), items: [
       i('/admin/companies', 'nav.companies', 'companies.view', <Building2 />),
       i('/admin/contracts', 'nav.contracts', 'contracts.view', <Handshake />),
+    ] },
+    { key: 'finance', label: t('nav.finance'), items: [
+      i('/admin/finance/fines', 'nav.fines', 'finance.view', <Receipt />),
+      i('/admin/finance/wallet', 'nav.wallet', 'finance.view', <Wallet />),
+      i('/admin/finance/billing', 'nav.billing', 'finance.view', <FileSpreadsheet />),
     ] },
     { key: 'admin', label: t('nav.administration'), items: [
       i('/admin/users', 'nav.users', 'users.view', <User />),

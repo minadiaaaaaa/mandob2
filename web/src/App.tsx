@@ -30,6 +30,7 @@ import { AbsencesImport, AbsencesList } from './pages/ops/Absences';
 import { AdvanceForm, AdvancesDue, AdvancesList, AdvanceView } from './pages/ops/Advances';
 import { ChangeRequests } from './pages/ops/Requests';
 import { IssuesInbox } from './pages/ops/Issues';
+import { Billing, FinesImport, FinesList, Wallet } from './pages/finance/Finance';
 
 // A screen opened by a direct link without its permission.
 function Guard({ perm, children }: { perm: string[]; children: ReactNode }) {
@@ -162,6 +163,11 @@ export default function App() {
         <Route path="transport-licenses/new" element={g('transport_licenses.create', <LicenseForm />)} />
         <Route path="transport-licenses/:id" element={g('transport_licenses.view', <LicenseView />)} />
         <Route path="transport-licenses/:id/edit" element={g('transport_licenses.update', <LicenseForm />)} />
+
+        <Route path="finance/fines" element={g('finance.view', <FinesList />)} />
+        <Route path="finance/fines/import" element={g('finance.import', <FinesImport />)} />
+        <Route path="finance/wallet" element={g('finance.view', <Wallet />)} />
+        <Route path="finance/billing" element={g('finance.view', <Billing />)} />
 
         <Route path="companies" element={g('companies.view', <CompaniesList />)} />
         <Route path="companies/new" element={g('companies.create', <CompanyForm />)} />

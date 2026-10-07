@@ -617,3 +617,60 @@ CREATE TABLE IF NOT EXISTS rider_issue_messages (
   INDEX (issue_id, id),
   FOREIGN KEY (issue_id) REFERENCES rider_issues(id) ON DELETE CASCADE
 );
+
+-- ======================================================================== chapter 8: finance
+-- All figures are the delivery company's; the office changes only a fine's status, note and amount.
+CREATE TABLE IF NOT EXISTS fines (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  rider_id BIGINT NOT NULL,
+  fine_date DATE NOT NULL,
+  invoice_no VARCHAR(60) NOT NULL DEFAULT '',
+  category VARCHAR(255) NOT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  company VARCHAR(150) NULL,
+  currency VARCHAR(3) NOT NULL DEFAULT 'SAR',
+  status ENUM('open','disputed','waived','deducted') NOT NULL DEFAULT 'open',
+  internal_note VARCHAR(500) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY uq_fine (rider_id, fine_date, invoice_no, category(150), amount),
+  INDEX (fine_date),
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);
+CREATE TABLE IF NOT EXISTS wallet_snapshots (
+  rider_id BIGINT NOT NULL,
+  snapshot_date DATE NOT NULL,
+  balance DECIMAL(12,2) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (rider_id, snapshot_date),
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);
+CREATE TABLE IF NOT EXISTS wallet_entries (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  rider_id BIGINT NOT NULL,
+  entry_date DATE NOT NULL,
+  description VARCHAR(500) NOT NULL DEFAULT '',
+  amount DECIMAL(12,2) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_entry (rider_id, entry_date, description(200), amount),
+  INDEX (entry_date),
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);
+CREATE TABLE IF NOT EXISTS billing (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  rider_id BIGINT NOT NULL,
+  month CHAR(7) NOT NULL,
+  contract VARCHAR(150) NULL,
+  completed_orders INT NULL,
+  basic_payment DECIMAL(12,2) NULL, distance_payment DECIMAL(12,2) NULL, ftr_bonus DECIMAL(12,2) NULL,
+  rider_payment_basic DECIMAL(12,2) NULL, rider_payment_scoring DECIMAL(12,2) NULL,
+  fine_acceptance DECIMAL(12,2) NULL, fine_contact DECIMAL(12,2) NULL, fine_declined DECIMAL(12,2) NULL, fine_late DECIMAL(12,2) NULL,
+  fine_no_show DECIMAL(12,2) NULL, fine_no_show_special DECIMAL(12,2) NULL, fine_daily_acceptance DECIMAL(12,2) NULL, fine_missed_days DECIMAL(12,2) NULL,
+  ded_stacking DECIMAL(12,2) NULL, ded_car DECIMAL(12,2) NULL, ded_google DECIMAL(12,2) NULL, total_deductions DECIMAL(12,2) NULL,
+  rider_balance DECIMAL(12,2) NULL, pending_balance DECIMAL(12,2) NULL, amount_excl_vat DECIMAL(12,2) NULL, vat DECIMAL(12,2) NULL,
+  amount_incl_vat DECIMAL(12,2) NULL, net_ftr DECIMAL(12,2) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY (rider_id, month),
+  INDEX (month),
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);

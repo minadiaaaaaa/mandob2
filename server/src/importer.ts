@@ -16,6 +16,7 @@ export type ImportDef = {
   perm: string;
   columns: Record<string, string[]>;      // field → translation keys / aliases its header may carry
   requiredColumns: string[][];            // the file must carry one column of each group
+  templateColumns?: string[];             // the template's columns when not all of them
   matchOn: string;                        // translation key shown in the preview
   maxRows?: number;
   options?: string[];                     // extra switches the screen sends, e.g. create_riders
@@ -104,7 +105,7 @@ export function importRoutes(def: ImportDef) {
     const lang = await langOf(req);
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Template');
-    ws.addRow(Object.values(def.columns).map((keys) => tr(lang, keys[0]))).font = { bold: true };
+    ws.addRow((def.templateColumns ?? Object.keys(def.columns)).map((f) => tr(lang, def.columns[f][0]))).font = { bold: true };
     ws.columns.forEach((c) => { c.width = 22; });
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${def.name}-template.xlsx"`);
