@@ -6,7 +6,7 @@ import { useAuth } from '../../auth';
 import { fmtNum, useI18n } from '../../i18n';
 import { Alert, Badge, Button, Card, Details, Field, IconButton, Loading, PageHeader, StatCard, StatGrid, toneIf, useAction, useUi, type Tone } from '../../ui/kit';
 import { Combo, ComboInput, Grid, SaveBar, SelectInput, TextArea, TextInput, useForm, type ComboOption } from '../../ui/forms';
-import { DataTable, FilterBar, FilterSelect, useList, type Column } from '../../ui/table';
+import { DataTable, FilterBar, FilterNumber, FilterSelect, useList, type Column } from '../../ui/table';
 import { Attachments, ScanUpload, type Scan } from '../../ui/files';
 import { ImportWizard } from '../../ui/importer';
 import { ExpiryDate, ExportButton, invalidateOptions, Remaining, useCityName, useOptions } from '../../ui/common';
@@ -67,7 +67,7 @@ export function CardsList() {
         <FilterSelect list={list} name="status" label={t('cards.status')} options={Object.keys(CARD_STATUS).map((v) => ({ value: v, label: t(`card.status.${v}`) }))} />
         <FilterSelect list={list} name="scan" label={t('cards.scan')} options={[{ value: 'no', label: t('cards.no_scan') }, { value: 'yes', label: t('cards.has_scan') }]} />
         <FilterSelect list={list} name="vehicle" label={t('cards.vehicle')} options={vehicles.map((v) => ({ value: v.value, label: v.label }))} />
-        <label className="text-xs"><span className="mb-1 block text-zinc-500">{t('cards.window')}</span><input type="number" min={1} className="input w-24 py-1.5" value={list.query.window ?? ''} onChange={(e) => list.set('window', e.target.value)} /></label>
+        <FilterNumber list={list} name="window" label={t('cards.window')} />
       </FilterBar>
       <DataTable list={list} columns={columns} onRowClick={(r) => nav(`/admin/operation-cards/${r.id}`)} selectable={can('operation_cards.delete')}
         bulk={<Button size="sm" variant="danger" onClick={removeMany}>{t('common.delete_selected')}</Button>} />
@@ -266,7 +266,7 @@ export function RegistrationsList() {
         <FilterSelect list={list} name="status" label={t('regs.status')} options={Object.keys(REG_STATUS).map((v) => ({ value: v, label: t(`reg.status.${v}`) }))} />
         <FilterSelect list={list} name="validity" label={t('regs.validity')} options={[['expired', 'docs.state.expired'], ['soon', 'regs.expiring_soon'], ['valid', 'docs.state.valid']].map(([v, k]) => ({ value: v, label: t(k) }))} />
         <FilterSelect list={list} name="current" label={t('regs.current')} options={[{ value: 'current', label: t('regs.current') }, { value: 'past', label: t('regs.past_issue') }]} />
-        <label className="text-xs"><span className="mb-1 block text-zinc-500">{t('regs.within')}</span><input type="number" min={1} className="input w-24 py-1.5" value={list.query.within ?? ''} onChange={(e) => list.set('within', e.target.value)} /></label>
+        <FilterNumber list={list} name="within" label={t('regs.within')} />
       </FilterBar>
       <DataTable list={list} columns={columns} onRowClick={(r) => nav(`/admin/vehicle-registrations/${r.id}`)} />
     </>

@@ -1660,6 +1660,8 @@
  "sys.value": "القيمة",
  "table.clear_filters": "مسح عوامل التصفية",
  "table.clear_selection": "إلغاء التحديد",
+ "table.fewer_filters": "فلاتر أقل",
+ "table.more_filters": "فلاتر إضافية",
  "table.next": "التالي",
  "table.no_match": "لا توجد سجلات مطابقة لعوامل التصفية",
  "table.no_permission": "لا تملك صلاحية عرض هذه البيانات",
