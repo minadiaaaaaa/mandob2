@@ -66,7 +66,7 @@ export function Donut({ data, center, empty }: { data: Datum[]; center?: ReactNo
 // A line over time; the zero line is drawn when the values cross it.
 export function Line({ data, empty, format = fmtNum, height = 160 }: { data: Datum[]; empty?: ReactNode; format?: (n: number) => string; height?: number }) {
   if (!data.length) return <div className="py-10 text-center text-sm text-zinc-500">{empty}</div>;
-  const W = 600; const H = height; const P = 6;
+  const W = 1000; const H = height; const P = 6;
   const vals = data.map((d) => d.value);
   const min = Math.min(0, ...vals); const max = Math.max(0, ...vals);
   const span = max - min || 1;
@@ -75,14 +75,31 @@ export function Line({ data, empty, format = fmtNum, height = 160 }: { data: Dat
   const pts = data.map((d, i) => `${x(i)},${y(d.value)}`).join(' ');
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full overflow-visible" role="img">
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto max-h-56 w-full overflow-visible" role="img">
         {min < 0 && max > 0 && <line x1={0} x2={W} y1={y(0)} y2={y(0)} className="stroke-zinc-300 dark:stroke-zinc-700" strokeDasharray="4 4" />}
         <polyline points={pts} fill="none" stroke="var(--brand)" strokeWidth={2.5} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
         {data.map((d, i) => (
           <circle key={i} cx={x(i)} cy={y(d.value)} r={4} className={d.value < 0 ? 'fill-red-500' : 'fill-[var(--brand)]'}><title>{`${d.label}: ${format(d.value)}`}</title></circle>
         ))}
       </svg>
-      <div className="mt-1 flex justify-between text-[10px] text-zinc-500 num"><span>{data[0].label}</span><span>{data.at(-1)!.label}</span></div>
+      <div className="mt-1 flex justify-between text-[10px] text-zinc-500" dir="ltr"><span className="num">{data[0].label}</span><span className="num">{data.at(-1)!.label}</span></div>
+    </div>
+  );
+}
+
+// A circular gauge: green from 90%, amber from 70%, red below.
+export function Gauge({ value, total, label }: { value: number; total: number; label?: ReactNode }) {
+  const pct = total ? Math.round((value / total) * 100) : 0;
+  const color = pct >= 90 ? '#10b981' : pct >= 70 ? '#f59e0b' : '#ef4444';
+  const r = 52; const c = 2 * Math.PI * r;
+  return (
+    <div className="flex items-center gap-5">
+      <svg viewBox="0 0 120 120" className="size-32 shrink-0 -rotate-90">
+        <circle cx="60" cy="60" r={r} fill="none" strokeWidth="12" className="stroke-zinc-100 dark:stroke-zinc-800" />
+        <circle cx="60" cy="60" r={r} fill="none" strokeWidth="12" stroke={color} strokeLinecap="round" strokeDasharray={`${(pct / 100) * c} ${c}`} />
+        <text x="60" y="66" textAnchor="middle" className="rotate-90 fill-current text-xl font-semibold" style={{ transformOrigin: '60px 60px' }}>{pct}%</text>
+      </svg>
+      <div className="text-sm"><div className="text-2xl font-semibold num">{fmtNum(value)} / {fmtNum(total)}</div>{label && <div className="text-xs text-zinc-500">{label}</div>}</div>
     </div>
   );
 }

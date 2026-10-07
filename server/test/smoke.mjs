@@ -337,6 +337,29 @@ assert.equal(fsum.wallet.balance, -80); assert.equal(fsum.fines.n, 1); assert.eq
 assert.equal((await api('GET', '/finance/billing/export?month=2026-09', undefined, true)).status, 200);
 console.log('ch8 ok');
 
+// --- ch9 dashboard, reports, notifications
+const dash = ok(await api('GET', '/dashboard'), 'dashboard');
+assert.ok(dash.alerts.expired >= 1); assert.equal(dash.figures.vehicles.total, 3); assert.ok(dash.charts.doc_kinds.length > 3);
+assert.equal(dash.charts.deliveries, null, 'a part that cannot load is null; the rest still show');
+assert.ok(dash.events.length > 0);
+const rv = ok(await api('GET', '/reports/riders?search=4000001'), 'report');
+assert.equal(rv.total, 1, 'digits match the rider number');
+assert.equal((await api('GET', '/reports/documents?validity=expired')).stats['alerts.s.expired'] > 0, true);
+assert.equal((await api('GET', '/reports/advances/export', undefined, true)).status, 200);
+assert.equal((await api('GET', '/reports/nope'))._s, 404);
+const gen1 = ok(await api('POST', '/notifications/generate'), 'generate');
+assert.ok(gen1.created > 0);
+assert.equal((await api('POST', '/notifications/generate')).created, 0, 'not repeated on the same day');
+const mine = await api('GET', '/notifications/mine');
+assert.ok(mine.unread > 0); assert.equal(mine.top, 'critical');
+const nlog = await api('GET', '/notifications?kind=rider');
+assert.ok(nlog.total > 0, 'riders get their own documents');
+ok(await api('POST', `/notifications/${mine.rows[0].id}/read`), 'mark read');
+ok(await api('PUT', '/notifications/preferences/oil_change', { in_app: false }), 'mute oil');
+const prefs = await api('GET', '/notifications/preferences');
+assert.equal(prefs._body.find((p) => p.category === 'oil_change').customised, true);
+console.log('ch9 ok');
+
 // --- the new role can open nothing
 cookie = '';
 ch = await api('GET', '/auth/challenge');
