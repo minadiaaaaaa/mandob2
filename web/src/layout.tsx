@@ -2,12 +2,13 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bike, Building2, Car, ChevronDown, FileBadge, FileText, Fuel, Globe, IdCard, KeyRound, LayoutDashboard, LogOut, Menu, Moon, Paperclip,
-  BellRing, FileSpreadsheet, Receipt, Wallet, FilePen, MessagesSquare, CalendarDays, CalendarX2, HandCoins, RefreshCw, ScrollText, Settings, Shield, ShieldBan, Sun, User, UserPlus, Users, Wrench, X, Handshake, ClipboardList, MonitorSmartphone, History,
+  BarChart3, Bell, SlidersHorizontal, BellRing, FileSpreadsheet, Receipt, Wallet, FilePen, MessagesSquare, CalendarDays, CalendarX2, HandCoins, RefreshCw, ScrollText, Settings, Shield, ShieldBan, Sun, User, UserPlus, Users, Wrench, X, Handshake, ClipboardList, MonitorSmartphone, History,
 } from 'lucide-react';
 import { get, patch, post } from './api';
 import { useAuth } from './auth';
 import { LANGS, useI18n } from './i18n';
 import { cx } from './ui/kit';
+import { NotificationBell } from './ui/bell';
 
 type Item = { to: string; label: string; perm: string[]; icon?: ReactNode; badge?: string[]; end?: boolean; children?: Item[] };
 type Section = { key: string; label: string; items: Item[] };
@@ -64,6 +65,11 @@ function useSections(): Section[] {
       i('/admin/finance/fines', 'nav.fines', 'finance.view', <Receipt />),
       i('/admin/finance/wallet', 'nav.wallet', 'finance.view', <Wallet />),
       i('/admin/finance/billing', 'nav.billing', 'finance.view', <FileSpreadsheet />),
+    ] },
+    { key: 'reports', label: t('nav.reports_notifications'), items: [
+      i('/admin/reports', 'nav.reports', 'reports.view', <BarChart3 />),
+      i('/admin/notifications', 'nav.notifications', 'notifications.view', <Bell />, undefined, undefined, true),
+      i('/admin/notifications/preferences', 'nav.notification_prefs', 'notification_prefs.view', <SlidersHorizontal />),
     ] },
     { key: 'admin', label: t('nav.administration'), items: [
       i('/admin/users', 'nav.users', 'users.view', <User />),
@@ -223,6 +229,7 @@ export function AdminLayout() {
           <div className="ms-auto flex items-center gap-1">
             <LangPicker />
             <ThemeToggle />
+            <NotificationBell />
             <div className="relative" ref={menuBox}>
               <button onClick={() => setMenu(!menu)} aria-expanded={menu} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800">
                 <span className="flex size-7 items-center justify-center rounded-full bg-brand text-xs font-semibold text-white ring-2 ring-brand/20">{me?.full_name.slice(0, 2)}</span>

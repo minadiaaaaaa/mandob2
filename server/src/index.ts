@@ -24,6 +24,7 @@ import { advancesRouter } from './routes/advances.js';
 import { requestsRouter } from './routes/requests.js';
 import { issuesRouter } from './routes/issues.js';
 import { financeRouter } from './routes/finance.js';
+import { dashboardRouter } from './routes/dashboard.js';
 
 const app = express();
 app.set('trust proxy', process.env.TRUST_PROXY === '1');
@@ -66,6 +67,7 @@ app.use('/api', advancesRouter);
 app.use('/api', requestsRouter);
 app.use('/api', issuesRouter);
 app.use('/api', financeRouter);
+app.use('/api', dashboardRouter);
 app.use('/api/attachments', attachmentsRouter);
 app.use('/api/scans', scansRouter);
 app.use('/api', (_req, res) => res.status(404).json({ error: 'not_found' }));

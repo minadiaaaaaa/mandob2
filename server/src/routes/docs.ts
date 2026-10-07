@@ -12,7 +12,7 @@ export const docsRouter = Router();
 // ======================================================================== expiry alerts
 // Every current document of the eleven types, as one list. `ref` is the record the "Open record" icon goes to.
 const ORG = "(SELECT value FROM settings WHERE `key` = 'org.name')";
-function alertsUnion(day: string) {
+export function alertsUnion(day: string) {
   return `
     SELECT d.doc_type kind, 'rider' owner_type, d.id record_id, d.rider_id ref_id, r.full_name owner,
       CASE WHEN d.doc_type = 'id' THEN r.national_id ELSE d.doc_number END number, d.issue_date, d.expiry_date

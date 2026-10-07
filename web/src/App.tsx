@@ -31,6 +31,7 @@ import { AdvanceForm, AdvancesDue, AdvancesList, AdvanceView } from './pages/ops
 import { ChangeRequests } from './pages/ops/Requests';
 import { IssuesInbox } from './pages/ops/Issues';
 import { Billing, FinesImport, FinesList, Wallet } from './pages/finance/Finance';
+import { NotificationPrefs, NotificationsLog, ReportsIndex, ReportView } from './pages/reports/Reports';
 
 // A screen opened by a direct link without its permission.
 function Guard({ perm, children }: { perm: string[]; children: ReactNode }) {
@@ -177,6 +178,11 @@ export default function App() {
         <Route path="contracts/new" element={g('contracts.create', <ContractForm />)} />
         <Route path="contracts/:id" element={g('contracts.view', <ContractView />)} />
         <Route path="contracts/:id/edit" element={g('contracts.update', <ContractForm />)} />
+
+        <Route path="reports" element={g('reports.view', <ReportsIndex />)} />
+        <Route path="reports/:name" element={g('reports.view', <ReportView />)} />
+        <Route path="notifications" element={g('notifications.view', <NotificationsLog />)} />
+        <Route path="notifications/preferences" element={g('notification_prefs.view', <NotificationPrefs />)} />
 
         <Route path="users" element={g('users.view', <UsersList />)} />
         <Route path="users/new" element={g('users.create', <UserForm />)} />
