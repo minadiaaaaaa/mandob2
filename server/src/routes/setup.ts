@@ -3,6 +3,7 @@ import { dbConfig, isInstalled, one, q, saveDbConfig, setSetting, testConnection
 import { clean, fail } from '../http.js';
 import { hashPassword } from '../auth.js';
 import { install } from '../seed.js';
+import { encrypt } from './system.js';
 import { attach, upload } from '../files.js';
 import { exec } from '../db.js';
 
@@ -91,7 +92,8 @@ setupRouter.post('/smtp', async (req, res) => {
     host: { req: true }, port: { type: 'int', min: 1, max: 65535, req: true }, encryption: { enum: ['starttls', 'ssl', 'none'] },
     username: {}, password: {}, sender_name: {}, sender_email: { type: 'email' },
   });
-  for (const [k, val] of Object.entries(v)) if (val !== null) await setSetting(`smtp.${k}`, String(val));
+  // the password is kept encrypted with the server key, like the private keys
+  for (const [k, val] of Object.entries(v)) if (val !== null) await setSetting(`smtp.${k}`, k === 'password' ? encrypt(String(val)) : String(val));
   await setSetting('smtp.enabled', '1');
   res.json({ ok: true });
 });

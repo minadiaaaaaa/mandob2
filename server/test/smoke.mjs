@@ -412,6 +412,50 @@ assert.equal(lb.stats.board, 1); assert.equal(lb.stats.wallet, 1, 'wallet over t
 assert.equal((await api('GET', '/live/riders/4000001')).points, 1);
 console.log('ch6 ok');
 
+// --- ch11 email, errors, jobs, backups, languages
+const tpls = ok(await api('GET', '/email/templates'), 'templates')._body;
+assert.ok(tpls.length >= 15, 'the ready-made templates are seeded');
+ok(await api('PATCH', '/email/templates/expiry.license', { subject: 'تنبيه {doc_number} {typo_here}' }), 'edit template');
+const tv = await api('GET', '/email/templates/expiry.license');
+assert.deepEqual(tv.check.undeclared, ['typo_here'], 'a misspelt placeholder is flagged');
+assert.equal((await api('POST', '/email/templates/system.smtp_test/deactivate')).error, 'template_required');
+const pvw = ok(await api('POST', '/email/templates/expiry.license/preview', { vars: { doc_number: 'L-9' } }), 'preview');
+assert.ok(pvw.html.includes('<html') && pvw.subject.includes('L-9'));
+assert.equal((await api('POST', '/email/smtp/system/test', { to: 'ops@example.com' })).error, 'email_send_failed', 'no SMTP yet');
+ok(await api('PUT', '/email/smtp/system', { host: 'smtp.example.com', port: 587, username: 'ops@example.com', password: 's3cret', sender_email: 'ops@example.com', enabled: true }), 'smtp');
+assert.equal((await api('GET', '/email/smtp')).system.has_password, true);
+ok(await api('PATCH', '/settings/system', { values: { 'email.dry_run': '1' } }), 'dry run');
+ok(await api('POST', '/email/smtp/system/test', { to: 'ops@example.com' }), 'test in dry run');
+const elog = await api('GET', '/email/log');
+assert.equal(elog.rows[0].status, 'sent'); assert.equal(elog.rows[1].status, 'failed');
+ok(await api('POST', `/email/log/${elog.rows[1].id}/retry`), 'retry');
+assert.equal((await api('GET', '/email/log')).rows.find((r) => r.id === elog.rows[1].id).status, 'sent');
+const jobs = ok(await api('GET', '/cron-jobs'), 'jobs')._body;
+assert.equal(jobs.length, 7); assert.ok(jobs.find((j) => j.name === 'document_expiry').next);
+assert.equal((await api('POST', '/cron-jobs/log_cleanup/run')).outcome, 'completed');
+assert.equal((await api('GET', '/cron-jobs/runs?job=log_cleanup')).total, 1);
+const bk = ok(await api('POST', '/backups', { type: 'full', note: 'smoke' }), 'backup');
+assert.equal((await api('POST', `/backups/${bk.id}/verify`)).ok, true);
+assert.ok((await api('GET', `/backups/${bk.id}/contents`)).manifest.rows > 0);
+const ridersBefore = (await api('GET', '/riders')).total;
+await api('POST', '/companies', { name: 'Made after the backup' });
+assert.equal((await api('POST', `/backups/${bk.id}/restore`, { confirm: 'restore' })).error, 'restore_confirm');
+const rs = ok(await api('POST', `/backups/${bk.id}/restore`, { confirm: 'RESTORE' }), 'restore');
+assert.ok(rs.safety > bk.id && rs.tables > 20, 'a safety backup is taken first');
+if (!rs.session_kept) { cookie = ''; const c2 = await api('GET', '/auth/challenge'); ok(await api('POST', '/auth/login', { username: 'admin', password: 'Admin12345!', challengeId: c2.id, code: c2.code }), 're-login'); }
+assert.equal((await api('GET', '/riders')).total, ridersBefore);
+assert.equal((await api('GET', '/companies?search=Made%20after')).total, 0, 'the restore brought the data back');
+const langs = ok(await api('GET', '/languages'), 'languages');
+assert.ok(langs.languages.find((l) => l.code === 'bn').completeness < 100);
+assert.equal((await api('PUT', '/languages/bn/keys/alerts.within', { value: 'mismatch' })).fields?.value, 'translation_placeholder_mismatch');
+ok(await api('PUT', '/languages/bn/keys/alerts.within', { value: '{n} দিনের মধ্যে' }), 'override');
+ok(await api('POST', '/languages', { code: 'fr', dir: 'ltr', name_native: 'Français', name_en: 'French' }), 'new language');
+ok(await api('POST', '/languages/rebuild'), 'rebuild');
+const pub = await api('GET', '/public/i18n');
+assert.equal(pub.overrides.bn['alerts.within'], '{n} দিনের মধ্যে'); assert.ok(pub.languages.some((l) => l.code === 'fr'));
+ok(await api('DELETE', '/languages/fr'), 'delete language');
+console.log('ch11 ok');
+
 // --- the new role can open nothing
 cookie = '';
 ch = await api('GET', '/auth/challenge');

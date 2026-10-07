@@ -797,3 +797,108 @@ CREATE TABLE IF NOT EXISTS live_days (
   completed INT NULL, cancelled INT NULL, wallet DECIMAL(12,2) NULL,
   PRIMARY KEY (rider_id, work_day)
 );
+
+-- ======================================================================== chapter 11: email, errors, jobs, backups, languages
+CREATE TABLE IF NOT EXISTS email_templates (
+  tkey VARCHAR(80) PRIMARY KEY,
+  name VARCHAR(150) NOT NULL,
+  subject VARCHAR(255) NOT NULL,
+  body_html TEXT NOT NULL,
+  placeholders VARCHAR(500) NULL,
+  grp ENUM('documents','advances','security','portal','system') NOT NULL DEFAULT 'system',
+  is_system TINYINT(1) NOT NULL DEFAULT 0,
+  is_required TINYINT(1) NOT NULL DEFAULT 0,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  updated_at DATETIME NULL
+);
+CREATE TABLE IF NOT EXISTS email_log (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  template_key VARCHAR(80) NULL,
+  to_email VARCHAR(255) NOT NULL,
+  to_name VARCHAR(150) NULL,
+  cc VARCHAR(500) NULL,
+  subject VARCHAR(255) NOT NULL,
+  body MEDIUMTEXT NULL,
+  account ENUM('system','riders') NOT NULL DEFAULT 'system',
+  status ENUM('queued','sent','failed') NOT NULL DEFAULT 'queued',
+  error_code VARCHAR(60) NULL,
+  error_message VARCHAR(1000) NULL,
+  entity_type VARCHAR(40) NULL,
+  entity_id VARCHAR(40) NULL,
+  retries INT NOT NULL DEFAULT 0,
+  provider_id VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  sent_at DATETIME NULL,
+  last_attempt_at DATETIME NULL,
+  INDEX (created_at), INDEX (status)
+);
+CREATE TABLE IF NOT EXISTS error_log (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  level ENUM('info','warning','error','critical') NOT NULL DEFAULT 'error',
+  code VARCHAR(80) NULL,
+  module VARCHAR(80) NULL,
+  message VARCHAR(1000) NOT NULL,
+  route VARCHAR(255) NULL,
+  method VARCHAR(10) NULL,
+  user_id INT NULL,
+  request_id VARCHAR(40) NULL,
+  stack TEXT NULL,
+  INDEX (created_at)
+);
+CREATE TABLE IF NOT EXISTS cron_runs (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  job VARCHAR(40) NOT NULL,
+  started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  finished_at DATETIME NULL,
+  outcome ENUM('running','completed','failed') NOT NULL DEFAULT 'running',
+  records INT NOT NULL DEFAULT 0,
+  notifications INT NOT NULL DEFAULT 0,
+  emails INT NOT NULL DEFAULT 0,
+  error VARCHAR(1000) NULL,
+  details JSON NULL,
+  manual TINYINT(1) NOT NULL DEFAULT 0,
+  INDEX (job, started_at)
+);
+CREATE TABLE IF NOT EXISTS backups (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  file_name VARCHAR(255) NOT NULL UNIQUE,
+  status ENUM('running','completed','failed') NOT NULL DEFAULT 'running',
+  type ENUM('full','db','files') NOT NULL DEFAULT 'full',
+  kind ENUM('manual','auto','safety','upload','registered') NOT NULL DEFAULT 'manual',
+  note VARCHAR(500) NULL,
+  tables_n INT NULL, rows_n INT NULL, files_n INT NULL, missing_files INT NULL,
+  size BIGINT NULL,
+  encrypted TINYINT(1) NOT NULL DEFAULT 1,
+  key_fp VARCHAR(20) NULL,
+  checksum CHAR(64) NULL,
+  error VARCHAR(1000) NULL,
+  created_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS restores (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  backup_id INT NULL,
+  file_name VARCHAR(255) NULL,
+  status ENUM('running','completed','failed') NOT NULL DEFAULT 'running',
+  user_id INT NULL,
+  details VARCHAR(1000) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS languages (
+  code VARCHAR(10) PRIMARY KEY,
+  name_native VARCHAR(60) NOT NULL,
+  name_en VARCHAR(60) NOT NULL,
+  dir ENUM('rtl','ltr') NOT NULL DEFAULT 'ltr',
+  font VARCHAR(100) NULL,
+  flag VARCHAR(16) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS translation_overrides (
+  lang VARCHAR(10) NOT NULL,
+  tkey VARCHAR(120) NOT NULL,
+  value TEXT NOT NULL,
+  updated_by INT NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (lang, tkey)
+);

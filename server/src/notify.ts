@@ -1,4 +1,5 @@
-import { exec, q } from './db.js';
+import { exec, one, q } from './db.js';
+import { sendMail } from './mail.js';
 import { today } from './http.js';
 
 // In-app notifications (guide 9.3). Title and body are translation keys rendered in the reader's language.
@@ -23,10 +24,31 @@ export async function notifyRider(riderId: number, n: Note) {
   return insert({ rider_id: riderId }, n, `r${riderId}`);
 }
 
+// The email that goes with a notification, when there is a template for it.
+function templateFor(n: Note) {
+  const p = n.params ?? {};
+  if (n.title === 'note.doc_expired' || n.title === 'note.doc_expiring') return `expiry.${String(p.kind ?? '').split('.').pop()}`;
+  return ({ 'note.oil_due': 'oil.due', 'note.oil_overdue': 'oil.due', 'note.advance_approved': 'advance.approved', 'note.advance_rejected': 'advance.rejected',
+    'note.inst_due': 'advance.installment', 'note.inst_overdue': 'advance.installment' } as Record<string, string>)[n.title] ?? null;
+}
+async function emailFor(to: { user_id?: number; rider_id?: number }, n: Note) {
+  const tpl = templateFor(n);
+  if (!tpl || !(await one('SELECT 1 FROM email_templates WHERE tkey = ?', [tpl]))) return;
+  // staff get it only when they ticked "Email" for the category; a rider gets it when there is an address
+  const r = to.user_id
+    ? await one<any>('SELECT u.email, u.full_name name, u.locale lang FROM users u JOIN notification_prefs p ON p.user_id = u.id AND p.category = ? AND p.email = 1 WHERE u.id = ?', [n.category, to.user_id])
+    : await one<any>('SELECT email, full_name name, language lang FROM riders WHERE id = ? AND email IS NOT NULL', [to.rider_id]);
+  if (!r?.email) return;
+  const p = n.params ?? {};
+  await sendMail({ template: tpl, to: r.email, toName: r.name, lang: r.lang ?? 'ar', entity_type: n.entity_type, entity_id: n.entity_id,
+    vars: { owner_name: p.owner ?? p.plate ?? r.name, doc_number: p.doc_number ?? p.number ?? '', expiry_date: p.date ?? '', days_left: p.days ?? '' } });
+}
+
 async function insert(to: { user_id?: number; rider_id?: number }, n: Note, who: string) {
   const dedupe = n.dedupe ? `${who}:${n.category}:${n.entity_type}:${n.entity_id}:${await today()}` : null;
   const r = await exec(`INSERT IGNORE INTO notifications (user_id, rider_id, category, severity, title, body, params, entity_type, entity_id, link, dedupe)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [to.user_id ?? null, to.rider_id ?? null, n.category, n.severity ?? 'info', n.title, n.body ?? null,
     n.params ? JSON.stringify(n.params) : null, n.entity_type ?? null, n.entity_id == null ? null : String(n.entity_id), n.link ?? null, dedupe]);
+  if (r.affectedRows) await emailFor(to, n).catch(() => {});
   return r.affectedRows;
 }

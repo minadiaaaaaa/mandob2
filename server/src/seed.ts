@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, exec, q } from './db.js';
 import { ALL_PERMS, BUILTIN_ROLES } from './perms.js';
+import { seedTemplates } from './mail.js';
 
 // [key, default, type, category, description] — the operational keys of "System settings" (guide 11.1.3).
 const SYSTEM: [string, string, string, string, string][] = [
@@ -52,6 +53,10 @@ const SYSTEM: [string, string, string, string, string][] = [
   ['backup.cron', '0 3 * * *', 'text', 'backups', 'The time of the automatic backup'],
   ['backup.keep_count', '14', 'int', 'backups', 'The number of automatic backups kept'],
   ['backup.type', 'full', 'text', 'backups', 'The type of the automatic backup'],
+  ['branding.checks_cron', '*/5 * * * *', 'text', 'maintenance', 'How often the branding verification photos are checked'],
+  ['branding.learn_cron', '0 4 * * *', 'text', 'maintenance', 'The daily time for learning the card model from the reviews'],
+  ['sync.branding_cron', '0 10 * * *', 'text', 'maintenance', 'The daily time for syncing the branding verification photos'],
+  ['sync.cron', '0 15 * * *', 'text', 'maintenance', 'The daily time for syncing the HungerStation reports'],
 ];
 
 // Organization details and platform settings are edited from their own tabs, not from the key table.
@@ -100,12 +105,14 @@ async function tablesAndSettings() {
 // and the Super Admin keeps every permission. Every statement is idempotent.
 export async function upgrade() {
   await tablesAndSettings();
+  await seedTemplates();
   await exec(`INSERT IGNORE INTO role_permissions (role_id, perm) SELECT r.id, p.perm FROM roles r
     JOIN JSON_TABLE(?, '$[*]' COLUMNS (perm VARCHAR(80) PATH '$')) p WHERE r.name = 'Super Admin'`, [JSON.stringify(ALL_PERMS)]);
 }
 
 export async function install(log: (s: string) => void) {
   await tablesAndSettings();
+  await seedTemplates();
   log('tables');
   log('settings');
   for (const role of BUILTIN_ROLES) {
