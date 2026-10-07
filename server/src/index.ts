@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, isInstalled, setting } from './db.js';
-import { errorHandler } from './http.js';
+import { HttpError, errorHandler } from './http.js';
 import { upgrade } from './seed.js';
 import { authenticate } from './auth.js';
 import { attachmentsRouter } from './files.js';
@@ -29,6 +29,9 @@ import { performanceRouter } from './routes/performance.js';
 import { brandingRouter } from './routes/branding.js';
 import { ingestRouter, syncRouter } from './routes/sync.js';
 import { liveRouter } from './routes/live.js';
+import { emailRouter } from './routes/email.js';
+import { logError, maintenanceRouter, startScheduler } from './routes/maintenance.js';
+import { languagesRouter, publicLanguagesRouter } from './routes/languages.js';
 
 const app = express();
 app.set('trust proxy', process.env.TRUST_PROXY === '1');
@@ -48,6 +51,7 @@ app.use('/api', async (_req: Request, res: Response, next: NextFunction) => {
 });
 
 app.use('/api', publicRouter);
+app.use('/api', publicLanguagesRouter);
 // the extension's ingest address carries its own token instead of a session
 app.use('/api', ingestRouter);
 app.use('/api', authenticate);
@@ -81,6 +85,9 @@ app.use('/api', performanceRouter);
 app.use('/api', brandingRouter);
 app.use('/api', syncRouter);
 app.use('/api', liveRouter);
+app.use('/api', emailRouter);
+app.use('/api', maintenanceRouter);
+app.use('/api', languagesRouter);
 app.use('/api/attachments', attachmentsRouter);
 app.use('/api/scans', scansRouter);
 app.use('/api', (_req, res) => res.status(404).json({ error: 'not_found' }));
@@ -92,7 +99,13 @@ if (existsSync(web)) {
   app.get(/^(?!\/api).*/, (_req, res) => res.sendFile(join(web, 'index.html')));
 }
 
+// Errors the code did not expect go to "System errors" (11.7) before the generic answer.
+app.use((err: any, req: Request, _res: Response, next: NextFunction) => {
+  if (!(err instanceof HttpError) && !err?.setup && !['ER_DUP_ENTRY', 'ER_ROW_IS_REFERENCED_2', 'LIMIT_FILE_SIZE'].includes(err?.code)) logError(err, req, 'error');
+  next(err);
+});
 app.use(errorHandler);
 
 const port = Number(process.env.PORT || 4000);
 app.listen(port, () => console.log(`Logistics Services Platform API on http://localhost:${port}`));
+startScheduler();

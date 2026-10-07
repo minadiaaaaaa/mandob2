@@ -76,7 +76,7 @@ systemRouter.patch('/settings/system', can('system_settings.update'), async (req
 
 // ---------- private keys: values are encrypted at rest and never shown ----------
 const KEY_FILE = join(DATA_DIR, 'app.key');
-function appKey() {
+export function appKey() {
   if (process.env.APP_KEY) return Buffer.from(process.env.APP_KEY, 'base64');
   if (!existsSync(KEY_FILE)) writeFileSync(KEY_FILE, randomBytes(32).toString('base64'), { mode: 0o600 });
   return Buffer.from(readFileSync(KEY_FILE, 'utf8').trim(), 'base64');

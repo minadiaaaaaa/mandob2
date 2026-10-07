@@ -257,7 +257,7 @@ export async function generateNotifications() {
     const expired = doc.d < 0;
     const n = {
       category: 'document_expiry' as const, severity: (expired ? 'critical' : 'warning') as 'critical' | 'warning',
-      title: expired ? 'note.doc_expired' : 'note.doc_expiring', params: { kind: `alerts.kind.${doc.kind}`, owner: doc.owner, days: Math.abs(doc.d), date: doc.expiry_date },
+      title: expired ? 'note.doc_expired' : 'note.doc_expiring', params: { kind: `alerts.kind.${doc.kind}`, owner: doc.owner, days: Math.abs(doc.d), date: doc.expiry_date, doc_number: doc.number },
       entity_type: doc.kind, entity_id: doc.record_id, link: '/admin/alerts', dedupe: true,
     };
     created += await notifyUsers('all', n);
