@@ -45,7 +45,9 @@ accountRouter.get('/profile', async (req, res) => {
 });
 
 accountRouter.patch('/profile', async (req, res) => {
-  const v = clean(req.body, { full_name: { req: true, max: 150 }, email: { req: true, type: 'email', max: 150 }, locale: { enum: ['ar', 'en', 'bn', 'ur'] } }, true);
+  const v = clean(req.body, { full_name: { req: true, max: 150 }, email: { req: true, type: 'email', max: 150 }, locale: { max: 10 } }, true);
+  // a built-in language or one added on the "Languages" screen
+  if (v.locale && !['ar', 'en', 'bn', 'ur'].includes(v.locale) && !(await one('SELECT 1 FROM languages WHERE code = ?', [v.locale]))) fieldError('locale', 'invalid');
   if (v.email && (await one('SELECT 1 FROM users WHERE email = ? AND id <> ?', [v.email, req.user!.id]))) fieldError('email', 'email_taken');
   const before = await one('SELECT full_name, email, locale FROM users WHERE id = ?', [req.user!.id]);
   if (Object.keys(v).length) await exec('UPDATE users SET ?, updated_at = UTC_TIMESTAMP() WHERE id = ?', [v, req.user!.id]);

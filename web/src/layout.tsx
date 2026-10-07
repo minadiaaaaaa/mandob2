@@ -2,11 +2,11 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bike, Building2, Car, ChevronDown, FileBadge, FileText, Fuel, Globe, IdCard, KeyRound, LayoutDashboard, LogOut, Menu, Moon, Paperclip,
-  Activity, ScanFace, Star, RefreshCcw, Radar, MapPinned, BarChart3, Bell, SlidersHorizontal, BellRing, FileSpreadsheet, Receipt, Wallet, FilePen, MessagesSquare, CalendarDays, CalendarX2, HandCoins, RefreshCw, ScrollText, Settings, Shield, ShieldBan, Sun, User, UserPlus, Users, Wrench, X, Handshake, ClipboardList, MonitorSmartphone, History,
+  Mail, MailCheck, Bug, Timer, DatabaseBackup, Languages, Activity, ScanFace, Star, RefreshCcw, Radar, MapPinned, BarChart3, Bell, SlidersHorizontal, BellRing, FileSpreadsheet, Receipt, Wallet, FilePen, MessagesSquare, CalendarDays, CalendarX2, HandCoins, RefreshCw, ScrollText, Settings, Shield, ShieldBan, Sun, User, UserPlus, Users, Wrench, X, Handshake, ClipboardList, MonitorSmartphone, History,
 } from 'lucide-react';
 import { get, patch, post } from './api';
 import { useAuth } from './auth';
-import { LANGS, useI18n } from './i18n';
+import { useI18n } from './i18n';
 import { cx } from './ui/kit';
 import { NotificationBell } from './ui/bell';
 import { SyncButton } from './pages/performance/Sync';
@@ -88,8 +88,14 @@ function useSections(): Section[] {
       i('/admin/settings', 'nav.settings', ['system_settings.view', 'platform_settings.view', 'secrets.view'], <Settings />),
       i('/admin/settings/organization', 'nav.organization', 'organization.view', <Building2 />),
       i('/admin/attachments', 'nav.attachments', 'attachments.view', <Paperclip />),
+      i('/admin/email/templates', 'nav.email_templates', ['email_templates.view', 'smtp.view'], <Mail />),
+      i('/admin/email/log', 'nav.email_log', 'email_log.view', <MailCheck />),
       i('/admin/logs/audit', 'nav.activity_log', ['audit_log.view', 'logs.view'], <ClipboardList />),
       i('/admin/logs/login', 'nav.login_attempts', 'login_log.view', <History />),
+      i('/admin/logs/errors', 'nav.system_errors', 'logs.view', <Bug />),
+      i('/admin/cron-jobs', 'nav.cron_jobs', 'cron_jobs.view', <Timer />),
+      i('/admin/backups', 'nav.backups', 'backups.view', <DatabaseBackup />),
+      i('/admin/languages', 'nav.languages', 'languages.view', <Languages />),
     ] },
   ];
 }
@@ -173,7 +179,7 @@ export function useTheme() {
 }
 
 export function LangPicker({ compact }: { compact?: boolean }) {
-  const { lang, setLang, t } = useI18n();
+  const { lang, setLang, t, langs } = useI18n();
   const { me } = useAuth();
   return (
     <label className="inline-flex items-center gap-1.5 text-sm" title={t('top.language')}>
@@ -185,7 +191,7 @@ export function LangPicker({ compact }: { compact?: boolean }) {
           // The choice is saved and remains after signing out.
           if (me) patch('/profile', { locale: l }).catch(() => {});
         }}>
-        {LANGS.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
+        {langs.map((l) => <option key={l.code} value={l.code}>{l.flag ? `${l.flag} ` : ''}{l.name}</option>)}
       </select>
     </label>
   );

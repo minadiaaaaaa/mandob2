@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Ban, CheckCircle2, ChevronDown, ChevronRight, Eye, KeyRound, Lock, LogOut, Pencil, Plus, Power, PowerOff, ShieldOff, Trash2, Unlock } from 'lucide-react';
 import { ApiError, del, get, patch, post, put } from '../../api';
 import { useAuth } from '../../auth';
-import { fmtDateTime, fmtNum, LANGS, useI18n } from '../../i18n';
+import { fmtDateTime, fmtNum, useI18n } from '../../i18n';
 import { Alert, Badge, Button, Card, Checkbox, cx, Details, Field, IconButton, Loading, Modal, PageHeader, StatCard, StatGrid, useAction, useErrorText, useUi, type Tone } from '../../ui/kit';
 import { Grid, SaveBar, SelectInput, TextArea, TextInput, useForm } from '../../ui/forms';
 import { DataTable, FilterBar, FilterDate, FilterSelect, useList, type Column } from '../../ui/table';
@@ -441,9 +441,8 @@ export function BlockedIps() {
 
 // ======================================================================== profile
 export function Profile() {
-  const { t } = useI18n();
+  const { t, setLang, langs } = useI18n();
   const { refresh, me } = useAuth();
-  const { setLang } = useI18n();
   const run = useAction();
   const { confirm, toast } = useUi();
   const [p, setP] = useState<any>(null);
@@ -472,7 +471,7 @@ export function Profile() {
         <form onSubmit={async (e) => { e.preventDefault(); if (await form.submit(() => patch('/profile', form.changes))) { toast(t('profile.saved')); if (form.changes.locale !== undefined) setLang((form.values.locale || me?.org_language || 'ar') as any); await refresh(); load(); } }}>
           <Card title={t('profile.my_details')}><div className="space-y-3">
             <TextInput form={form} name="full_name" label={t('users.full_name')} required /><TextInput form={form} name="email" label={t('users.email')} type="email" required dir="ltr" />
-            <SelectInput form={form} name="locale" label={t('profile.language')} empty={t('profile.org_language')} options={LANGS.map((l) => ({ value: l.code, label: l.name }))} />
+            <SelectInput form={form} name="locale" label={t('profile.language')} empty={t('profile.org_language')} options={langs.map((l) => ({ value: l.code, label: l.name }))} />
             <Button type="submit" variant="primary" disabled={!form.changed.length} loading={form.busy}>{t('common.save_changes')}</Button>
           </div></Card>
         </form>

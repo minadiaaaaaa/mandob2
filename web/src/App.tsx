@@ -37,6 +37,9 @@ import { RatingsImport, RatingsList } from './pages/performance/Ratings';
 import { BrandingImport, BrandingList, BrandingView } from './pages/performance/Branding';
 import { ExtensionPage, SyncScreen } from './pages/performance/Sync';
 import { LiveBoard, LiveReport, RiderDay } from './pages/ops/Live';
+import { EmailLog, EmailScreen } from './pages/system/Email';
+import { Backups, CronJobs, SystemErrors } from './pages/system/Maintenance';
+import { Languages } from './pages/system/Languages';
 
 // A screen opened by a direct link without its permission.
 function Guard({ perm, children }: { perm: string[]; children: ReactNode }) {
@@ -222,6 +225,12 @@ export default function App() {
         <Route path="settings/:tab" element={g(['system_settings.view', 'organization.view', 'platform_settings.view', 'secrets.view'], <Settings />)} />
         <Route path="attachments" element={g('attachments.view', <AttachmentsIndex />)} />
         <Route path="logs/audit" element={g(['audit_log.view', 'logs.view'], <AuditLog />)} />
+        <Route path="email/templates" element={g(['email_templates.view', 'smtp.view'], <EmailScreen />)} />
+        <Route path="email/log" element={g('email_log.view', <EmailLog />)} />
+        <Route path="logs/errors" element={g('logs.view', <SystemErrors />)} />
+        <Route path="cron-jobs" element={g('cron_jobs.view', <CronJobs />)} />
+        <Route path="backups" element={g('backups.view', <Backups />)} />
+        <Route path="languages" element={g('languages.view', <Languages />)} />
         <Route path="logs/login" element={g('login_log.view', <LoginAttempts />)} />
         <Route path="*" element={<NotFound />} />
       </Route>
