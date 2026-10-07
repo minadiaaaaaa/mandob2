@@ -7,6 +7,7 @@ import { fmtNum, useI18n } from '../../i18n';
 import { Badge, Button, Card, StatCard } from '../../ui/kit';
 import { LEAVE_TONE } from '../ops/Leaves';
 import { FinancialSummary } from '../finance/Finance';
+import { RatingCard } from '../performance/Ratings';
 
 // The rider's leaves (3.1), absence (3.2) and financial summary (8.5) inside the rider's record.
 export function RiderOpsCards({ riderId }: { riderId: number | string }) {
@@ -14,6 +15,7 @@ export function RiderOpsCards({ riderId }: { riderId: number | string }) {
   return (
     <div className="mt-4 space-y-4">
       {can('finance.view') && <FinancialSummary riderId={riderId} />}
+      {can('ratings.view') && <RatingCard riderId={riderId} />}
       <div className="grid gap-4 lg:grid-cols-2">
         {can('leaves.view') && <LeavesCard riderId={riderId} />}
         {can('absences.view') && <AbsenceCard riderId={riderId} />}

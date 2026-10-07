@@ -12,8 +12,8 @@ type Preview = {
 };
 
 // All import screens: "File" → "Preview" (writes nothing) → "Result".
-export function ImportWizard({ base, back, options = [], modeLabels, extraLabels = {}, intro, onFinished }: {
-  base: string; back: string; options?: { name: string; label: ReactNode; hint?: ReactNode }[];
+export function ImportWizard({ base, back, options = [], modeLabels, extraLabels = {}, intro, onFinished, values = {} }: {
+  base: string; back: string; options?: { name: string; label: ReactNode; hint?: ReactNode; defaultOn?: boolean }[]; values?: Record<string, string>;
   modeLabels?: { question: string; skip: string; replace: string }; extraLabels?: Record<string, string>; intro?: ReactNode; onFinished?: () => void;
 }) {
   const { t } = useI18n();
@@ -22,7 +22,7 @@ export function ImportWizard({ base, back, options = [], modeLabels, extraLabels
   const [step, setStep] = useState<'file' | 'preview' | 'result'>('file');
   const [file, setFile] = useState<File | null>(null);
   const [mode, setMode] = useState<'skip' | 'replace'>('skip');
-  const [opts, setOpts] = useState<Record<string, boolean>>({});
+  const [opts, setOpts] = useState<Record<string, boolean>>(() => Object.fromEntries(options.map((o) => [o.name, !!o.defaultOn])));
   const [pv, setPv] = useState<Preview | null>(null);
   const [result, setResult] = useState<Record<string, number> | null>(null);
   const [busy, setBusy] = useState(false);
@@ -35,6 +35,7 @@ export function ImportWizard({ base, back, options = [], modeLabels, extraLabels
     const fd = new FormData();
     fd.append('file', file); fd.append('mode', mode);
     for (const [k, v] of Object.entries(opts)) fd.append(k, v ? '1' : '0');
+    for (const [k, v] of Object.entries(values)) fd.append(k, v);
     setBusy(true); setErr(null);
     try { setPv(await post<Preview>(`${base}/preview`, fd)); setStep('preview'); }
     catch (e) { setErr(errText(e)); }
