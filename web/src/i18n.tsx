@@ -4,42 +4,50 @@ import en from '@shared/i18n/en.json';
 import bn from '@shared/i18n/bn.json';
 import ur from '@shared/i18n/ur.json';
 
-export const LANGS = [
+export type LangInfo = { code: string; name: string; dir: 'rtl' | 'ltr'; font?: string | null; flag?: string | null };
+export const LANGS: LangInfo[] = [
   { code: 'ar', name: 'العربية', dir: 'rtl' },
   { code: 'en', name: 'English', dir: 'ltr' },
   { code: 'bn', name: 'বাংলা', dir: 'ltr' },
   { code: 'ur', name: 'اردو', dir: 'rtl' },
-] as const;
-export type Lang = (typeof LANGS)[number]['code'];
-const DICTS: Record<string, Record<string, string>> = { ar, en, bn, ur };
+];
+export type Lang = string;
+const BASE: Record<string, Record<string, string>> = { ar, en, bn, ur };
 
 export type T = (key: string, vars?: Record<string, unknown>) => string;
-type Ctx = { lang: Lang; dir: 'rtl' | 'ltr'; t: T; setLang: (l: Lang) => void; has: (key: string) => boolean };
+type Ctx = { lang: Lang; dir: 'rtl' | 'ltr'; t: T; setLang: (l: Lang) => void; has: (key: string) => boolean; langs: LangInfo[] };
 const I18n = createContext<Ctx>(null!);
 
 const stored = (): Lang => {
-  try { const l = localStorage.getItem('lsp.lang'); if (l && l in DICTS) return l as Lang; } catch { /* storage blocked */ }
+  try { const l = localStorage.getItem('lsp.lang'); if (l && /^[a-z]{2,3}(-[A-Z]{2})?$/.test(l)) return l; } catch { /* storage blocked */ }
   return 'ar';
 };
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(stored);
-  const dir = LANGS.find((l) => l.code === lang)!.dir;
+  // Languages added on the "Languages" screen and every translation override arrive from the server.
+  const [extra, setExtra] = useState<{ langs: LangInfo[]; overrides: Record<string, Record<string, string>> }>({ langs: [], overrides: {} });
+  useEffect(() => { fetch('/api/public/i18n').then((r) => (r.ok ? r.json() : null)).then((d) => d && setExtra({ langs: d.languages, overrides: d.overrides ?? {} })).catch(() => {}); }, []);
+  const langs = useMemo(() => [...LANGS, ...extra.langs.filter((l) => !LANGS.some((b) => b.code === l.code))], [extra.langs]);
+  const dicts = useMemo(() => Object.fromEntries(langs.map((l) => [l.code, { ...(BASE[l.code] ?? {}), ...(extra.overrides[l.code] ?? {}) }])), [langs, extra.overrides]);
+  const info = langs.find((l) => l.code === lang) ?? LANGS[0];
+  const dir = info.dir;
   useEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.dir = dir;
-  }, [lang, dir]);
+    if (info.font) document.documentElement.style.setProperty('--font-ui', info.font); else document.documentElement.style.removeProperty('--font-ui');
+  }, [lang, dir, info.font]);
   const setLang = useCallback((l: Lang) => {
     setLangState(l);
     try { localStorage.setItem('lsp.lang', l); } catch { /* ignore */ }
   }, []);
   // A missing phrase falls back to English, then to the key itself.
   const t = useCallback<T>((key, vars) => {
-    const s = DICTS[lang][key] ?? en[key as keyof typeof en] ?? key;
+    const s = dicts[lang]?.[key] ?? dicts.en?.[key] ?? key;
     return vars ? s.replace(/\{(\w+)\}/g, (_, k) => (vars[k] ?? '') as string) : s;
-  }, [lang]);
-  const has = useCallback((key: string) => key in DICTS[lang] || key in en, [lang]);
-  const value = useMemo(() => ({ lang, dir, t, setLang, has }), [lang, dir, t, setLang, has]);
+  }, [lang, dicts]);
+  const has = useCallback((key: string) => key in (dicts[lang] ?? {}) || key in (dicts.en ?? {}), [lang, dicts]);
+  const value = useMemo(() => ({ lang, dir, t, setLang, has, langs }), [lang, dir, t, setLang, has, langs]);
   return <I18n.Provider value={value}>{children}</I18n.Provider>;
 }
 export const useI18n = () => useContext(I18n);
