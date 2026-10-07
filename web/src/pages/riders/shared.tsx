@@ -29,5 +29,5 @@ export function MissingDocs({ types }: { types: string | null }) {
   const have = new Set((types ?? '').split(',').filter(Boolean));
   const missing = DOC_TYPES.filter((d) => !have.has(d));
   if (!missing.length) return <Badge tone="green">{t('riders.complete')}</Badge>;
-  return <div className="flex flex-wrap gap-1">{missing.map((d) => <Badge key={d} tone={d === 'ajeer' ? 'red' : 'amber'}>{t(`docs.${d}`)}</Badge>)}</div>;
+  return <div className="flex min-w-44 flex-wrap gap-1">{missing.map((d) => <Badge key={d} tone={d === 'ajeer' ? 'red' : 'amber'}>{t(`docs.${d}`)}</Badge>)}</div>;
 }

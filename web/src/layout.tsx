@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bike, Building2, Car, ChevronDown, FileBadge, FileText, Fuel, Globe, IdCard, KeyRound, LayoutDashboard, LogOut, Menu, Moon, Paperclip,
@@ -90,12 +90,12 @@ function Sidebar({ collapsed, onNavigate, badges }: { collapsed: boolean; onNavi
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const visible = (it: Item) => can(...it.perm);
   const linkCls = ({ isActive }: { isActive: boolean }) => cx('flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition [&_svg]:size-4 [&_svg]:shrink-0',
-    isActive ? 'bg-brand text-white' : 'text-zinc-300 hover:bg-white/10 hover:text-white');
+    isActive ? 'bg-brand font-medium text-white shadow-sm shadow-black/30' : 'text-zinc-400 hover:bg-white/[.06] hover:text-white');
   return (
-    <nav className="scroll-thin flex h-full flex-col overflow-y-auto bg-zinc-900 px-2 py-3 text-zinc-100 dark:bg-zinc-950">
-      <Link to="/admin" onClick={onNavigate} className="mb-4 flex items-center gap-2 px-2">
+    <nav className="scroll-thin flex h-full flex-col overflow-y-auto border-e border-white/5 bg-gradient-to-b from-zinc-900 to-zinc-950 px-2 py-3 text-zinc-100">
+      <Link to="/admin" onClick={onNavigate} className="mb-3 flex items-center gap-2.5 border-b border-white/[.06] px-2 pb-3">
         {org?.logos?.logo ? <img src="/api/public/logo/logo" alt="" className="h-8 w-8 rounded bg-white object-contain p-0.5" />
-          : <span className="flex size-8 items-center justify-center rounded bg-brand font-bold">{(org?.['org.name'] || 'L')[0]}</span>}
+          : <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand font-bold shadow-sm">{(org?.['org.name'] || 'L')[0]}</span>}
         {!collapsed && <span className="truncate text-sm font-semibold">{org?.['org.name'] || org?.['platform.name']}</span>}
       </Link>
       {sections.map((s) => {
@@ -104,7 +104,7 @@ function Sidebar({ collapsed, onNavigate, badges }: { collapsed: boolean; onNavi
         return (
           <div key={s.key} className="mb-3">
             {!collapsed && (
-              <div className="mb-1 flex items-center px-2.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+              <div className="mb-1 flex items-center px-2.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-500/90">
                 {s.label}
                 <NavBadge keys={items.flatMap((x) => x.badge ?? [])} badges={badges} />
               </div>
@@ -113,11 +113,11 @@ function Sidebar({ collapsed, onNavigate, badges }: { collapsed: boolean; onNavi
               {items.map((it) => it.children ? (
                 <div key={it.to}>
                   <button title={collapsed ? it.label : undefined} onClick={() => setOpen({ ...open, [it.to]: !(open[it.to] ?? loc.pathname.startsWith(it.to)) })}
-                    className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm text-zinc-300 hover:bg-white/10 hover:text-white [&_svg]:size-4">
+                    className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm text-zinc-400 hover:bg-white/[.06] hover:text-white [&_svg]:size-4">
                     {it.icon}{!collapsed && <><span className="truncate">{it.label}</span><NavBadge keys={it.badge} badges={badges} /><ChevronDown className="!size-3.5 opacity-60" /></>}
                   </button>
                   {(open[it.to] ?? it.children.some((c) => loc.pathname.startsWith(c.to))) && !collapsed && (
-                    <div className="ms-6 mt-0.5 space-y-0.5 border-s border-zinc-700 ps-2">
+                    <div className="ms-[1.15rem] mt-0.5 space-y-0.5 border-s border-white/10 ps-2">
                       {it.children.filter(visible).map((c) => (
                         <NavLink key={c.to} to={c.to} onClick={onNavigate} className={linkCls}><span className="truncate">{c.label}</span><NavBadge keys={c.badge} badges={badges} /></NavLink>
                       ))}
@@ -185,6 +185,13 @@ export function AdminLayout() {
   const [badges, setBadges] = useState<Badges>({});
   useEffect(() => { get<Badges>('/meta/badges').then(setBadges).catch(() => {}); }, [loc.pathname]);
   useEffect(() => { try { localStorage.setItem('lsp.sidebar', collapsed ? '1' : '0'); } catch { /* ignore */ } }, [collapsed]);
+  const menuBox = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const h = (e: MouseEvent) => { if (!menuBox.current?.contains(e.target as Node)) setMenu(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [menu]);
   const signOut = async () => { await post('/auth/logout').catch(() => {}); await refresh(); nav('/admin/login'); };
 
   return (
@@ -194,7 +201,7 @@ export function AdminLayout() {
       </aside>
       {mobile && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setMobile(false)} />}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="no-print sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-zinc-200 bg-white/90 px-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/90">
+        <header className="no-print sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-zinc-200/80 bg-white/80 px-3 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-900/80">
           <button className="rounded-lg p-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
             title={window.innerWidth < 1024 ? t('top.open_menu') : t('top.collapse_sidebar')}
             onClick={() => (window.innerWidth < 1024 ? setMobile(!mobile) : setCollapsed(!collapsed))}>
@@ -203,14 +210,15 @@ export function AdminLayout() {
           <div className="ms-auto flex items-center gap-1">
             <LangPicker />
             <ThemeToggle />
-            <div className="relative">
-              <button onClick={() => setMenu(!menu)} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800">
-                <span className="flex size-7 items-center justify-center rounded-full bg-brand text-xs font-semibold text-white">{me?.full_name.slice(0, 2)}</span>
+            <div className="relative" ref={menuBox}>
+              <button onClick={() => setMenu(!menu)} aria-expanded={menu} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800">
+                <span className="flex size-7 items-center justify-center rounded-full bg-brand text-xs font-semibold text-white ring-2 ring-brand/20">{me?.full_name.slice(0, 2)}</span>
                 <span className="hidden max-w-40 truncate sm:block">{me?.full_name}</span>
                 <ChevronDown className="size-3.5 text-zinc-400" />
               </button>
               {menu && (
-                <div className="absolute end-0 mt-1 w-48 rounded-lg border border-zinc-200 bg-white py-1 text-sm shadow-lg dark:border-zinc-700 dark:bg-zinc-900" onMouseLeave={() => setMenu(false)}>
+                <div className="pop-in absolute end-0 mt-1 w-56 overflow-hidden rounded-xl border border-zinc-200 bg-white py-1 text-sm shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                  <div className="border-b border-zinc-100 px-3 py-2 dark:border-zinc-800"><div className="truncate font-medium">{me?.full_name}</div><div className="truncate text-xs text-zinc-500">{me?.role}</div></div>
                   <Link to="/admin/profile" onClick={() => setMenu(false)} className="flex items-center gap-2 px-3 py-2 hover:bg-zinc-100 dark:hover:bg-zinc-800"><User className="size-4" />{t('top.profile')}</Link>
                   <button onClick={signOut} className="flex w-full items-center gap-2 px-3 py-2 text-red-600 hover:bg-zinc-100 dark:hover:bg-zinc-800"><LogOut className="size-4" />{t('top.sign_out')}</button>
                 </div>

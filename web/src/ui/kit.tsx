@@ -72,9 +72,9 @@ export function IconButton({ title, tone, className, children, ...p }: ButtonHTM
 
 export function Card({ title, actions, children, className, subtitle, pad = true }: { title?: ReactNode; subtitle?: ReactNode; actions?: ReactNode; children?: ReactNode; className?: string; pad?: boolean }) {
   return (
-    <section className={cx('rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900', className)}>
+    <section className={cx('rounded-xl border border-zinc-200/80 bg-white shadow-xs dark:border-zinc-800 dark:bg-zinc-900', className)}>
       {(title || actions) && (
-        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
+        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 px-4 py-3 dark:border-zinc-800/80">
           <div>
             <h2 className="text-sm font-semibold">{title}</h2>
             {subtitle && <p className="mt-0.5 text-xs text-zinc-500">{subtitle}</p>}
@@ -93,8 +93,8 @@ export function PageHeader({ title, subtitle, actions, back }: { title: ReactNod
   return (
     <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
-        {back && <Link to={back} className="mb-1 inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-brand"><Arrow className="size-3.5" />{t('common.back')}</Link>}
-        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+        {back && <Link to={back} className="mb-1.5 inline-flex items-center gap-1 rounded-md text-xs font-medium text-zinc-500 hover:text-brand"><Arrow className="size-3.5" />{t('common.back')}</Link>}
+        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{title}</h1>
         {subtitle && <div className="mt-1 text-sm text-zinc-500">{subtitle}</div>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
@@ -106,18 +106,25 @@ export function Badge({ tone = 'none', children, className, title }: { tone?: To
   return <span title={title} className={cx('inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset whitespace-nowrap', TONE_BADGE[tone], className)}>{children}</span>;
 }
 
+const TONE_BAR: Record<Tone, string> = {
+  green: 'before:bg-emerald-500', amber: 'before:bg-amber-500', red: 'before:bg-red-500', blue: 'before:bg-blue-500', grey: 'before:bg-zinc-400', none: 'before:bg-zinc-200 dark:before:bg-zinc-700',
+};
 export function StatCard({ label, value, tone = 'none', sub, onClick, active, icon }: { label: ReactNode; value: ReactNode; tone?: Tone; sub?: ReactNode; onClick?: () => void; active?: boolean; icon?: ReactNode }) {
   const Comp = onClick ? 'button' : 'div';
   return (
-    <Comp onClick={onClick} className={cx('rounded-xl border bg-white p-3.5 text-start shadow-sm transition dark:bg-zinc-900',
-      active ? 'border-brand ring-2 ring-brand/30' : 'border-zinc-200 dark:border-zinc-800', onClick && 'hover:border-brand/60')}>
-      <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-500">{icon}{label}</div>
-      <div className={cx('mt-1.5 text-2xl font-semibold num', TONE_TEXT[tone])}>{value}</div>
+    <Comp onClick={onClick} className={cx('relative min-w-36 shrink-0 snap-start sm:min-w-0 overflow-hidden rounded-xl border bg-white px-3.5 py-3 text-start shadow-xs transition dark:bg-zinc-900',
+      'before:absolute before:inset-y-0 before:start-0 before:w-[3px]', TONE_BAR[tone],
+      active ? 'border-brand ring-2 ring-brand/25' : 'border-zinc-200/80 dark:border-zinc-800', onClick && 'cursor-pointer hover:-translate-y-px hover:border-brand/50 hover:shadow-sm')}>
+      <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400 [&_svg]:size-3.5">{icon}<span className="truncate">{label}</span></div>
+      <div className={cx('mt-1 text-xl font-semibold tracking-tight num', TONE_TEXT[tone])}>{value}</div>
       {sub && <div className="mt-0.5 text-xs text-zinc-500">{sub}</div>}
     </Comp>
   );
 }
-export const StatGrid = ({ children }: { children: ReactNode }) => <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">{children}</div>;
+// On phones the cards scroll sideways in one row instead of filling the first screen.
+export const StatGrid = ({ children }: { children: ReactNode }) => (
+  <div className="scroll-thin -mx-4 mb-5 flex snap-x gap-2.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-[repeat(auto-fit,minmax(7.5rem,1fr))] sm:overflow-visible sm:px-0 sm:pb-0">{children}</div>
+);
 // "Orange if there is anyone" style cards.
 export const toneIf = (n: number | undefined, tone: Tone): Tone => (n ? tone : 'none');
 
@@ -184,8 +191,8 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/50 p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={cx('max-h-[90vh] w-full overflow-auto rounded-xl bg-white shadow-xl dark:bg-zinc-900', wide ? 'max-w-3xl' : 'max-w-md')}>
+    <div className="fade-in fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/50 p-4 backdrop-blur-[2px]" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div role="dialog" aria-modal="true" className={cx('pop-in max-h-[90vh] w-full overflow-auto rounded-2xl bg-white shadow-2xl ring-1 ring-zinc-900/5 dark:bg-zinc-900 dark:ring-white/10', wide ? 'max-w-3xl' : 'max-w-md')}>
         <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
           <h3 className="font-semibold">{title}</h3>
           <IconButton title="×" onClick={onClose}><X /></IconButton>
@@ -200,8 +207,8 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
 export function SidePanel({ open, onClose, title, children, footer }: { open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; footer?: ReactNode }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-zinc-950/40" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <aside className="flex h-full w-full max-w-lg flex-col bg-white shadow-2xl dark:bg-zinc-900">
+    <div className="fade-in fixed inset-0 z-40 flex justify-end bg-zinc-950/40" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <aside className="slide-in flex h-full w-full max-w-lg flex-col bg-white shadow-2xl dark:bg-zinc-900">
         <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
           <h3 className="font-semibold">{title}</h3>
           <IconButton title="×" onClick={onClose}><X /></IconButton>
@@ -250,7 +257,7 @@ export function UiProvider({ children }: { children: ReactNode }) {
       </Modal>
       <div className="pointer-events-none fixed bottom-4 start-4 z-[60] flex flex-col gap-2">
         {toasts.map((x) => (
-          <div key={x.id} className="pointer-events-auto w-80 max-w-[90vw]"><Alert tone={x.tone}>{x.text}</Alert></div>
+          <div key={x.id} className="pop-in pointer-events-auto w-80 max-w-[90vw] rounded-lg shadow-lg"><Alert tone={x.tone}>{x.text}</Alert></div>
         ))}
       </div>
     </UiCtx.Provider>
@@ -291,10 +298,10 @@ export function Details({ rows, cols = 2 }: { rows: [ReactNode, ReactNode, boole
 
 export function Tabs({ tabs, value, onChange }: { tabs: { key: string; label: ReactNode }[]; value: string; onChange: (k: string) => void }) {
   return (
-    <div className="mb-4 flex gap-1 overflow-x-auto border-b border-zinc-200 dark:border-zinc-800">
+    <div className="scroll-thin mb-4 flex gap-1 overflow-x-auto border-b border-zinc-200 dark:border-zinc-800">
       {tabs.map((tab) => (
         <button key={tab.key} onClick={() => onChange(tab.key)}
-          className={cx('-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition',
+          className={cx('-mb-px whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition',
             value === tab.key ? 'border-brand text-brand' : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200')}>
           {tab.label}
         </button>

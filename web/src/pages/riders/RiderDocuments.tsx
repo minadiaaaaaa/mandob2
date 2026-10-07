@@ -3,7 +3,7 @@ import { UserRound } from 'lucide-react';
 import { useAuth } from '../../auth';
 import { fmtNum, useI18n } from '../../i18n';
 import { Badge, IconButton, PageHeader, StatCard, StatGrid, toneIf } from '../../ui/kit';
-import { DataTable, FilterBar, FilterSelect, FilterToggles, useList, type Column } from '../../ui/table';
+import { DataTable, FilterBar, FilterNumber, FilterSelect, FilterToggles, useList, type Column } from '../../ui/table';
 import { ExportButton, Remaining, useCityName, useOptions } from '../../ui/common';
 import { DOC_MODULE, DOC_SLUG } from './shared';
 
@@ -58,15 +58,13 @@ export default function RiderDocuments() {
         <StatCard label={t('docs.s.no_expiry')} value={fmtNum(s.none)} />
       </StatGrid>
       <FilterBar list={list} placeholder={t('docs.search_hint')}>
-        <div className="text-xs"><span className="mb-1 block text-zinc-500">{t('docs.validity')}</span>
-          <FilterToggles list={list} name="validity" options={[
+        <FilterToggles list={list} name="validity" options={[
             { value: 'expired', label: t('docs.state.expired'), tone: 'bg-red-600 text-white ring-red-600' },
             { value: 'near', label: t('docs.state.near'), tone: 'bg-amber-500 text-white ring-amber-500' },
             { value: 'valid', label: t('docs.state.valid'), tone: 'bg-emerald-600 text-white ring-emerald-600' },
             { value: 'none', label: t('docs.state.none'), tone: 'bg-zinc-500 text-white ring-zinc-500' },
-          ]} /></div>
-        <label className="text-xs"><span className="mb-1 block text-zinc-500">{t('docs.window')}</span>
-          <input type="number" min={1} max={365} className="input w-24 py-1.5" value={list.query.window ?? 30} onChange={(e) => list.set('window', e.target.value)} /></label>
+          ]} />
+        <FilterNumber list={list} name="window" label={t('docs.window')} placeholder="30" />
         {can('riders.view') && <FilterSelect list={list} name="company" label={t('riders.company')} options={companies.map((c: any) => ({ value: c.id, label: c.name }))} />}
         {can('riders.view') && <FilterSelect list={list} name="city" label={t('riders.city')} options={cities.map((c: any) => ({ value: c.id, label: city(c) }))} />}
         <FilterSelect list={list} name="in_force" label={t('docs.in_force')} allLabel={t('docs.current_only')} options={[{ value: 'superseded', label: t('docs.superseded_only') }, { value: 'all', label: t('docs.all_versions') }]} />

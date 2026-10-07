@@ -6,7 +6,7 @@ import { useAuth } from '../../auth';
 import { fmtDateTime, fmtMoney, fmtNum, useI18n } from '../../i18n';
 import { Alert, Badge, Button, Card, Checkbox, Details, Field, IconButton, Loading, PageHeader, StatCard, StatGrid, toneIf, useAction, useErrorText, useUi, type Tone } from '../../ui/kit';
 import { ComboInput, Grid, SaveBar, SelectInput, TextArea, TextInput, useForm } from '../../ui/forms';
-import { DataTable, FilterBar, FilterDate, FilterSelect, useList, type Column } from '../../ui/table';
+import { DataTable, FilterBar, FilterDate, FilterNumber, FilterSelect, useList, type Column } from '../../ui/table';
 import { Attachments } from '../../ui/files';
 import { ImportWizard } from '../../ui/importer';
 import { ExpiryDate, ExportButton, invalidateOptions, Remaining, useOptions } from '../../ui/common';
@@ -324,7 +324,7 @@ export function CoversList() {
         <FilterSelect list={list} name="status" label={t('vi.status')} options={Object.keys(VALID3).map((v) => ({ value: v, label: t(`reg.status.${v}`) }))} />
         <FilterSelect list={list} name="expiry" label={t('vi.expiry')} options={[['expired', 'docs.state.expired'], ['soon', 'regs.expiring_soon'], ['valid', 'docs.state.valid']].map(([v, k]) => ({ value: v, label: t(k) }))} />
         <FilterSelect list={list} name="current" label={t('vi.current')} options={[{ value: 'current', label: t('vi.current_only') }, { value: 'not', label: t('vi.not_current') }]} />
-        <label className="text-xs"><span className="mb-1 block text-zinc-500">{t('regs.within')}</span><input type="number" min={1} className="input w-24 py-1.5" value={list.query.within ?? ''} onChange={(e) => list.set('within', e.target.value)} /></label>
+        <FilterNumber list={list} name="within" label={t('regs.within')} />
       </FilterBar>
       <DataTable list={list} columns={columns} onRowClick={(r) => nav(`/admin/insurance/vehicles/${r.id}`)} selectable={can('vehicle_insurance.update') || can('vehicle_insurance.delete')}
         bulk={<>

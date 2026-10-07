@@ -43,7 +43,7 @@ export default function RidersList() {
     { key: 'phone', header: t('riders.phone'), render: (r) => <span className="num">{r.phone ?? '—'}</span> },
     { key: 'company', header: t('riders.company'), render: (r) => r.company_name ?? '—' },
     { key: 'city', header: t('riders.city'), render: (r) => (r.city_ar ? city(r) : '—') },
-    { key: 'vehicle', header: t('riders.vehicle'), render: (r) => r.vehicle_plate ?? '—' },
+    { key: 'vehicle', header: t('riders.vehicle'), render: (r) => <span className="whitespace-nowrap">{r.vehicle_plate ?? '—'}</span> },
     { key: 'status', header: t('riders.status'), render: (r) => <RiderStatus s={r.status} /> },
     { key: 'actions', header: t('common.actions'), render: (r) => (
       <div className="flex">
