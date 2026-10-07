@@ -8,6 +8,7 @@ import { Alert, Badge, Button, Card, Details, IconButton, Loading, PageHeader, u
 import { Attachments } from '../../ui/files';
 import { Remaining, useCityName } from '../../ui/common';
 import { DOC_MODULE, DOC_TYPES, RiderStatus, type DocType } from './shared';
+import { RiderOpsCards } from './RiderCards';
 
 export default function RiderView() {
   // the profile shares the /admin/riders/:slug route with the document screens
@@ -121,6 +122,7 @@ export default function RiderView() {
           </div>
         </Card>
       </div>
+      <RiderOpsCards riderId={r.id} />
       <div className="mt-4"><Attachments entityType="rider" entityId={r.id} /></div>
     </>
   );

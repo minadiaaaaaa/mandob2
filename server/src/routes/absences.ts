@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { exec, one, q } from '../db.js';
-import { clean, eq, fail, list, listAll, sendExport, where, type Query, type Spec } from '../http.js';
+import { clean, eq, fail, list, listAll, sendExport, today, where, type Query, type Spec } from '../http.js';
 import { can } from '../auth.js';
 import { audit } from '../audit.js';
 import { cellBool, cellNum, cellStr, importRoutes, type ImportDef } from '../importer.js';
@@ -51,6 +51,15 @@ absencesRouter.get('/absences/export', can('absences.view'), async (req, res) =>
       { key: 'company_comment', label: 'abs.company_comment' }, { key: 'internal_note', label: 'abs.internal_note' },
     ],
   });
+});
+
+// The "Absence" card in the rider's record.
+absencesRouter.get('/absences/rider/:id', can('absences.view'), async (req, res) => {
+  const year = (await today()).slice(0, 4);
+  const [sum] = await q(`SELECT COALESCE(ROUND(SUM(days)),0) total, COALESCE(ROUND(SUM(CASE WHEN YEAR(start_at) = ? THEN days END)),0) this_year,
+    COALESCE(ROUND(SUM(CASE WHEN paid = 0 THEN days END)),0) unpaid FROM rider_absences WHERE rider_id = ?`, [year, req.params.id]);
+  const latest = await q(`SELECT a.id, a.start_at, a.end_at, ROUND(a.days) days, a.reason, a.paid FROM rider_absences a WHERE a.rider_id = ? ORDER BY a.start_at DESC LIMIT 5`, [req.params.id]);
+  res.json({ ...sum, latest });
 });
 
 absencesRouter.patch('/absences/:id/note', can('absences.manage'), async (req, res) => {

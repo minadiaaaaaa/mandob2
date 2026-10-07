@@ -12,9 +12,9 @@ type Preview = {
 };
 
 // All import screens: "File" → "Preview" (writes nothing) → "Result".
-export function ImportWizard({ base, back, options = [], modeLabels, extraLabels = {}, intro }: {
+export function ImportWizard({ base, back, options = [], modeLabels, extraLabels = {}, intro, onFinished }: {
   base: string; back: string; options?: { name: string; label: ReactNode; hint?: ReactNode }[];
-  modeLabels?: { question: string; skip: string; replace: string }; extraLabels?: Record<string, string>; intro?: ReactNode;
+  modeLabels?: { question: string; skip: string; replace: string }; extraLabels?: Record<string, string>; intro?: ReactNode; onFinished?: () => void;
 }) {
   const { t } = useI18n();
   const run = useAction();
@@ -44,7 +44,7 @@ export function ImportWizard({ base, back, options = [], modeLabels, extraLabels
     setBusy(true);
     const r = await run(() => post(`${base}/run`, { token: pv!.token }));
     setBusy(false);
-    if (r) { setResult(r); setStep('result'); }
+    if (r) { setResult(r); setStep('result'); onFinished?.(); }
   };
   const restart = () => { setStep('file'); setFile(null); setPv(null); setResult(null); setErr(null); };
   const steps = [['file', t('import.step_file')], ['preview', t('import.step_preview')], ['result', t('import.step_result')]] as const;

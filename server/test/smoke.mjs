@@ -297,6 +297,46 @@ assert.ok((await api('GET', `/issues/${iss.id}`)).resolved_at);
 assert.equal((await api('GET', '/issues?status=resolved')).total, 1);
 console.log('ch3.5 ok');
 
+// --- ch8 finance imports and screens
+const imp = async (path, csv, extra = {}) => {
+  const f = new FormData(); f.append('file', new Blob([csv], { type: 'text/csv' }), 'f.csv'); f.append('mode', extra.mode ?? 'skip');
+  if (extra.create) f.append('create_riders', '1');
+  const pv = ok(await api('POST', `${path}/preview`, f), `${path} preview`);
+  return { pv, run: pv.readable ? ok(await api('POST', `${path}/run`, { token: pv.token }), `${path} run`) : null };
+};
+let fx = await imp('/finance/fines/import', 'Rider ID,Date,Category,Amount,Invoice number,Status\n4000001,2026-09-03,Speeding,300,INV1,\n4000002,2026-09-10,No helmet,150,,dropped\n4000001,bad,X,1,,\n,2026-09-01,Y,1,,\n4000001,2026-09-03,Speeding,300,INV1,\n7777777,2026-09-04,Parking,100,,\n');
+assert.equal(fx.pv.problems, 3, 'bad date, no rider id, duplicate in file');
+assert.deepEqual(fx.pv.problemList.map((p) => p.reason), ['bad_date', 'no_rider_id', 'duplicate_in_file']);
+assert.equal(fx.pv.extra.unknown_riders, 1);
+assert.equal(fx.run.inserted, 2); assert.equal(fx.run.skipped, 1, 'the unknown rider is left out');
+let fines = await api('GET', '/finance/fines');
+assert.equal(fines.total, 2); assert.equal(fines.stats.total, 450); assert.equal(fines.stats.top.full_name, 'محمد أحمد');
+const sp = fines.rows.find((x) => x.category === 'Speeding');
+ok(await api('PATCH', `/finance/fines/${sp.id}`, { status: 'disputed', internal_note: 'appeal #12' }), 'fine status');
+assert.equal((await api('PATCH', `/finance/fines/${sp.id}`, { amount: 150, category: 'ignored' })).error, undefined);
+fx = await imp('/finance/fines/import', 'Rider ID,Date,Category,Amount,Invoice number\n4000001,2026-09-03,Speeding,150,INV1\n', { mode: 'replace' });
+assert.equal(fx.run.replaced, 1);
+fines = await api('GET', `/finance/fines?search=4000001`);
+assert.equal(fines.rows[0].status, 'disputed', 'an import never resets the office status');
+assert.equal((await api('GET', '/finance/fines?amount_min=200')).stats.total, 300, 'the cards ignore the amount fields');
+const nb = (await api('GET', '/finance/fines?search=No%20helmet')).rows[0];
+assert.equal((await api('PATCH', `/finance/fines/${nb.id}`, { amount: 150 })).error, undefined);
+fx = await imp('/finance/wallet/import', 'Rider ID,Balance,Snapshot date\n4000001,-120.5,2026-10-01\n4000001,-80,2026-10-05\n4000002,40,2026-10-05\n');
+assert.equal(fx.run.inserted, 3);
+fx = await imp('/finance/wallet/import', 'Rider ID,Date,Amount,Description\n4000001,2026-10-02,-25,COD shortage\n4000001,2026-10-02,-25,COD shortage\n4000001,2026-10-03,15,Bonus\n');
+assert.equal(fx.run.inserted, 2);
+const bal = await api('GET', '/finance/wallet/balances');
+assert.equal(bal.rows[0].balance, -80, 'the worst balance first, from the latest snapshot'); assert.equal(bal.stats.net, -40); assert.equal(bal.stats.owed, -80);
+assert.equal((await api('GET', '/finance/wallet/history/4000001'))._body.length, 2);
+fx = await imp('/finance/billing/import', 'Rider ID,Month,Contract,Completed orders,Basic payment,Total deductions,Amount incl VAT,Net FTR,Fine late\n4000001,2026-09,Riyadh 3PL,320,4100,250,4200,40,-30\n4000002,09-2026,,100,1200,0,1300,,\n4000003,2026-13,,1,1,1,1,1,1\n');
+assert.equal(fx.pv.problemList[0].reason, 'bad_month'); assert.equal(fx.run.inserted, 2);
+const bill = await api('GET', '/finance/billing?month=2026-09');
+assert.equal(bill.stats.riders, 2); assert.equal(bill.totals.amount_incl_vat, 5500); assert.equal(bill.rows[0].full_name, 'محمد أحمد', 'largest amount first');
+const fsum = await api('GET', '/finance/rider/4000001');
+assert.equal(fsum.wallet.balance, -80); assert.equal(fsum.fines.n, 1); assert.equal(fsum.billing.month, '2026-09');
+assert.equal((await api('GET', '/finance/billing/export?month=2026-09', undefined, true)).status, 200);
+console.log('ch8 ok');
+
 // --- the new role can open nothing
 cookie = '';
 ch = await api('GET', '/auth/challenge');
