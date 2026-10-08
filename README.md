@@ -20,8 +20,8 @@ Stack: Node 24 + Express + MySQL 8 (server), React + Vite + Tailwind (web), 4 la
 **1. Get the code and the dependencies**
 
 ```bash
-git clone https://github.com/Fadysamy9/tayson-logistics.git
-cd tayson-logistics
+git clone https://github.com/Fadysamy9/mandoob.git
+cd mandoob
 pnpm setup                 # installs server/ and web/ dependencies
 ```
 
