@@ -20,7 +20,7 @@ export default function Setup() {
   const [tested, setTested] = useState(false);
   const [log, setLog] = useState<string[]>([]);
   const [ran, setRan] = useState(false);
-  const [pf, setPf] = useState<Record<string, string>>({ platform_name: '', default_language: 'ar', currency: 'SAR', timezone: 'Asia/Riyadh', country: 'SA', primary_color: '#0f766e', secondary_color: '#0f172a', tax_label: 'VAT', tax_rate: '15', tax_enabled: '1' });
+  const [pf, setPf] = useState<Record<string, string>>({ platform_name: 'مندوب', default_language: 'ar', currency: 'SAR', timezone: 'Asia/Riyadh', country: 'SA', primary_color: '#0f766e', secondary_color: '#0f172a', tax_label: 'VAT', tax_rate: '15', tax_enabled: '1' });
   const [files, setFiles] = useState<Record<string, File>>({});
   const [admin, setAdmin] = useState({ full_name: '', email: '', password: '', confirm: '' });
   const [smtp, setSmtp] = useState({ host: '', port: '587', encryption: 'starttls', username: '', password: '', sender_name: '', sender_email: '' });

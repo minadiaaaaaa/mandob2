@@ -1,4 +1,4 @@
--- Logistics Services Platform: full database structure (64 tables, no data).
+-- Mandoob (مندوب): full database structure (64 tables, no data).
 -- Exported from an installed MySQL 8 database. The app creates the same tables by itself from
 -- server/src/schema.sql on first run (setup wizard), so this file is for reference, review, or a manual setup.
 -- Manual use: mysql -u root -p logistics < database/schema.sql   (then run the /setup wizard for roles, settings and the first admin)

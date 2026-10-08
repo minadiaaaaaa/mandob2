@@ -1,5 +1,5 @@
 {
-  "name": "logistics-services-platform",
+  "name": "mandoob",
   "private": true,
   "scripts": {
     "setup": "pnpm -C server install && pnpm -C web install",
