@@ -30,9 +30,9 @@ assert.ok(me.perms.includes('riders.view'));
 console.log('login ok, perms', me.perms.length);
 
 // --- arabic text round trip
-ok(await api('PATCH', '/settings/organization', { name: 'مؤسسة تايسون للخدمات اللوجستية', tax_number: '300123456700003' }), 'org');
+ok(await api('PATCH', '/settings/organization', { name: 'مؤسسة مندوب', tax_number: '300123456700003' }), 'org');
 const org = await api('GET', '/public/org');
-assert.equal(org['org.name'], 'مؤسسة تايسون للخدمات اللوجستية');
+assert.equal(org['org.name'], 'مؤسسة مندوب');
 
 // --- companies, contracts
 const co = ok(await api('POST', '/companies', { name: 'HungerStation', email: 'ops@hs.example', operator_id: '7788' }), 'company');
