@@ -456,6 +456,116 @@ assert.equal(pub.overrides.bn['alerts.within'], '{n} দিনের মধ্�
 ok(await api('DELETE', '/languages/fr'), 'delete language');
 console.log('ch11 ok');
 
+// --- ch12 rider portal: its own sessions, the rider side of requests, leaves and conversations
+let rcookie = '';
+async function rapi(method, path, body) {
+  const opts = { method, headers: { cookie: rcookie } };
+  if (body instanceof FormData) opts.body = body;
+  else if (body !== undefined) { opts.body = JSON.stringify(body); opts.headers['content-type'] = 'application/json'; }
+  const r = await fetch(base + '/api' + path, opts);
+  const sc = r.headers.get('set-cookie');
+  if (sc) rcookie = sc.split(';')[0];
+  const j = await r.json().catch(() => ({}));
+  return { ...j, _s: r.status, _body: j };
+}
+const lastCode = async () => (await api('GET', '/email/log')).rows[0].subject.match(/(\d{6})/)[1];
+const png = () => new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' });
+const dayPlus = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+assert.equal((await api('GET', '/portal/me')).error, 'rider_session_ended', 'a staff session is not a rider session');
+assert.equal((await rapi('POST', '/portal/login', { rider_id: '9999999' })).error, 'portal_bad_credentials');
+assert.equal((await rapi('POST', '/portal/login', { rider_id: '4000001' })).error, 'portal_disabled', 'a suspended rider cannot sign in');
+ok(await api('POST', '/riders/bulk-edit', { ids: [4000001], changes: { status: 'active' } }), 'reactivate');
+assert.equal(ok(await rapi('POST', '/portal/login', { rider_id: '4000001' }), 'portal login').first, true, 'first sign-in with the ID alone');
+const pme = ok(await rapi('GET', '/portal/me'), 'portal me');
+assert.equal(pme.id, 4000001); assert.equal(pme.has_password, false);
+const pov = ok(await rapi('GET', '/portal/overview'), 'overview');
+assert.equal(pov.completion.items.length, 7); assert.equal(pov.completion.items.find((i) => i.key === 'ajeer').status, 'expired');
+const ppf = ok(await rapi('GET', '/portal/profile'), 'profile');
+assert.equal(ppf.national_id, '••••••9012', 'the ID number is masked');
+const pperf = ok(await rapi('GET', '/portal/performance?from=2026-09-01&to=2026-09-30'), 'performance');
+assert.ok(pperf.total.completed >= 18); assert.equal(pperf.absence.days.find((d) => d.day === '2026-09-01').status, 'present');
+assert.equal((await rapi('GET', '/portal/performance?from=2026-09-30&to=2026-09-01')).fields?.from, 'start_after_end');
+ok(await rapi('GET', '/portal/ratings'), 'ratings'); ok(await rapi('GET', '/portal/attendance'), 'attendance');
+// update requests
+assert.equal((await rapi('POST', '/portal/requests', { type: 'contact', phone: '0551234567' })).fields?.phone, 'same_as_current');
+assert.equal((await rapi('POST', '/portal/requests', { type: 'contact', phone: '12' })).fields?.phone, 'portal_phone_rules');
+const pcr = ok(await rapi('POST', '/portal/requests', { type: 'contact', phone: '+966559876543' }), 'contact request');
+assert.equal((await rapi('POST', '/portal/requests', { type: 'contact', email: 'm@example.com' })).error, 'request_pending_exists');
+const nofile = new FormData(); nofile.append('type', 'document'); nofile.append('doc_type', 'license');
+assert.equal((await rapi('POST', '/portal/requests', nofile)).fields?.files, 'file_required');
+const docReq = (t) => { const f = new FormData(); f.append('type', 'document'); f.append('doc_type', t); f.append('expiry_date', '2028-01-01'); f.append('files', png(), 'front.png'); f.append('files', png(), 'back.png'); return f; };
+const pdr = ok(await rapi('POST', '/portal/requests', docReq('license')), 'document request');
+const phr = ok(await rapi('POST', '/portal/requests', docReq('health')), 'another document type is its own request');
+ok(await rapi('POST', `/portal/requests/${phr.id}/cancel`), 'cancel request');
+const preqs = ok(await rapi('GET', '/portal/requests'), 'requests');
+assert.equal(preqs.pending, 2); assert.deepEqual(preqs.rows.find((r) => r.id === pdr.id).files.map((f) => f.attachment_type), ['front', 'back']);
+assert.equal((await rapi('GET', `/portal/files/${preqs.rows.find((r) => r.id === pdr.id).files[0].id}`))._s, 200);
+assert.equal((await rapi('GET', `/portal/files/${issv.list[1].files[0].id}`))._s, 404, 'a file on an internal note is never the rider\'s');
+ok(await api('POST', `/change-requests/${pcr.id}/approve`), 'office approves');
+assert.equal((await api('GET', '/riders/4000001')).phone, '+966559876543');
+// leaves
+assert.equal((await rapi('POST', '/portal/leaves', { leave_type: 'annual', start_date: dayPlus(-2), reason: 'x' })).fields?.start_date, 'leave_in_past');
+assert.equal((await rapi('POST', '/portal/leaves', { leave_type: 'annual', start_date: dayPlus(5), end_date: dayPlus(40), reason: 'x' })).fields?.end_date, 'leave_too_long');
+assert.equal((await rapi('POST', '/portal/leaves', { leave_type: 'annual', start_date: dayPlus(120), reason: 'x' })).fields?.start_date, 'leave_too_far');
+const plv = ok(await rapi('POST', '/portal/leaves', { leave_type: 'emergency', start_date: dayPlus(60), end_date: dayPlus(62), reason: 'ظرف عائلي' }), 'portal leave');
+assert.equal((await rapi('POST', '/portal/leaves', { leave_type: 'annual', start_date: dayPlus(62), reason: 'x' })).fields?.start_date, 'leave_overlap');
+assert.equal((await api('GET', `/leaves/${plv.id}`)).source, 'rider');
+ok(await rapi('POST', `/portal/leaves/${plv.id}/cancel`), 'cancel leave');
+assert.equal((await rapi('POST', `/portal/leaves/${plv.id}/cancel`)).error, 'leave_cannot_cancel');
+// conversations
+const pis0 = new FormData(); pis0.append('category', 'app'); pis0.append('subject', 'App freezes'); pis0.append('body', 'short');
+assert.equal((await rapi('POST', '/portal/issues', pis0)).fields?.body, 'too_short');
+const pis1 = new FormData(); pis1.append('category', 'app'); pis1.append('subject', 'App freezes'); pis1.append('body', 'The app freezes when I start a shift.'); pis1.append('priority', 'urgent');
+assert.equal((await rapi('POST', '/portal/issues', pis1)).fields?.priority, 'invalid', 'urgent is for the office only');
+pis1.set('priority', 'high');
+const pis = ok(await rapi('POST', '/portal/issues', pis1), 'portal issue');
+assert.equal((await api('GET', `/issues/${pis.id}`)).opened_by, 'rider');
+const sr1 = new FormData(); sr1.append('body', 'Please update the app.');
+ok(await api('POST', `/issues/${pis.id}/messages`, sr1), 'office reply');
+assert.equal((await rapi('GET', '/portal/me')).unread_issues, 2, 'the reply and the office-opened conversation');
+const pconv = ok(await rapi('GET', `/portal/issues/${pis.id}`), 'conversation');
+assert.equal(pconv.status, 'in_progress'); assert.equal(pconv.list.length, 2); assert.equal(pconv.list[1].user_name, undefined, 'the employee name stays hidden');
+ok(await rapi('POST', `/portal/issues/${pis.id}/read`), 'read');
+assert.equal((await rapi('GET', '/portal/me')).unread_issues, 1);
+assert.ok((await rapi('GET', `/portal/issues/${iss.id}`)).list.every((m) => !m.internal), 'internal notes stay with the office');
+const rr = new FormData(); rr.append('body', 'Still a problem');
+ok(await rapi('POST', `/portal/issues/${iss.id}/messages`, rr), 'reply to a resolved conversation');
+assert.equal((await api('GET', `/issues/${iss.id}`)).status, 'open', 'the reply reopens it');
+assert.equal((await rapi('GET', '/portal/issues?status=open')).rows.length, 2);
+// security: verify the email, then the password
+assert.equal((await rapi('POST', '/portal/security/password', { password: 'Rider2026x', confirm: 'Rider2026x' })).error, 'verify_email_first');
+ok(await rapi('POST', '/portal/security/email', { email: 'Rider@Example.com' }), 'send code');
+const vcode = await lastCode();
+assert.equal((await rapi('POST', '/portal/security/email', { email: 'rider@example.com' })).error, 'code_wait');
+assert.equal((await rapi('POST', '/portal/security/email/verify', { code: vcode === '000000' ? '111111' : '000000' })).fields?.code, 'code_wrong');
+assert.equal(ok(await rapi('POST', '/portal/security/email/verify', { code: vcode }), 'verify').email, 'rider@example.com');
+assert.equal((await rapi('POST', '/portal/security/password', { password: 'onlyletters', confirm: 'onlyletters' })).fields?.password, 'portal_password_rules');
+ok(await rapi('POST', '/portal/security/password', { password: 'Rider2026x', confirm: 'Rider2026x' }), 'set password');
+const keep = rcookie;
+assert.equal((await rapi('POST', '/portal/login', { rider_id: '4000001' })).step, 'password');
+assert.equal((await rapi('POST', '/portal/login', { rider_id: '4000001', password: 'wrong-pass1' })).error, 'portal_bad_credentials');
+assert.equal(ok(await rapi('POST', '/portal/login', { rider_id: '4000001', password: 'Rider2026x' }), 'login with password').first, false);
+// forgot password: the code goes to the verified email, and the reset ends every session
+ok(await rapi('POST', '/portal/forgot', { rider_id: '4000001' }), 'forgot');
+ok(await rapi('POST', '/portal/reset', { rider_id: '4000001', code: await lastCode(), password: 'NewPass2026', confirm: 'NewPass2026' }), 'reset');
+assert.equal((await rapi('GET', '/portal/me')).error, 'rider_session_ended');
+rcookie = keep; assert.equal((await rapi('GET', '/portal/me'))._s, 401, 'every device is signed out');
+// the office's portal account card
+const pac = ok(await api('GET', '/riders/4000001/portal'), 'portal card');
+assert.equal(pac.has_password, true); assert.equal(pac.attempts.length, 5);
+ok(await rapi('POST', '/portal/login', { rider_id: '4000001', password: 'NewPass2026' }), 'login new password');
+assert.equal(ok(await api('POST', '/riders/4000001/portal/disable'), 'disable').ended, 1);
+assert.equal((await rapi('POST', '/portal/login', { rider_id: '4000001', password: 'NewPass2026' })).error, 'portal_disabled');
+ok(await api('POST', '/riders/4000001/portal/enable'), 'enable');
+ok(await api('POST', '/riders/4000001/portal/reset-password'), 'office reset');
+assert.equal(ok(await rapi('POST', '/portal/login', { rider_id: '4000001' }), 'ID alone again').first, true);
+assert.ok((await rapi('GET', '/portal/security')).verified_email, 'the reset keeps the verified email');
+// 10 failures from one network block the sign-in for a while
+let blocked = false;
+for (let i = 0; i < 12 && !blocked; i++) blocked = (await rapi('POST', '/portal/login', { rider_id: '1' })).error === 'portal_too_many';
+assert.ok(blocked);
+console.log('ch12 ok');
+
 // --- the new role can open nothing
 cookie = '';
 ch = await api('GET', '/auth/challenge');

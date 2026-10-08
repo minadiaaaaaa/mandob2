@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
   action VARCHAR(80) NOT NULL,
   entity_type VARCHAR(60) NULL,
   entity_id VARCHAR(60) NULL,
-  actor_type ENUM('user','system','api','guest','job') NOT NULL DEFAULT 'user',
+  actor_type ENUM('user','system','api','guest','job','rider') NOT NULL DEFAULT 'user',
   actor_id INT NULL,
   actor_name VARCHAR(150) NULL,
   status ENUM('success','failed','error','pending','denied') NOT NULL DEFAULT 'success',
@@ -576,7 +576,7 @@ CREATE TABLE IF NOT EXISTS rider_change_requests (
   doc_type ENUM('id','license','health','driver_card','ajeer','other') NULL,
   payload JSON NOT NULL,
   snapshot JSON NULL,
-  rider_note VARCHAR(500) NULL,
+  rider_note VARCHAR(1000) NULL,
   status ENUM('pending','approved','rejected','cancelled') NOT NULL DEFAULT 'pending',
   review_note VARCHAR(500) NULL,
   reviewed_by INT NULL,
@@ -901,4 +901,52 @@ CREATE TABLE IF NOT EXISTS translation_overrides (
   updated_by INT NULL,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (lang, tkey)
+);
+
+-- ======================================================================== chapter 12: the rider portal
+-- Rider sign-in is kept apart from staff sign-in: its own sessions, attempts and emailed codes.
+-- verified_email is the address used for sign-in recovery only; the file's email stays riders.email.
+CREATE TABLE IF NOT EXISTS rider_accounts (
+  rider_id BIGINT PRIMARY KEY,
+  verified_email VARCHAR(150) NULL UNIQUE,
+  email_verified_at DATETIME NULL,
+  locale VARCHAR(10) NULL,
+  last_login_at DATETIME NULL,
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);
+CREATE TABLE IF NOT EXISTS rider_sessions (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  token_hash CHAR(64) NOT NULL UNIQUE,
+  rider_id BIGINT NOT NULL,
+  ip VARCHAR(64) NULL,
+  user_agent VARCHAR(255) NULL,
+  status ENUM('active','signed_out','expired','revoked') NOT NULL DEFAULT 'active',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_activity_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NOT NULL,
+  ended_at DATETIME NULL,
+  INDEX (rider_id, status)
+);
+CREATE TABLE IF NOT EXISTS rider_login_attempts (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  typed VARCHAR(30) NULL,
+  rider_id BIGINT NULL,
+  success TINYINT(1) NOT NULL DEFAULT 0,
+  reason VARCHAR(40) NULL,
+  ip VARCHAR(64) NULL,
+  user_agent VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX (ip, created_at), INDEX (rider_id, created_at)
+);
+CREATE TABLE IF NOT EXISTS rider_codes (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  rider_id BIGINT NOT NULL,
+  purpose ENUM('verify_email','reset_password') NOT NULL,
+  email VARCHAR(150) NOT NULL,
+  code_hash CHAR(64) NOT NULL,
+  attempts INT NOT NULL DEFAULT 0,
+  expires_at DATETIME NOT NULL,
+  used_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX (rider_id, purpose, created_at)
 );

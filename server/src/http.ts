@@ -34,7 +34,7 @@ export const latinDigits = (s: string) => s.replace(AR_DIGITS, (d) => String((d.
 
 // Returns only the fields the rules know. With partial=true (edit screens) absent fields are skipped,
 // so an edit saves only what changed.
-export function clean(body: Record<string, any>, rules: Record<string, Rule>, partial = false) {
+export function clean(body: Record<string, any> = {}, rules: Record<string, Rule>, partial = false) {
   const out: Record<string, any> = {};
   const fields: Record<string, string> = {};
   for (const [k, r] of Object.entries(rules)) {
@@ -183,7 +183,7 @@ export function tr(lang: string, key: string, vars: Record<string, unknown> = {}
   return s.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''));
 }
 export async function langOf(req: Request) {
-  return req.user?.locale || (await setting('org.default_language')) || 'ar';
+  return req.user?.locale || req.rider?.locale || (await setting('org.default_language')) || 'ar';
 }
 
 // ---------- export to Excel / CSV ----------

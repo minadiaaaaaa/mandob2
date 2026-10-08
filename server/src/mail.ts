@@ -22,8 +22,8 @@ export const SEED = [
   T('security.login', 'New sign-in alert', 'security', 'user_name,login_time,ip_address,device', 'تنبيه أمني لحسابك', '<p>{user_name}، سُجّل دخول/قفل لحسابك في {login_time} من العنوان {ip_address} ({device}).</p><p>إن لم يكن هذا أنت فتواصل مع مدير النظام فوراً.</p>'),
   T('system.jobs', 'Scheduled jobs summary', 'system', 'job_name,status,duration', 'ملخص الوظيفة المجدولة {job_name}: {status}', '<p>انتهت الوظيفة <b>{job_name}</b> بنتيجة <b>{status}</b> خلال {duration}.</p>'),
   T('system.smtp_test', 'Email settings test', 'system', 'company_name', 'رسالة اختبار إعدادات البريد — {company_name}', '<p>هذه رسالة اختبار. إن وصلتك فإعدادات البريد تعمل.</p><p>This is a test message: the email settings work.</p>', 1),
-  T('portal.verify_email', 'Rider portal email verification', 'portal', 'owner_name,code', 'رمز التحقق من بريدك: {code}', '<p>{owner_name}، رمز التحقق من بريدك الإلكتروني هو <b style="font-size:20px">{code}</b>. صالح لمدة 15 دقيقة.</p>', 1),
-  T('portal.reset_password', 'Rider portal password recovery', 'portal', 'owner_name,code', 'رمز استعادة كلمة المرور: {code}', '<p>{owner_name}، رمز استعادة كلمة المرور هو <b style="font-size:20px">{code}</b>. صالح لمدة 15 دقيقة. إن لم تطلبه فتجاهل هذه الرسالة.</p>', 1),
+  T('portal.verify_email', 'Rider portal email verification', 'portal', 'owner_name,code,link', 'رمز التحقق من بريدك: {code}', '<p>{owner_name}، رمز التحقق من بريدك الإلكتروني هو <b style="font-size:20px">{code}</b>. صالح لمدة 15 دقيقة.</p><p><a href="{link}">تأكيد البريد مباشرة</a></p>', 1),
+  T('portal.reset_password', 'Rider portal password recovery', 'portal', 'owner_name,code,link', 'رمز استعادة كلمة المرور: {code}', '<p>{owner_name}، رمز استعادة كلمة المرور هو <b style="font-size:20px">{code}</b>. صالح لمدة 15 دقيقة. إن لم تطلبه فتجاهل هذه الرسالة.</p><p><a href="{link}">إدخال الرمز</a></p>', 1),
 ];
 export async function seedTemplates() {
   for (const t of SEED) {

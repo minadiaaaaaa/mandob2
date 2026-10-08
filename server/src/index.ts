@@ -32,6 +32,7 @@ import { liveRouter } from './routes/live.js';
 import { emailRouter } from './routes/email.js';
 import { logError, maintenanceRouter, startScheduler } from './routes/maintenance.js';
 import { languagesRouter, publicLanguagesRouter } from './routes/languages.js';
+import { portalAdminRouter, portalRouter } from './routes/portal.js';
 
 const app = express();
 app.set('trust proxy', process.env.TRUST_PROXY === '1');
@@ -54,6 +55,8 @@ app.use('/api', publicRouter);
 app.use('/api', publicLanguagesRouter);
 // the extension's ingest address carries its own token instead of a session
 app.use('/api', ingestRouter);
+// the rider portal has its own sessions (chapter 12)
+app.use('/api', portalRouter);
 app.use('/api', authenticate);
 
 // Maintenance mode blocks every signed-in user except administrators.
@@ -88,6 +91,7 @@ app.use('/api', liveRouter);
 app.use('/api', emailRouter);
 app.use('/api', maintenanceRouter);
 app.use('/api', languagesRouter);
+app.use('/api', portalAdminRouter);
 app.use('/api/attachments', attachmentsRouter);
 app.use('/api/scans', scansRouter);
 app.use('/api', (_req, res) => res.status(404).json({ error: 'not_found' }));
