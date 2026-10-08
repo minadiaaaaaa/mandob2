@@ -44,6 +44,8 @@ body {
 
 /* Numbers and dates are always Latin digits, whatever the language. */
 .num { font-variant-numeric: tabular-nums; unicode-bidi: isolate; direction: ltr; display: inline-block; white-space: nowrap; }
+/* on a table cell the number keeps its cell layout and the table's alignment */
+td.num, th.num { display: table-cell; direction: inherit; unicode-bidi: plaintext; }
 
 /* In the components layer so utilities (w-auto, ps-8 …) can still override it. */
 @layer components {

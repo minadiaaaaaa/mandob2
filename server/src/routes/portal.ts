@@ -9,6 +9,7 @@ import { sendMail, smtpConfig } from '../mail.js';
 import { fileChangeRequest } from './requests.js';
 import { leaveFromRider, overlap } from './leaves.js';
 import { addMessage, files10, messages, riderMessage } from './issues.js';
+import { logError } from './maintenance.js';
 
 // Chapter 12: the rider portal. Riders sign in with their own sessions, never with a staff account.
 declare global {
@@ -191,6 +192,13 @@ portalRouter.get('/portal/files/:id', async (req, res) => {
   sendStored(res, a, req.query.download === '1');
 });
 
+// A portal page that failed to display is recorded in "System errors" for the office.
+portalRouter.post('/portal/client-error', async (req, res) => {
+  const b = req.body ?? {};
+  await logError({ name: 'PortalPage', message: `[rider #${req.rider!.id}] ${String(b.page ?? '').slice(0, 200)}: ${String(b.message ?? '')}`, stack: String(b.stack ?? '') }, req);
+  res.json({ ok: true });
+});
+
 // ======================================================================== profile and its completion (12.4, 12.5)
 const DOCS = ['id', 'license', 'health', 'driver_card', 'ajeer'] as const;
 async function completion(riderId: number, day: string) {
@@ -302,12 +310,9 @@ portalRouter.get('/portal/performance/export', async (req, res) => {
   if (!rows.length) fail(404, 'no_performance_data');
   const [total] = await q<any>(`SELECT ${PERF_SUMS} FROM daily_performance p WHERE p.rider_id = ? AND p.work_date BETWEEN ? AND ?`, [id, from, to]);
   const pct = (k: string) => (r: any) => (r[k] == null ? null : (Number(r[k]) * 100).toFixed(2));
-  const cols: Col[] = [{ key: 'label', label: 'rp.perf.date' }, { key: 'completed', label: 'rp.perf.completed' }, { key: 'accepted', label: 'rp.perf.accepted' },
-    { key: 'declined', label: 'rp.perf.declined' }, { key: 'cancelled', label: 'rp.perf.cancelled' }, { key: 'notified', label: 'rp.perf.offered' },
-    { key: 'att', label: 'rp.perf.att', value: pct('att') }, { key: 'acc', label: 'rp.perf.acc', value: pct('acc') }, { key: 'actual', label: 'rp.perf.actual' },
-    { key: 'planned', label: 'rp.perf.planned' }, { key: 'break_hours', label: 'rp.perf.break' }, { key: 'lost', label: 'rp.perf.lost' },
-    { key: 'no_shows', label: 'rp.perf.no_shows' }, { key: 'shifts', label: 'rp.perf.shifts' }];
-  await sendExport(req, res, { format: 'csv', title: 'rp.perf.title', cols, rows: [...rows, { ...total, label: tr(await langOf(req), 'rp.perf.total') }] });
+  const cols: Col[] = ['date', 'completed', 'accepted', 'declined', 'cancelled', 'offered', 'att', 'acc', 'actual', 'planned', 'break', 'lost', 'no_shows', 'shifts'].map((k) => ({
+    key: ({ date: 'label', offered: 'notified', break: 'break_hours' } as Record<string, string>)[k] ?? k, label: `rp.perf.col.${k}`, value: k === 'att' || k === 'acc' ? pct(k) : undefined }));
+  await sendExport(req, res, { format: 'csv', title: 'rp.nav.performance', cols, rows: [...rows, { ...total, label: tr(await langOf(req), 'rp.perf.total') }] });
 });
 
 portalRouter.get('/portal/ratings', async (req, res) => {
@@ -424,7 +429,9 @@ portalRouter.post('/portal/leaves', async (req, res) => {
   if (v.start_date > addDays(day, 90)) fieldError('start_date', 'leave_too_far');
   if (v.end_date < v.start_date) fieldError('end_date', 'end_before_start');
   if (daysBetween(v.start_date, v.end_date) + 1 > 30) fieldError('end_date', 'leave_too_long');
-  await overlap(id, v.start_date, v.end_date);
+  // the rider reads "You already have…", not the office's wording
+  try { await overlap(id, v.start_date, v.end_date); }
+  catch (e) { if (e instanceof HttpError) fieldError('start_date', 'leave_overlap_mine', e.params); throw e; }
   const out = await leaveFromRider(id, { ...v, rider_id: id });
   await riderAudit(req, { action: 'leave.create', entity_type: 'leave', entity_id: out.id, after: { ...v, letter_no: out.letter_no } });
   res.json(out);
@@ -433,7 +440,7 @@ portalRouter.post('/portal/leaves', async (req, res) => {
 portalRouter.post('/portal/leaves/:id/cancel', async (req, res) => {
   // after approval only the office can cancel it
   const r = await exec("UPDATE leaves SET status = 'cancelled', updated_at = UTC_TIMESTAMP() WHERE id = ? AND rider_id = ? AND status = 'pending'", [req.params.id, req.rider!.id]);
-  if (!r.affectedRows) fail(409, 'leave_cannot_cancel');
+  if (!r.affectedRows) fail(409, 'leave_cancel_pending_only');
   await riderAudit(req, { action: 'leave.cancel', entity_type: 'leave', entity_id: req.params.id });
   res.json({ ok: true });
 });
@@ -471,7 +478,7 @@ portalRouter.post('/portal/issues', files10, async (req, res) => {
 });
 
 async function ownIssue(req: Request) {
-  const i = await one<any>('SELECT id, subject, category, priority, status, created_at, last_activity_at, staff_read_at FROM rider_issues WHERE id = ? AND rider_id = ?', [req.params.id, req.rider!.id]);
+  const i = await one<any>('SELECT id, subject, category, priority, status, opened_by, created_at, last_activity_at, staff_read_at FROM rider_issues WHERE id = ? AND rider_id = ?', [req.params.id, req.rider!.id]);
   if (!i) fail(404, 'not_found');
   return i;
 }

@@ -178,7 +178,7 @@ export function useTheme() {
   return [dark, setDark] as const;
 }
 
-export function LangPicker({ compact }: { compact?: boolean }) {
+export function LangPicker({ compact, onPick }: { compact?: boolean; onPick?: (l: string) => void }) {
   const { lang, setLang, t, langs } = useI18n();
   const { me } = useAuth();
   return (
@@ -189,7 +189,8 @@ export function LangPicker({ compact }: { compact?: boolean }) {
           const l = e.target.value as typeof lang;
           setLang(l);
           // The choice is saved and remains after signing out.
-          if (me) patch('/profile', { locale: l }).catch(() => {});
+          if (onPick) onPick(l);
+          else if (me) patch('/profile', { locale: l }).catch(() => {});
         }}>
         {langs.map((l) => <option key={l.code} value={l.code}>{l.flag ? `${l.flag} ` : ''}{l.name}</option>)}
       </select>
