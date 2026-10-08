@@ -111,5 +111,5 @@ app.use((err: any, req: Request, _res: Response, next: NextFunction) => {
 app.use(errorHandler);
 
 const port = Number(process.env.PORT || 4000);
-app.listen(port, () => console.log(`Logistics Services Platform API on http://localhost:${port}`));
+app.listen(port, () => console.log(`Mandoob API on http://localhost:${port}`));
 startScheduler();

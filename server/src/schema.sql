@@ -1,4 +1,4 @@
--- Logistics Services Platform — schema (phase 1). Run by the setup wizard, step 2.
+-- Mandoob (مندوب) — schema. Run by the setup wizard, step 2.
 -- Every statement is idempotent so the step can be re-run.
 
 CREATE TABLE IF NOT EXISTS settings (

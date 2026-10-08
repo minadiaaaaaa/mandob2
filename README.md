@@ -1,4 +1,4 @@
-# Logistics Services Platform
+# مندوب (Mandoob)
 
 A rebuild of the system described in `Logistics-Services-User-Guide.pdf`: an admin system for delivery
 operators that run riders on HungerStation and similar apps. It has an admin panel (`/admin`), a rider portal

@@ -61,13 +61,13 @@ const SYSTEM: [string, string, string, string, string][] = [
 
 // Organization details and platform settings are edited from their own tabs, not from the key table.
 const OTHER: [string, string, string][] = [
-  ['org.name', '', 'organization'], ['org.name_en', '', 'organization'], ['org.system_name', 'Logistics Services Platform', 'organization'],
+  ['org.name', '', 'organization'], ['org.name_en', '', 'organization'], ['org.system_name', 'مندوب', 'organization'],
   ['org.version', '1.0.0', 'organization'], ['org.unified_number', '', 'organization'], ['org.cr_number', '', 'organization'],
   ['org.tax_number', '', 'organization'], ['org.support_email', '', 'organization'], ['org.support_phone', '', 'organization'],
   ['org.website', '', 'organization'], ['org.address', '', 'organization'], ['org.default_language', 'ar', 'organization'],
   ['org.timezone', 'Asia/Riyadh', 'organization'], ['org.currency', 'SAR', 'organization'], ['org.date_format', 'YYYY-MM-DD', 'organization'],
   ['org.maintenance', '0', 'organization'], ['org.maintenance_message', '', 'organization'], ['org.description', '', 'organization'],
-  ['platform.name', 'Logistics Services Platform', 'platform'], ['platform.tagline', '', 'platform'],
+  ['platform.name', 'مندوب', 'platform'], ['platform.tagline', '', 'platform'],
   ['platform.primary_color', '#0f766e', 'platform'], ['platform.secondary_color', '#0f172a', 'platform'],
   ['platform.currency', 'SAR', 'platform'], ['platform.locale', 'ar', 'platform'], ['platform.timezone', 'Asia/Riyadh', 'platform'],
   ['platform.country', 'SA', 'platform'], ['platform.date_format', 'YYYY-MM-DD', 'platform'], ['platform.time_format', '24', 'platform'],
@@ -105,6 +105,8 @@ async function tablesAndSettings() {
     const [col] = await q<{ ty: string }>('SELECT COLUMN_TYPE ty FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?', [t, c]);
     if (col && !def.toLowerCase().startsWith(col.ty.toLowerCase())) await exec(`ALTER TABLE ${t} MODIFY ${c} ${def}`);
   }
+  // the product is now called "مندوب"; installs that kept the old default name take the new one
+  await exec("UPDATE settings SET value = 'مندوب' WHERE `key` IN ('org.system_name', 'platform.name') AND value = 'Logistics Services Platform'");
   for (const [k, v, t, c, d] of SYSTEM) {
     await exec('INSERT IGNORE INTO settings (`key`, value, type, category, description) VALUES (?, ?, ?, ?, ?)', [k, v, t, c, d]);
   }
