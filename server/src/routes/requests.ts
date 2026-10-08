@@ -108,9 +108,10 @@ requestsRouter.post('/change-requests/:id/reject', can('rider_portal.review_requ
   res.json({ ok: true });
 });
 
-// Filed from the rider portal (chapter 12): one pending request of each type at a time.
+// Filed from the rider portal (chapter 12): one pending request of each type (and document type) at a time.
 export async function fileChangeRequest(riderId: number, r: { type: 'contact' | 'photo' | 'document'; doc_type?: string | null; payload: Record<string, unknown>; rider_note?: string | null }) {
-  const dup = await one('SELECT 1 FROM rider_change_requests WHERE rider_id = ? AND type = ? AND status = ?', [riderId, r.type, 'pending']);
+  // documents count per document type
+  const dup = await one("SELECT 1 FROM rider_change_requests WHERE rider_id = ? AND type = ? AND status = 'pending' AND (type <> 'document' OR doc_type <=> ?)", [riderId, r.type, r.doc_type ?? null]);
   if (dup) fail(409, 'request_pending_exists');
   const snapshot = await currentValues({ rider_id: riderId, type: r.type, doc_type: r.doc_type });
   const ins = await exec('INSERT INTO rider_change_requests SET ?', [{ rider_id: riderId, type: r.type, doc_type: r.doc_type ?? null,

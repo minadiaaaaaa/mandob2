@@ -204,9 +204,9 @@ const RULES = {
   rider_id: { req: true, type: 'int' as const }, start_date: { req: true, type: 'date' as const }, end_date: { type: 'date' as const },
   leave_type: { req: true, enum: TYPES }, reason: { req: true, max: 500 }, reason_paragraph: { max: 1000 }, internal_note: { max: 4000 },
 };
-async function overlap(riderId: number, start: string, end: string, except = 0) {
-  const o = await one<any>(`SELECT letter_no FROM leaves WHERE rider_id = ? AND id <> ? AND status IN ${LIVE} AND start_date <= ? AND end_date >= ?`, [riderId, except, end, start]);
-  if (o) fieldError('start_date', 'leave_overlap', { letter: o.letter_no });
+export async function overlap(riderId: number, start: string, end: string, except = 0) {
+  const o = await one<any>(`SELECT letter_no, start_date FROM leaves WHERE rider_id = ? AND id <> ? AND status IN ${LIVE} AND start_date <= ? AND end_date >= ?`, [riderId, except, end, start]);
+  if (o) fieldError('start_date', 'leave_overlap', { letter: o.letter_no, date: o.start_date });
 }
 // The stamp is placed when the option is on, both images exist, the user may stamp, and the request is live.
 async function stampFor(req: Request, status: string) {

@@ -93,8 +93,18 @@ const CITIES: [string, string][] = [
   ['الباحة', 'Al Baha'], ['عرعر', 'Arar'], ['سكاكا', 'Sakaka'], ['حفر الباطن', 'Hafar Al Batin'],
 ];
 
+// Columns that later versions widened: [table, column, type it must have now].
+const WIDENED: [string, string, string][] = [
+  ['audit_log', 'actor_type', "ENUM('user','system','api','guest','job','rider') NOT NULL DEFAULT 'user'"],
+  ['rider_change_requests', 'rider_note', 'VARCHAR(1000) NULL'],
+];
+
 async function tablesAndSettings() {
   await exec(readFileSync(join(ROOT, 'src', 'schema.sql'), 'utf8'));
+  for (const [t, c, def] of WIDENED) {
+    const [col] = await q<{ ty: string }>('SELECT COLUMN_TYPE ty FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?', [t, c]);
+    if (col && !def.toLowerCase().startsWith(col.ty.toLowerCase())) await exec(`ALTER TABLE ${t} MODIFY ${c} ${def}`);
+  }
   for (const [k, v, t, c, d] of SYSTEM) {
     await exec('INSERT IGNORE INTO settings (`key`, value, type, category, description) VALUES (?, ?, ?, ?, ?)', [k, v, t, c, d]);
   }

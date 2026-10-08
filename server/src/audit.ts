@@ -4,7 +4,7 @@ import { exec } from './db.js';
 type Entry = {
   action: string; entity_type?: string; entity_id?: unknown;
   severity?: 'info' | 'warning' | 'error' | 'critical'; status?: 'success' | 'failed' | 'error' | 'pending' | 'denied';
-  actor_type?: 'user' | 'system' | 'api' | 'guest' | 'job'; before?: unknown; after?: unknown; details?: string;
+  actor_type?: 'user' | 'system' | 'api' | 'guest' | 'job' | 'rider'; actor_id?: number; actor_name?: string; before?: unknown; after?: unknown; details?: string;
 };
 
 const SECRET = /password|token|secret|hash/i;
@@ -18,7 +18,7 @@ export async function audit(req: Request | null, e: Entry) {
     await exec(`INSERT INTO audit_log (action, entity_type, entity_id, actor_type, actor_id, actor_name, status, severity, ip, route, request_id, user_agent, before_json, after_json, details)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
       e.action, e.entity_type ?? null, e.entity_id == null ? null : String(e.entity_id),
-      e.actor_type ?? (req?.user ? 'user' : 'guest'), req?.user?.id ?? null, req?.user?.full_name ?? null,
+      e.actor_type ?? (req?.user ? 'user' : 'guest'), e.actor_id ?? req?.user?.id ?? null, e.actor_name ?? req?.user?.full_name ?? null,
       e.status ?? 'success', e.severity ?? 'info',
       req ? (req.ip ?? '').replace(/^::ffff:/, '') : null, req ? `${req.method} ${req.originalUrl}`.slice(0, 255) : null, req?.rid ?? null,
       req ? (req.headers['user-agent'] ?? '').slice(0, 255) : null,
