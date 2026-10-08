@@ -40,6 +40,10 @@ import { LiveBoard, LiveReport, RiderDay } from './pages/ops/Live';
 import { EmailLog, EmailScreen } from './pages/system/Email';
 import { Backups, CronJobs, SystemErrors } from './pages/system/Maintenance';
 import { Languages } from './pages/system/Languages';
+import { ForgotPassword, PortalLayout, RiderLogin } from './pages/portal/shell';
+import { Attendance, Overview, Performance, Profile as RiderProfilePage, Ratings } from './pages/portal/home';
+import { Help, Leaves, Requests, Security } from './pages/portal/requests';
+import { RiderIssues } from './pages/portal/issues';
 
 // A screen opened by a direct link without its permission.
 function Guard({ perm, children }: { perm: string[]; children: ReactNode }) {
@@ -59,11 +63,6 @@ function NotFound() {
   const { t } = useI18n();
   return <div className="py-20 text-center"><h1 className="text-2xl font-semibold">404</h1><p className="mt-2 text-zinc-500">{t('err.not_found')}</p><Link to="/admin"><Button className="mt-4">{t('err.back_to_dashboard')}</Button></Link></div>;
 }
-// ponytail: the rider portal (chapter 12) is a later phase; its links land here meanwhile.
-function RiderPortalSoon() {
-  const { t } = useI18n();
-  return <div className="flex min-h-screen items-center justify-center p-4"><Alert tone="blue" title={t('portal.soon_title')}>{t('portal.soon_text')} <Link className="text-brand underline" to="/">{t('login.back_to_site')}</Link></Alert></div>;
-}
 // /admin/riders/<rider id> is the profile; /admin/riders/driving-licenses etc. are the document screens.
 function RiderOrDocs() {
   const { slug = '' } = useParams();
@@ -78,7 +77,22 @@ export default function App() {
     <Routes>
       <Route path="/" element={<PublicSite />} />
       <Route path="/setup" element={<Setup />} />
-      <Route path="/rider/*" element={<RiderPortalSoon />} />
+      <Route path="/rider/login" element={<RiderLogin />} />
+      <Route path="/rider/forgot-password" element={<ForgotPassword />} />
+      <Route path="/rider" element={<PortalLayout />}>
+        <Route index element={<Overview />} />
+        <Route path="profile" element={<RiderProfilePage />} />
+        <Route path="attendance" element={<Attendance />} />
+        <Route path="performance" element={<Performance />} />
+        <Route path="ratings" element={<Ratings />} />
+        <Route path="requests" element={<Requests />} />
+        <Route path="leaves" element={<Leaves />} />
+        <Route path="issues" element={<RiderIssues />} />
+        <Route path="issues/:id" element={<RiderIssues />} />
+        <Route path="security" element={<Security />} />
+        <Route path="help" element={<Help />} />
+        <Route path="*" element={<Overview />} />
+      </Route>
       <Route path="/admin/login" element={<Login />} />
       <Route path="/admin" element={<RequireAuth><AdminLayout /></RequireAuth>}>
         <Route index element={g('dashboard.view', <Dashboard />)} />

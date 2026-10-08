@@ -8,9 +8,9 @@ import { Alert, Badge, Button, cx, Details, Field, IconButton, Modal, PageHeader
 import { RiderPicker } from '../../ui/forms';
 import { useCityName } from '../../ui/common';
 
-const STATUS_TONE: Record<string, Tone> = { open: 'blue', in_progress: 'amber', resolved: 'green', closed: 'grey' };
+export const STATUS_TONE: Record<string, Tone> = { open: 'blue', in_progress: 'amber', resolved: 'green', closed: 'grey' };
 const PRIORITY_TONE: Record<string, Tone> = { high: 'amber', urgent: 'red' };
-const CATEGORIES = ['account', 'performance', 'attendance', 'payment', 'vehicle', 'app', 'other'];
+export const CATEGORIES = ['account', 'performance', 'attendance', 'payment', 'vehicle', 'app', 'other'];
 const PRIORITIES = ['low', 'normal', 'high', 'urgent'];
 const STATUSES = ['open', 'in_progress', 'resolved', 'closed'];
 
@@ -20,7 +20,7 @@ function useTabState<T>(key: string, initial: T) {
   useEffect(() => { try { sessionStorage.setItem(key, JSON.stringify(v)); } catch { /* ignore */ } }, [key, v]);
   return [v, setV] as const;
 }
-function ago(t: (k: string, v?: any) => string, at: string) {
+export function ago(t: (k: string, v?: any) => string, at: string) {
   const s = Math.max(0, (Date.now() - Date.parse(at.replace(' ', 'T') + 'Z')) / 1000);
   if (s < 60) return t('iss.just_now');
   if (s < 3600) return t('iss.min_ago', { n: Math.floor(s / 60) });
@@ -139,7 +139,7 @@ export function IssuesInbox() {
   );
 }
 
-type Msg = { id: number; author: 'rider' | 'staff'; body: string | null; internal: number; created_at: string; user_name?: string; files: any[]; local?: 'sending' | 'failed'; retry?: FormData };
+export type Msg = { id: number; author: 'rider' | 'staff'; body: string | null; internal: number; created_at: string; user_name?: string; files: any[]; local?: 'sending' | 'failed'; retry?: FormData };
 
 function Conversation({ id, onChanged, back }: { id: number; onChanged: () => void; back: ReactNode }) {
   const { t } = useI18n();
@@ -239,9 +239,10 @@ function Conversation({ id, onChanged, back }: { id: number; onChanged: () => vo
   );
 }
 
-function FileChip({ f, light }: { f: any; light?: boolean }) {
+export const staffFile = (id: number) => `/api/attachments/${id}/file`;
+export function FileChip({ f, light, href = staffFile }: { f: any; light?: boolean; href?: (id: number) => string }) {
   const { t } = useI18n();
-  const src = `/api/attachments/${f.id}/file`;
+  const src = href(f.id);
   if (f.mime.startsWith('image/')) return <a href={src} target="_blank" rel="noreferrer"><img src={src} alt={f.file_name} className="max-h-56 rounded-lg" /></a>;
   if (f.mime.startsWith('audio/')) return <div><audio controls src={src} className="h-9 max-w-64" />{f.attachment_type === 'voice' && <div className="text-[10px] opacity-70">{t('iss.voice_message')} · {t('iss.no_transcript')}</div>}</div>;
   if (f.mime.startsWith('video/')) return <video controls src={src} className="max-h-56 rounded-lg" />;
@@ -249,7 +250,8 @@ function FileChip({ f, light }: { f: any; light?: boolean }) {
     <FileText className="size-4 shrink-0" /><span className="truncate">{f.file_name}</span><span className="shrink-0 opacity-70 num">{fmtBytes(f.size)}</span><Download className="size-3.5 shrink-0" /></a>;
 }
 
-function Composer({ onSend }: { onSend: (fd: FormData, preview: Msg) => Promise<boolean> }) {
+// staff=false is the rider's side: no internal notes.
+export function Composer({ onSend, staff = true, placeholder }: { onSend: (fd: FormData, preview: Msg) => Promise<boolean>; staff?: boolean; placeholder?: string }) {
   const { t } = useI18n();
   const [text, setText] = useState('');
   const [files, setFiles] = useState<File[]>([]);
@@ -271,7 +273,7 @@ function Composer({ onSend }: { onSend: (fd: FormData, preview: Msg) => Promise<
     if (internal && !voice) fd.append('internal', '1');
     const sent = voice ? [new File([voice], `voice-${Date.now()}.webm`, { type: voice.type || 'audio/webm' })] : files;
     for (const f of sent) fd.append('files', f);
-    const preview: Msg = { id: 0, author: 'staff', body: voice ? null : text, internal: internal && !voice ? 1 : 0, created_at: new Date().toISOString().slice(0, 19).replace('T', ' '), files: sent.map((f, i) => ({ id: -i, file_name: f.name, mime: 'application/octet-stream', size: f.size })) };
+    const preview: Msg = { id: 0, author: staff ? 'staff' : 'rider', body: voice ? null : text, internal: internal && !voice ? 1 : 0, created_at: new Date().toISOString().slice(0, 19).replace('T', ' '), files: sent.map((f, i) => ({ id: -i, file_name: f.name, mime: 'application/octet-stream', size: f.size })) };
     if (!voice) { setText(''); setFiles([]); }
     await onSend(fd, preview);
   };
@@ -297,21 +299,21 @@ function Composer({ onSend }: { onSend: (fd: FormData, preview: Msg) => Promise<
       {err && <p className="mb-1 text-xs text-red-600">{err}</p>}
       <div className="flex items-end gap-2">
         <IconButton title={t('iss.attach')} onClick={() => input.current?.click()}><Paperclip /></IconButton>
-        <textarea className="input max-h-40 min-h-10 flex-1 resize-y" rows={1} maxLength={5000} dir="auto" placeholder={internal ? t('iss.internal_placeholder') : t('iss.reply_placeholder')} value={text}
+        <textarea className="input max-h-40 min-h-10 flex-1 resize-y" rows={1} maxLength={5000} dir="auto" placeholder={internal ? t('iss.internal_placeholder') : placeholder ?? t('iss.reply_placeholder')} value={text}
           onChange={(e) => setText(e.target.value)} onPaste={(e) => { const imgs = Array.from(e.clipboardData.files); if (imgs.length) { e.preventDefault(); add(imgs); } }}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }} />
         {!text && !files.length && !internal && rec.supported
           ? <IconButton title={t('iss.record_voice')} onClick={async () => { if (!(await rec.start())) setErr(t('iss.mic_blocked')); }}><Mic /></IconButton>
           : <Button variant={internal ? 'warn' : 'primary'} icon={<Send className="size-4" />} onClick={() => submit()}>{internal ? t('iss.save_note') : t('iss.send')}</Button>}
       </div>
-      <div className="mt-2"><Switch checked={internal} onChange={setInternal} label={<span className="text-xs">{t('iss.internal_note')}</span>} /></div>
+      {staff && <div className="mt-2"><Switch checked={internal} onChange={setInternal} label={<span className="text-xs">{t('iss.internal_note')}</span>} /></div>}
       <input ref={input} type="file" hidden multiple onChange={(e) => { if (e.target.files) add(e.target.files); e.target.value = ''; }} />
     </div>
   );
 }
 
 // Voice messages: pause, resume, listen before sending; stops by itself at five minutes.
-function useRecorder() {
+export function useRecorder() {
   const [state, setState] = useState<'idle' | 'recording' | 'paused' | 'stopped'>('idle');
   const [secs, setSecs] = useState(0);
   const [blob, setBlob] = useState<Blob | null>(null);

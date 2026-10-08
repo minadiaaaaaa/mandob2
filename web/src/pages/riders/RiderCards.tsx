@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus } from 'lucide-react';
-import { get } from '../../api';
+import { get, post } from '../../api';
 import { useAuth } from '../../auth';
-import { fmtNum, useI18n } from '../../i18n';
-import { Badge, Button, Card, StatCard } from '../../ui/kit';
+import { fmtDateTime, fmtNum, useI18n } from '../../i18n';
+import { Badge, Button, Card, Details, StatCard, useAction, useUi } from '../../ui/kit';
 import { LEAVE_TONE } from '../ops/Leaves';
 import { FinancialSummary } from '../finance/Finance';
 import { RatingCard } from '../performance/Ratings';
@@ -14,6 +14,7 @@ export function RiderOpsCards({ riderId }: { riderId: number | string }) {
   const { can } = useAuth();
   return (
     <div className="mt-4 space-y-4">
+      {can('rider_portal.manage_portal') && <PortalAccountCard riderId={riderId} />}
       {can('finance.view') && <FinancialSummary riderId={riderId} />}
       {can('ratings.view') && <RatingCard riderId={riderId} />}
       <div className="grid gap-4 lg:grid-cols-2">
@@ -66,6 +67,44 @@ function AbsenceCard({ riderId }: { riderId: number | string }) {
           <li key={x.id} className="flex gap-2"><span className="num">{x.start_at.slice(0, 10)}</span><span className="text-zinc-500">{t('abs.n_days', { n: x.days })}</span>
             <span className="text-zinc-500">{x.reason ?? ''}</span>{x.paid === 0 && <Badge tone="amber" className="ms-auto">{t('abs.paid_no')}</Badge>}</li>
         ))}</ul>
+      )}
+    </Card>
+  );
+}
+
+// 12.14 "Rider portal account": access, password, sign-ins. Only for "Manage portal accounts".
+function PortalAccountCard({ riderId }: { riderId: number | string }) {
+  const { t } = useI18n();
+  const { confirm, toast } = useUi();
+  const run = useAction();
+  const [a, setA] = useState<any>(null);
+  const load = useCallback(() => get(`/riders/${riderId}/portal`).then(setA).catch(() => {}), [riderId]);
+  useEffect(() => { load(); }, [load]);
+  if (!a) return null;
+  const act = async (what: 'disable' | 'enable' | 'reset-password', okKey: string) => {
+    if (!(await confirm({ title: t(`portal_acc.${what}_q`), body: t(`portal_acc.${what}_body`), tone: what === 'enable' ? 'primary' : 'danger', confirm: t(`portal_acc.${what}`) }))) return;
+    const r = await run(() => post(`/riders/${riderId}/portal/${what}`));
+    if (r) { load(); toast(t(okKey, { n: r.ended ?? 0 })); }
+  };
+  return (
+    <Card title={t('portal_acc.title')} actions={<>
+      {a.portal_enabled ? <Button size="sm" variant="danger" onClick={() => act('disable', 'portal_acc.disabled_ok')}>{t('portal_acc.disable')}</Button>
+        : <Button size="sm" variant="primary" onClick={() => act('enable', 'portal_acc.enabled_ok')}>{t('portal_acc.enable')}</Button>}
+      {a.has_password && <Button size="sm" onClick={() => act('reset-password', 'portal_acc.reset_ok')}>{t('portal_acc.reset-password')}</Button>}
+    </>}>
+      <Details cols={3} rows={[
+        [t('portal_acc.access'), <Badge tone={a.portal_enabled ? 'green' : 'red'}>{a.portal_enabled ? t('portal_acc.enabled') : t('portal_acc.disabled')}</Badge>, true],
+        [t('portal_acc.password'), a.has_password ? <>{t('portal_acc.set')} · <span className="num">{fmtDateTime(a.portal_password_set_at)}</span></> : t('portal_acc.not_set'), true],
+        [t('portal_acc.last_sign_in'), a.last_login_at ? <span className="num">{fmtDateTime(a.last_login_at)}</span> : t('portal_acc.never'), true],
+        [t('portal_acc.sessions'), fmtNum(a.active_sessions), true],
+        [t('portal_acc.verified_email'), a.verified_email ?? '—', true],
+      ]} />
+      {!['active', 'inactive'].includes(a.status) && <p className="mt-3 text-xs text-amber-600">{t('portal_acc.status_blocks')}</p>}
+      <h3 className="mb-1 mt-4 text-xs font-semibold text-zinc-500">{t('portal_acc.attempts')}</h3>
+      {!a.attempts.length ? <p className="text-sm text-zinc-500">{t('portal_acc.never')}</p> : (
+        <ul className="divide-y divide-zinc-100 text-sm dark:divide-zinc-800">{a.attempts.map((x: any, i: number) => (
+          <li key={i} className="flex flex-wrap items-center gap-2 py-1.5"><Badge tone={x.success ? 'green' : 'red'}>{x.success ? t('portal_acc.success') : t('portal_acc.failed')}</Badge>
+            {!x.success && <span className="text-xs">{t(`portal_acc.reason.${x.reason}`)}</span>}<span className="ms-auto text-xs text-zinc-500 num">{x.ip} · {fmtDateTime(x.created_at)}</span></li>))}</ul>
       )}
     </Card>
   );

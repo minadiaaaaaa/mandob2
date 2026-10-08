@@ -40,7 +40,7 @@ export function Bars({ data, empty, format = fmtNum }: { data: Datum[]; empty?: 
 }
 
 // A ring split into parts, with its legend.
-export function Donut({ data, center, empty }: { data: Datum[]; center?: ReactNode; empty?: ReactNode }) {
+export function Donut({ data, center, empty, onPick }: { data: Datum[]; center?: ReactNode; empty?: ReactNode; onPick?: (d: Datum) => void }) {
   const total = data.reduce((s, d) => s + d.value, 0);
   if (!total) return <div className="py-10 text-center text-sm text-zinc-500">{empty}</div>;
   const COLORS: Record<string, string> = { brand: 'var(--brand)', green: '#10b981', amber: '#f59e0b', red: '#ef4444', blue: '#3b82f6', grey: '#a1a1aa' };
@@ -55,8 +55,9 @@ export function Donut({ data, center, empty }: { data: Datum[]; center?: ReactNo
       </div>
       <ul className="min-w-32 flex-1 space-y-1.5 text-xs">
         {data.map((d) => (
-          <li key={d.label} className="flex items-center gap-2"><span className="size-2.5 shrink-0 rounded-sm" style={{ background: COLORS[d.tone ?? 'brand'] }} />
-            <span className="flex-1 truncate">{d.label}</span><span className="font-medium num">{fmtNum(d.value)}</span></li>
+          <li key={d.label} className={onPick ? 'cursor-pointer rounded hover:bg-zinc-100 dark:hover:bg-zinc-800' : undefined} onClick={onPick && (() => onPick(d))}>
+            <span className="flex items-center gap-2"><span className="size-2.5 shrink-0 rounded-sm" style={{ background: COLORS[d.tone ?? 'brand'] }} />
+            <span className="flex-1 truncate">{d.label}</span><span className="font-medium num">{fmtNum(d.value)}</span></span></li>
         ))}
       </ul>
     </div>

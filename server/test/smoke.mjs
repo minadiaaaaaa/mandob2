@@ -485,6 +485,7 @@ assert.equal(ppf.national_id, '••••••9012', 'the ID number is masked
 const pperf = ok(await rapi('GET', '/portal/performance?from=2026-09-01&to=2026-09-30'), 'performance');
 assert.ok(pperf.total.completed >= 18); assert.equal(pperf.absence.days.find((d) => d.day === '2026-09-01').status, 'present');
 assert.equal((await rapi('GET', '/portal/performance?from=2026-09-30&to=2026-09-01')).fields?.from, 'start_after_end');
+assert.match(await (await fetch(base + '/api/portal/performance/export?from=2026-09-01&to=2026-09-30', { headers: { cookie: rcookie } })).text(), /2026-09-01/);
 ok(await rapi('GET', '/portal/ratings'), 'ratings'); ok(await rapi('GET', '/portal/attendance'), 'attendance');
 // update requests
 assert.equal((await rapi('POST', '/portal/requests', { type: 'contact', phone: '0551234567' })).fields?.phone, 'same_as_current');
@@ -508,10 +509,10 @@ assert.equal((await rapi('POST', '/portal/leaves', { leave_type: 'annual', start
 assert.equal((await rapi('POST', '/portal/leaves', { leave_type: 'annual', start_date: dayPlus(5), end_date: dayPlus(40), reason: 'x' })).fields?.end_date, 'leave_too_long');
 assert.equal((await rapi('POST', '/portal/leaves', { leave_type: 'annual', start_date: dayPlus(120), reason: 'x' })).fields?.start_date, 'leave_too_far');
 const plv = ok(await rapi('POST', '/portal/leaves', { leave_type: 'emergency', start_date: dayPlus(60), end_date: dayPlus(62), reason: 'ظرف عائلي' }), 'portal leave');
-assert.equal((await rapi('POST', '/portal/leaves', { leave_type: 'annual', start_date: dayPlus(62), reason: 'x' })).fields?.start_date, 'leave_overlap');
+assert.equal((await rapi('POST', '/portal/leaves', { leave_type: 'annual', start_date: dayPlus(62), reason: 'x' })).fields?.start_date, 'leave_overlap_mine');
 assert.equal((await api('GET', `/leaves/${plv.id}`)).source, 'rider');
 ok(await rapi('POST', `/portal/leaves/${plv.id}/cancel`), 'cancel leave');
-assert.equal((await rapi('POST', `/portal/leaves/${plv.id}/cancel`)).error, 'leave_cannot_cancel');
+assert.equal((await rapi('POST', `/portal/leaves/${plv.id}/cancel`)).error, 'leave_cancel_pending_only');
 // conversations
 const pis0 = new FormData(); pis0.append('category', 'app'); pis0.append('subject', 'App freezes'); pis0.append('body', 'short');
 assert.equal((await rapi('POST', '/portal/issues', pis0)).fields?.body, 'too_short');

@@ -259,7 +259,7 @@ export function UiProvider({ children }: { children: ReactNode }) {
           </Field>
         )}
       </Modal>
-      <div className="pointer-events-none fixed bottom-4 start-4 z-[60] flex flex-col gap-2">
+      <div className="pointer-events-none fixed bottom-20 start-4 z-[60] flex flex-col gap-2 lg:bottom-4">
         {toasts.map((x) => (
           <div key={x.id} className="pop-in pointer-events-auto w-80 max-w-[90vw] rounded-lg shadow-lg"><Alert tone={x.tone}>{x.text}</Alert></div>
         ))}
