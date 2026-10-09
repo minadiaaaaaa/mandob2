@@ -105,7 +105,7 @@ if (existsSync(web)) {
 
 // Errors the code did not expect go to "System errors" (11.7) before the generic answer.
 app.use((err: any, req: Request, _res: Response, next: NextFunction) => {
-  if (!(err instanceof HttpError) && !err?.setup && !['23505', '23503', '23502', '23514', '22001', '22P02', 'LIMIT_FILE_SIZE'].includes(err?.code)) logError(err, req, 'error');
+  if (!(err instanceof HttpError) && !err?.setup && !['entity.parse.failed', 'entity.too.large', 'encoding.unsupported', 'charset.unsupported'].includes(err?.type) && !['23505', '23503', '23502', '23514', '22001', '22P02', 'LIMIT_FILE_SIZE'].includes(err?.code)) logError(err, req, 'error');
   next(err);
 });
 app.use(errorHandler);

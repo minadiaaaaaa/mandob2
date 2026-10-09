@@ -991,6 +991,8 @@
  "err.invalid_hijri": "Hijri date as year-month-day, year 1300–1550.",
  "err.invalid_ip": "Enter one valid IP address.",
  "err.invalid_json": "Enter valid JSON.",
+ "err.request_too_large": "The request exceeds the allowed size.",
+ "err.unsupported_encoding": "The request encoding is not supported.",
  "err.invalid_number": "Enter a number.",
  "err.invalid_phone": "Enter a valid phone number (at least five characters).",
  "err.ip_blocked": "This address is blocked from accessing the system",

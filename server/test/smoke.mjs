@@ -1,9 +1,10 @@
 // End-to-end check of the API against a FRESH install (it creates companies, riders, vehicles…).
-// Usage: node server/test/smoke.mjs http://localhost:4000   — admin user: admin / Admin12345!
+// Usage: from server/, node test/smoke.mjs http://localhost:4200 — disposable fixtures only.
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 const base = process.argv[2] ?? 'http://localhost:4100';
+assert.match(base, /^http:\/\/(?:localhost|127\.0\.0\.1):(4100|4200)$/, 'Disposable test ports only');
 let cookie = '';
 async function api(method, path, body, raw = false) {
   const opts = { method, headers: { cookie, connection: 'close' } };

@@ -1,0 +1,110 @@
+{
+  "generatedAt": "2026-10-09T12:16:47.600Z",
+  "schema": "mandoob_test_fullqa",
+  "total": 16,
+  "results": [
+    {
+      "method": "GET",
+      "path": "/auth/challenge",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/auth/challenge",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/profile/password",
+      "expected": 422,
+      "status": 422,
+      "error": "current_password_wrong"
+    },
+    {
+      "method": "POST",
+      "path": "/profile/password",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/me",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/me",
+      "expected": 401,
+      "status": 401,
+      "error": "session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/me",
+      "expected": 401,
+      "status": 401,
+      "error": "session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/me",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/me",
+      "expected": 401,
+      "status": 401,
+      "error": "session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/login",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/portal/me",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/portal/security/email/verify",
+      "expected": 422,
+      "status": 422,
+      "error": "code_expired"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/security/email/verify",
+      "expected": 422,
+      "status": 422,
+      "error": "code_locked"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/me",
+      "expected": 401,
+      "status": 401,
+      "error": "rider_session_ended"
+    }
+  ]
+}

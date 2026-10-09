@@ -365,7 +365,7 @@ performanceRouter.post('/ratings/bulk-delete', can('ratings.delete'), async (req
 });
 // The rider file's "HungerStation monthly rating" card.
 performanceRouter.get('/ratings/rider/:id', can('ratings.view'), async (req, res) => {
-  const rows = await q<any>(`SELECT m.*, c.min_final floor, (SELECT c2.min_final FROM rating_cutoffs c2 WHERE c2.month = m.month AND c2.segment = CHAR(ASCII(m.segment) - 1)) next_floor
+  const rows = await q<any>(`SELECT m.*, c.min_final floor, (SELECT c2.min_final FROM rating_cutoffs c2 WHERE c2.month = m.month AND c2.segment = CHR(ASCII(m.segment) - 1)) next_floor
     FROM monthly_ratings m LEFT JOIN rating_cutoffs c ON c.month = m.month AND c.segment = m.segment WHERE m.rider_id = ? ORDER BY m.month`, [req.params.id]);
   res.json(rows);
 });

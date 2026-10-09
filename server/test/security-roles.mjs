@@ -1,6 +1,7 @@
 // Run against the disposable test server on port 4100/4200, never a production instance.
 import assert from 'node:assert/strict';
 const base=(process.argv[2]||'http://127.0.0.1:4100')+'/api';
+assert.match(base, /^http:\/\/(?:localhost|127\.0\.0\.1):(4100|4200)\/api$/, 'Disposable test ports only');
 function client(){let cookie='';return async(method,path,body)=>{const headers={cookie,connection:'close'};if(body!==undefined)headers['content-type']='application/json';const r=await fetch(base+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});const sc=r.headers.get('set-cookie');if(sc)cookie=sc.split(';')[0];return {status:r.status,body:r.headers.get('content-type')?.includes('json')?await r.json():{bytes:(await r.arrayBuffer()).byteLength}}}}
 async function login(c,user,password){const ch=(await c('GET','/auth/challenge')).body;assert.equal((await c('POST','/auth/login',{username:user,password,challengeId:ch.id,code:ch.code})).status,200)}
 const admin=client();await login(admin,'admin','Admin12345!');const roles=(await admin('GET','/roles')).body.rows;

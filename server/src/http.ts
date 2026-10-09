@@ -16,6 +16,9 @@ export const fail = (status: number, code: string, params: Record<string, unknow
 
 export function errorHandler(err: any, _req: Request, res: Response, _next: NextFunction) {
   if (err instanceof HttpError) return res.status(err.status).json({ error: err.code, params: err.params, fields: err.fields });
+  if (err?.type === 'entity.parse.failed') return res.status(400).json({ error: 'invalid_json' });
+  if (err?.type === 'entity.too.large') return res.status(413).json({ error: 'request_too_large' });
+  if (['encoding.unsupported', 'charset.unsupported'].includes(err?.type)) return res.status(415).json({ error: 'unsupported_encoding' });
   if (err?.setup) return res.status(503).json({ error: 'setup_required', setup: true });
   if (err?.code === '23505') return res.status(409).json({ error: 'duplicate' });
   if (err?.code === '23503') return res.status(409).json({ error: 'in_use' });
