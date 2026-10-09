@@ -1,0 +1,151 @@
+{
+  "generatedAt": "2026-10-09T12:07:35.151Z",
+  "origin": "http://127.0.0.1:4100",
+  "total": 23,
+  "results": [
+    {
+      "method": "GET",
+      "path": "/auth/challenge",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "GET",
+      "path": "/vehicles",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "POST",
+      "path": "/vehicle-registrations",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "POST",
+      "path": "/vehicle-registrations",
+      "status": 422,
+      "expected": 422,
+      "error": "serial_taken"
+    },
+    {
+      "method": "PATCH",
+      "path": "/vehicle-registrations/1",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "GET",
+      "path": "/vehicle-registrations/1",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "PATCH",
+      "path": "/vehicle-registrations/1",
+      "status": 422,
+      "expected": 422,
+      "error": "expiry_before_issue"
+    },
+    {
+      "method": "POST",
+      "path": "/vehicle-registrations/1/renew",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "GET",
+      "path": "/vehicle-registrations/1",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "GET",
+      "path": "/vehicle-registrations/2",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "POST",
+      "path": "/fuel-cards",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "POST",
+      "path": "/fuel-cards",
+      "status": 422,
+      "expected": 422,
+      "error": "card_number_taken"
+    },
+    {
+      "method": "PATCH",
+      "path": "/fuel-cards/1",
+      "status": 422,
+      "expected": 422,
+      "error": "two_decimals"
+    },
+    {
+      "method": "POST",
+      "path": "/fuel-cards/1/block",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "GET",
+      "path": "/fuel-cards/1",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "POST",
+      "path": "/fuel-cards/1/unblock",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "GET",
+      "path": "/fuel-cards/1",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "DELETE",
+      "path": "/fuel-cards/1",
+      "status": 409,
+      "expected": 409,
+      "error": "fuel_card_has_balance"
+    },
+    {
+      "method": "PATCH",
+      "path": "/fuel-cards/1",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "DELETE",
+      "path": "/fuel-cards/1",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "GET",
+      "path": "/fuel-cards/1",
+      "status": 404,
+      "expected": 404,
+      "error": "not_found"
+    },
+    {
+      "method": "POST",
+      "path": "/fuel-cards",
+      "status": 200,
+      "expected": 200
+    }
+  ]
+}

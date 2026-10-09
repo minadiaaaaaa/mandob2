@@ -991,6 +991,8 @@
  "err.invalid_hijri": "التاريخ الهجري بصيغة سنة-شهر-يوم، والسنة بين 1300 و1550.",
  "err.invalid_ip": "أدخل عنوان IP واحداً صحيحاً.",
  "err.invalid_json": "أدخل JSON صحيحاً.",
+ "err.request_too_large": "حجم الطلب أكبر من الحد المسموح.",
+ "err.unsupported_encoding": "ترميز الطلب غير مدعوم.",
  "err.invalid_number": "أدخل رقماً.",
  "err.invalid_phone": "أدخل رقماً صحيحاً (خمسة أحرف على الأقل).",
  "err.ip_blocked": "تم حظر هذا العنوان من الوصول إلى النظام",

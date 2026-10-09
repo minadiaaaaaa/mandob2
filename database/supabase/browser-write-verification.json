@@ -1,0 +1,19 @@
+{
+  "generatedAt": "2026-10-09T12:06:10.746Z",
+  "origin": "http://127.0.0.1:4100",
+  "total": 3,
+  "results": [
+    {
+      "check": "Create rider through real UI",
+      "passed": true
+    },
+    {
+      "check": "Stored HTML displays as text; no script runs",
+      "passed": true
+    },
+    {
+      "check": "Edit persisted and read back from Supabase",
+      "passed": true
+    }
+  ]
+}

@@ -1,0 +1,529 @@
+{
+  "generatedAt": "2026-10-09T11:56:59.816Z",
+  "origin": "http://127.0.0.1:4100",
+  "total": 76,
+  "results": [
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "status": 400,
+      "expected": 400,
+      "error": "invalid_json"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "status": 413,
+      "expected": 413,
+      "error": "request_too_large"
+    },
+    {
+      "method": "GET",
+      "path": "/me",
+      "status": 401,
+      "expected": 401,
+      "error": "session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/setup/status",
+      "status": 409,
+      "expected": 409,
+      "error": "already_installed"
+    },
+    {
+      "method": "POST",
+      "path": "/setup/db/test",
+      "status": 409,
+      "expected": 409,
+      "error": "already_installed"
+    },
+    {
+      "method": "POST",
+      "path": "/setup/db/save",
+      "status": 409,
+      "expected": 409,
+      "error": "already_installed"
+    },
+    {
+      "method": "POST",
+      "path": "/setup/install",
+      "status": 409,
+      "expected": 409,
+      "error": "already_installed"
+    },
+    {
+      "method": "POST",
+      "path": "/setup/platform",
+      "status": 409,
+      "expected": 409,
+      "error": "already_installed"
+    },
+    {
+      "method": "POST",
+      "path": "/setup/admin",
+      "status": 409,
+      "expected": 409,
+      "error": "already_installed"
+    },
+    {
+      "method": "POST",
+      "path": "/setup/smtp",
+      "status": 409,
+      "expected": 409,
+      "error": "already_installed"
+    },
+    {
+      "method": "POST",
+      "path": "/setup/complete",
+      "status": 409,
+      "expected": 409,
+      "error": "already_installed"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/me",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/me",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "PUT",
+      "path": "/portal/locale",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "PUT",
+      "path": "/portal/locale",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/files/999999",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/files/999999",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/client-error",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/client-error",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/profile",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/profile",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/overview",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/overview",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/performance",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/performance",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/performance/export",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/performance/export",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/ratings",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/ratings",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/attendance",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/attendance",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/requests",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/requests",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/requests",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/requests",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/requests/999999/cancel",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/requests/999999/cancel",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/leaves",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/leaves",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/leaves",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/leaves",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/leaves/999999/cancel",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/leaves/999999/cancel",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/issues",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/issues",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/issues",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/issues",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/issues/999999",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/issues/999999",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/issues/999999/messages",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/issues/999999/messages",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/issues/999999/read",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/issues/999999/read",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/security",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/portal/security",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/security/email",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/security/email",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/security/email/verify",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/security/email/verify",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/security/password",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/portal/security/password",
+      "status": 401,
+      "expected": 401,
+      "error": "rider_session_ended"
+    },
+    {
+      "method": "POST",
+      "path": "/sync/ingest",
+      "status": 401,
+      "expected": 401,
+      "error": "token_refused"
+    },
+    {
+      "method": "POST",
+      "path": "/sync/ingest",
+      "status": 401,
+      "expected": 401,
+      "error": "token_refused"
+    },
+    {
+      "method": "PUT",
+      "path": "/email/branding",
+      "status": 403,
+      "expected": 403,
+      "error": "forbidden"
+    },
+    {
+      "method": "GET",
+      "path": "/profile/sessions",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "DELETE",
+      "path": "/profile/sessions/24",
+      "status": 409,
+      "expected": 409,
+      "error": "session_already_ended"
+    },
+    {
+      "method": "GET",
+      "path": "/me",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "GET",
+      "path": "/riders?search='+OR+1%3D1--",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "GET",
+      "path": "/riders?sort=id%3BDROP+TABLE+riders",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "GET",
+      "path": "/riders?page=-1&pageSize=999999",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "GET",
+      "path": "/riders?search=%3Cscript%3Ealert(1)%3C%2Fscript%3E",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "GET",
+      "path": "/ratings/rider/4000001",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/logout",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "GET",
+      "path": "/me",
+      "status": 401,
+      "expected": 401,
+      "error": "session_ended"
+    }
+  ]
+}

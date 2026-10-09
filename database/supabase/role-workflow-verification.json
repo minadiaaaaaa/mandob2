@@ -1,0 +1,321 @@
+{
+  "generatedAt": "2026-10-09T11:58:32.630Z",
+  "origin": "http://127.0.0.1:4100",
+  "total": 38,
+  "results": [
+    {
+      "role": "Super Admin",
+      "method": "POST",
+      "path": "/riders",
+      "permission": "riders.create",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Super Admin",
+      "method": "PATCH",
+      "path": "/riders/8900100",
+      "permission": "riders.update",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Super Admin",
+      "method": "GET",
+      "path": "/riders/8900100",
+      "permission": "riders.view",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Super Admin",
+      "method": "POST",
+      "path": "/vehicles",
+      "permission": "vehicles.create",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Super Admin",
+      "method": "POST",
+      "path": "/companies",
+      "permission": "companies.create",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Super Admin",
+      "method": "POST",
+      "path": "/performance",
+      "permission": "performance.create",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Super Admin",
+      "method": "POST",
+      "path": "/advances",
+      "permission": "advances.create",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Super Admin",
+      "method": "POST",
+      "path": "/attachments",
+      "permission": "attachments.upload",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Fleet Manager",
+      "method": "POST",
+      "path": "/riders",
+      "permission": "riders.create",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Fleet Manager",
+      "method": "PATCH",
+      "path": "/riders/8900101",
+      "permission": "riders.update",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Fleet Manager",
+      "method": "GET",
+      "path": "/riders/8900101",
+      "permission": "riders.view",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Fleet Manager",
+      "method": "POST",
+      "path": "/vehicles",
+      "permission": "vehicles.create",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Fleet Manager",
+      "method": "POST",
+      "path": "/companies",
+      "permission": "companies.create",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Fleet Manager",
+      "method": "POST",
+      "path": "/performance",
+      "permission": "performance.create",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Fleet Manager",
+      "method": "POST",
+      "path": "/advances",
+      "permission": "advances.create",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Fleet Manager",
+      "method": "POST",
+      "path": "/attachments",
+      "permission": "attachments.upload",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Documents Officer",
+      "method": "POST",
+      "path": "/riders",
+      "permission": "riders.create",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Documents Officer",
+      "method": "PATCH",
+      "path": "/riders/8900102",
+      "permission": "riders.update",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Documents Officer",
+      "method": "GET",
+      "path": "/riders/8900102",
+      "permission": "riders.view",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Documents Officer",
+      "method": "POST",
+      "path": "/vehicles",
+      "permission": "vehicles.create",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Documents Officer",
+      "method": "POST",
+      "path": "/companies",
+      "permission": "companies.create",
+      "expected": 403,
+      "status": 403,
+      "error": "forbidden"
+    },
+    {
+      "role": "Documents Officer",
+      "method": "POST",
+      "path": "/performance",
+      "permission": "performance.create",
+      "expected": 403,
+      "status": 403,
+      "error": "forbidden"
+    },
+    {
+      "role": "Documents Officer",
+      "method": "POST",
+      "path": "/advances",
+      "permission": "advances.create",
+      "expected": 403,
+      "status": 403,
+      "error": "forbidden"
+    },
+    {
+      "role": "Documents Officer",
+      "method": "POST",
+      "path": "/attachments",
+      "permission": "attachments.upload",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Data Entry",
+      "method": "POST",
+      "path": "/riders",
+      "permission": "riders.create",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Data Entry",
+      "method": "PATCH",
+      "path": "/riders/8900103",
+      "permission": "riders.update",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Data Entry",
+      "method": "GET",
+      "path": "/riders/8900103",
+      "permission": "riders.view",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Data Entry",
+      "method": "POST",
+      "path": "/vehicles",
+      "permission": "vehicles.create",
+      "expected": 403,
+      "status": 403,
+      "error": "forbidden"
+    },
+    {
+      "role": "Data Entry",
+      "method": "POST",
+      "path": "/companies",
+      "permission": "companies.create",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Data Entry",
+      "method": "POST",
+      "path": "/performance",
+      "permission": "performance.create",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Data Entry",
+      "method": "POST",
+      "path": "/advances",
+      "permission": "advances.create",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Data Entry",
+      "method": "POST",
+      "path": "/attachments",
+      "permission": "attachments.upload",
+      "expected": 200,
+      "status": 200
+    },
+    {
+      "role": "Viewer",
+      "method": "POST",
+      "path": "/riders",
+      "permission": "riders.create",
+      "expected": 403,
+      "status": 403,
+      "error": "forbidden"
+    },
+    {
+      "role": "Viewer",
+      "method": "POST",
+      "path": "/vehicles",
+      "permission": "vehicles.create",
+      "expected": 403,
+      "status": 403,
+      "error": "forbidden"
+    },
+    {
+      "role": "Viewer",
+      "method": "POST",
+      "path": "/companies",
+      "permission": "companies.create",
+      "expected": 403,
+      "status": 403,
+      "error": "forbidden"
+    },
+    {
+      "role": "Viewer",
+      "method": "POST",
+      "path": "/performance",
+      "permission": "performance.create",
+      "expected": 403,
+      "status": 403,
+      "error": "forbidden"
+    },
+    {
+      "role": "Viewer",
+      "method": "POST",
+      "path": "/advances",
+      "permission": "advances.create",
+      "expected": 403,
+      "status": 403,
+      "error": "forbidden"
+    },
+    {
+      "role": "Viewer",
+      "method": "POST",
+      "path": "/attachments",
+      "permission": "attachments.upload",
+      "expected": 403,
+      "status": 403,
+      "error": "forbidden"
+    }
+  ]
+}

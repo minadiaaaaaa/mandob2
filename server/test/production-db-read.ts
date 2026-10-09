@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';import {writeFileSync} from 'node:fs';import {q,closeDb,DB_SCHEMA} from '../src/db.js';
+assert.equal(DB_SCHEMA,'public');const results=[];
+try{
+const tables=await q<{relname:string;relrowsecurity:boolean}>("SELECT c.relname,c.relrowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind='r'");assert.equal(tables.length,64);assert.ok(tables.every(t=>t.relrowsecurity));results.push({check:'All 64 tables enable RLS',passed:true});
+for(const role of ['anon','authenticated']){const rows=await q("SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND ((c.relkind='r' AND has_table_privilege(?,c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')) OR (c.relkind='S' AND has_sequence_privilege(?,c.oid,'USAGE,SELECT,UPDATE')))",[role,role]);assert.equal(rows.length,0);results.push({check:role+' has no public table/sequence privileges',passed:true})}
+for(const role of ['mandoob_runtime','mandoob_request']){const [r]=await q<any>('SELECT rolbypassrls,rolsuper,rolinherit FROM pg_roles WHERE rolname=?',[role]);assert.equal(r.rolsuper,false);assert.equal(r.rolbypassrls,false);if(role==='mandoob_runtime')assert.equal(r.rolinherit,false);results.push({check:role+' cannot bypass RLS',passed:true})}
+const [member]=await q<any>("SELECT pg_has_role('mandoob_runtime','postgres','MEMBER') member");assert.equal(member.member,false);results.push({check:'Runtime cannot become postgres',passed:true});
+const policies=await q<any>("SELECT tablename,policyname FROM pg_policies WHERE schemaname='public'");for(const t of tables)for(const policy of ['app_staff','app_rider_read'])assert.ok(policies.some(p=>p.tablename===t.relname&&p.policyname===policy));results.push({check:'Every table has staff and rider policies',passed:true});
+writeFileSync('../database/supabase/production-db-verification.json',JSON.stringify({generatedAt:new Date().toISOString(),schema:'public',total:results.length,results},null,2));console.log('PRODUCTION DATABASE READ CHECKS PASSED:',results.length);
+}finally{await closeDb()}
