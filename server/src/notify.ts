@@ -1,3 +1,4 @@
+import { asSystem } from './db.js';
 import { exec, one, q } from './db.js';
 import { sendMail } from './mail.js';
 import { today } from './http.js';
@@ -11,7 +12,7 @@ export type Note = {
   entity_type?: string; entity_id?: string | number; link?: string; dedupe?: boolean;
 };
 
-export async function notifyUsers(users: 'all' | number[], n: Note) {
+async function notifyUsersInternal(users: 'all' | number[], n: Note) {
   const ids = users === 'all' ? (await q<{ id: number }>("SELECT id FROM users WHERE status = 'active'")).map((u) => u.id) : users;
   if (!ids.length) return 0;
   const muted = new Set((await q<{ user_id: number }>('SELECT user_id FROM notification_prefs WHERE category = ? AND in_app = 0 AND user_id IN (?)', [n.category, ids])).map((r) => r.user_id));
@@ -52,3 +53,5 @@ async function insert(to: { user_id?: number; rider_id?: number }, n: Note, who:
   if (r.affectedRows) await emailFor(to, n).catch(() => {});
   return r.affectedRows;
 }
+
+export function notifyUsers(...args: Parameters<typeof notifyUsersInternal>) { return asSystem(() => notifyUsersInternal(...args)); }

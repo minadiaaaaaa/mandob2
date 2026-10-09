@@ -1,6 +1,6 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { randomBytes, randomInt } from 'node:crypto';
-import { exec, one, q, setting, tx } from '../db.js';
+import { exec, one, q, setting, tx, withActor } from '../db.js';
 import { HttpError, addDays, clean, daysBetween, fail, fieldError, langOf, latinDigits, sendExport, today, tr, type Col } from '../http.js';
 import { can, clientIp, hashPassword, readCookie, sha256, verifyPassword } from '../auth.js';
 import { audit } from '../audit.js';
@@ -43,6 +43,7 @@ portalRouter.post('/portal/login', async (req, res) => {
   const r = /^\d{1,20}$/.test(typed) ? await one<any>('SELECT id, full_name, status, portal_enabled, portal_password_hash FROM riders WHERE id = ?', [typed]) : undefined;
   if (!r) { await attempt(req, typed, null, false, 'bad_credentials'); fail(401, 'portal_bad_credentials'); }
   if (!r.portal_enabled || !ALLOWED.includes(r.status)) { await attempt(req, typed, r.id, false, 'disabled'); fail(403, 'portal_disabled'); }
+  if (!r.portal_password_hash) { await attempt(req, typed, r.id, false, 'password_not_ready'); fail(403, 'portal_password_not_ready'); }
   if (r.portal_password_hash) {
     if (!password) { await attempt(req, typed, r.id, false, 'no_password'); return res.json({ step: 'password' }); }
     if (!(await verifyPassword(password, r.portal_password_hash))) { await attempt(req, typed, r.id, false, 'bad_credentials'); fail(401, 'portal_bad_credentials'); }
@@ -153,7 +154,7 @@ async function riderAuth(req: Request, _res: Response, next: NextFunction) {
   }
   await exec('UPDATE rider_sessions SET last_activity_at = UTC_TIMESTAMP() WHERE id = ? AND last_activity_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 SECOND)', [s.sid]);
   req.rider = { id: s.id, full_name: s.full_name, locale: s.locale, sessionId: s.sid };
-  next();
+  withActor({ kind: 'rider', id: s.id }, next);
 }
 portalRouter.use('/portal', riderAuth);
 
@@ -289,7 +290,7 @@ async function period(req: Request) {
   return { from, to, group };
 }
 async function perfRows(riderId: number, from: string, to: string, group: string) {
-  const key = group === 'month' ? 'LEFT(p.work_date, 7)' : 'p.work_date';
+  const key = group === 'month' ? 'LEFT(p.work_date::text, 7)' : 'p.work_date';
   return q<any>(`SELECT ${key} label, ${PERF_SUMS} FROM daily_performance p WHERE p.rider_id = ? AND p.work_date BETWEEN ? AND ? GROUP BY label ORDER BY label DESC`, [riderId, from, to]);
 }
 portalRouter.get('/portal/performance', async (req, res) => {
@@ -492,7 +493,8 @@ portalRouter.post('/portal/issues/:id/messages', files10, async (req, res) => {
   res.json({ id: await riderMessage(req, Number(req.params.id), req.rider!.id) });
 });
 portalRouter.post('/portal/issues/:id/read', async (req, res) => {
-  await exec('UPDATE rider_issues SET rider_read_at = NOW(3) WHERE id = ? AND rider_id = ?', [req.params.id, req.rider!.id]);
+  const result = await exec('UPDATE rider_issues SET rider_read_at = NOW(3) WHERE id = ? AND rider_id = ?', [req.params.id, req.rider!.id]);
+  if (!result.affectedRows) fail(404, 'not_found');
   res.json({ ok: true });
 });
 
@@ -521,7 +523,7 @@ portalRouter.post('/portal/security/email/verify', async (req, res) => {
   try {
     await exec('INSERT INTO rider_accounts (rider_id, verified_email, email_verified_at) VALUES (?, ?, UTC_TIMESTAMP()) ON DUPLICATE KEY UPDATE verified_email = VALUES(verified_email), email_verified_at = UTC_TIMESTAMP()', [id, c.email]);
   } catch (e: any) {
-    if (e?.code === 'ER_DUP_ENTRY') fieldError('email', 'email_verified_elsewhere');
+    if (e?.code === '23505') fieldError('email', 'email_verified_elsewhere');
     throw e;
   }
   await riderAudit(req, { action: 'portal.email_verified', entity_type: 'rider', entity_id: id, details: c.email });
@@ -569,10 +571,11 @@ portalAdminRouter.post('/riders/:id/portal/enable', managePortal, async (req, re
   await audit(req, { action: 'portal.enable', entity_type: 'rider', entity_id: r.id });
   res.json({ ok: true });
 });
-// Deletes the password; the email verification stays, so the rider can set a new one directly.
+// Office provisions a password without opening an ID-only sign-in window.
 portalAdminRouter.post('/riders/:id/portal/reset-password', managePortal, async (req, res) => {
   const r = await portalRider(req.params.id);
-  await exec('UPDATE riders SET portal_password_hash = NULL, portal_password_set_at = NULL WHERE id = ?', [r.id]);
+  const password = checkPassword(req.body ?? {});
+  await exec('UPDATE riders SET portal_password_hash = ?, portal_password_set_at = UTC_TIMESTAMP() WHERE id = ?', [await hashPassword(password), r.id]);
   const ended = await endSessions(r.id);
   await audit(req, { action: 'portal.reset_password', entity_type: 'rider', entity_id: r.id, severity: 'warning', details: `${ended} sessions ended` });
   res.json({ ok: true, ended });

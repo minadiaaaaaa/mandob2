@@ -16,7 +16,7 @@ export default function Setup() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [installed, setInstalled] = useState(false);
-  const [db, setDb] = useState({ host: '127.0.0.1', port: '3306', user: 'root', password: '', database: 'logistics' });
+  const [db, setDb] = useState({ host: '127.0.0.1', port: '5432', user: 'postgres', password: '', database: 'postgres' });
   const [tested, setTested] = useState(false);
   const [log, setLog] = useState<string[]>([]);
   const [ran, setRan] = useState(false);

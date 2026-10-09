@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ROOT, exec, q } from './db.js';
+import { ROOT, DB_SCHEMA, exec, q, executeScript } from './db.js';
 import { ALL_PERMS, BUILTIN_ROLES } from './perms.js';
 import { seedTemplates } from './mail.js';
 
@@ -100,17 +100,12 @@ const WIDENED: [string, string, string][] = [
 ];
 
 async function tablesAndSettings() {
-  await exec(readFileSync(join(ROOT, 'src', 'schema.sql'), 'utf8'));
-  for (const [t, c, def] of WIDENED) {
-    const [col] = await q<{ ty: string }>('SELECT COLUMN_TYPE ty FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?', [t, c]);
-    if (col && !def.toLowerCase().startsWith(col.ty.toLowerCase())) await exec(`ALTER TABLE ${t} MODIFY ${c} ${def}`);
-  }
+  const [table] = await q('SELECT 1 FROM information_schema.tables WHERE table_schema = ? AND table_name = ?', [DB_SCHEMA, 'settings']);
+  if (!table) await executeScript(readFileSync(join(ROOT, '..', 'database', 'supabase', 'schema.sql'), 'utf8').replace(/public\./g, `"${DB_SCHEMA}".`));
   // the product is now called "مندوب"; installs that kept the old default name take the new one
   await exec("UPDATE settings SET value = 'مندوب' WHERE `key` IN ('org.system_name', 'platform.name') AND value = 'Logistics Services Platform'");
-  for (const [k, v, t, c, d] of SYSTEM) {
-    await exec('INSERT IGNORE INTO settings (`key`, value, type, category, description) VALUES (?, ?, ?, ?, ?)', [k, v, t, c, d]);
-  }
-  for (const [k, v, c] of OTHER) await exec('INSERT IGNORE INTO settings (`key`, value, type, category, editable) VALUES (?, ?, ?, ?, 0)', [k, v, 'text', c]);
+  await exec('INSERT INTO settings ("key", value, type, category, description) VALUES ? ON CONFLICT DO NOTHING', [SYSTEM]);
+  await exec('INSERT INTO settings ("key", value, type, category, editable) VALUES ? ON CONFLICT DO NOTHING', [OTHER.map(([k,v,c])=>[k,v,'text',c,0])]);
 }
 
 // Runs at every start of an installed system: tables and settings added by later versions appear,
@@ -119,7 +114,7 @@ export async function upgrade() {
   await tablesAndSettings();
   await seedTemplates();
   await exec(`INSERT IGNORE INTO role_permissions (role_id, perm) SELECT r.id, p.perm FROM roles r
-    JOIN JSON_TABLE(?, '$[*]' COLUMNS (perm VARCHAR(80) PATH '$')) p WHERE r.name = 'Super Admin'`, [JSON.stringify(ALL_PERMS)]);
+    CROSS JOIN jsonb_array_elements_text(?::jsonb) AS p(perm) WHERE r.name = 'Super Admin'`, [JSON.stringify(ALL_PERMS)]);
 }
 
 export async function install(log: (s: string) => void) {

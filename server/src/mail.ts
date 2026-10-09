@@ -1,3 +1,4 @@
+import { asSystem } from './db.js';
 import nodemailer from 'nodemailer';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -26,10 +27,8 @@ export const SEED = [
   T('portal.reset_password', 'Rider portal password recovery', 'portal', 'owner_name,code,link', 'رمز استعادة كلمة المرور: {code}', '<p>{owner_name}، رمز استعادة كلمة المرور هو <b style="font-size:20px">{code}</b>. صالح لمدة 15 دقيقة. إن لم تطلبه فتجاهل هذه الرسالة.</p><p><a href="{link}">إدخال الرمز</a></p>', 1),
 ];
 export async function seedTemplates() {
-  for (const t of SEED) {
-    await exec('INSERT IGNORE INTO email_templates (tkey, name, subject, body_html, placeholders, grp, is_system, is_required) VALUES (?, ?, ?, ?, ?, ?, 1, ?)',
-      [t.key, t.name, t.subject, t.body, t.placeholders, t.grp, t.required]);
-  }
+  await exec('INSERT INTO email_templates (tkey, name, subject, body_html, placeholders, grp, is_system, is_required) VALUES ? ON CONFLICT DO NOTHING',
+    [SEED.map(t => [t.key, t.name, t.subject, t.body, t.placeholders, t.grp, 1, t.required])]);
 }
 
 // ---------- the branded frame ----------
@@ -79,7 +78,7 @@ ${footer}${contacts ? `<br>${contacts}` : ''}${b.auto_notice ? `<br><i>${esc(rtl
 
 // ---------- sending ----------
 export type Account = 'system' | 'riders';
-export async function smtpConfig(account: Account) {
+async function smtpConfigInternal(account: Account) {
   const p = account === 'system' ? 'smtp' : 'smtp2';
   const get = (k: string) => setting(`${p}.${k}`);
   const pass = (await get('password')) ?? '';
@@ -103,7 +102,7 @@ async function deliver(account: Account, to: string, subject: string, html: stri
 }
 
 // Renders a template, records it in the log, and sends it. Never throws: the log row carries the outcome.
-export async function sendMail(m: { template: string; to: string; toName?: string | null; vars?: Record<string, unknown>; lang?: string; account?: Account;
+async function sendMailInternal(m: { template: string; to: string; toName?: string | null; vars?: Record<string, unknown>; lang?: string; account?: Account;
   entity_type?: string; entity_id?: string | number; cc?: string | null; force?: boolean }) {
   const t = await one<any>('SELECT * FROM email_templates WHERE tkey = ?', [m.template]);
   const org = await orgValues();
@@ -129,3 +128,7 @@ export async function attempt(id: number, refused: string | null = null) {
     return false;
   }
 }
+
+export function sendMail(...args: Parameters<typeof sendMailInternal>) { return asSystem(() => sendMailInternal(...args)); }
+
+export function smtpConfig(...args: Parameters<typeof smtpConfigInternal>) { return asSystem(() => smtpConfigInternal(...args)); }

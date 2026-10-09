@@ -214,7 +214,7 @@ async function renew(req: Request) {
         newDocId = (await exec(`INSERT INTO ${k.table} SET ?`, [copy])).insertId;
       } catch (e: any) {
         // the number of these documents is never repeated, and the old record keeps its number
-        if (e?.code === 'ER_DUP_ENTRY') fieldError('new_number', 'renewal_number_needed');
+        if (e?.code === '23505') fieldError('new_number', 'renewal_number_needed');
         throw e;
       }
       currentId = newDocId;

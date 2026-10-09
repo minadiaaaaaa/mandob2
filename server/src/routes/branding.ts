@@ -99,7 +99,7 @@ brandingRouter.post('/branding/:id/recheck', can('performance.update'), async (r
 });
 brandingRouter.post('/branding/retry-failed', can('performance.update'), async (req, res) => {
   const w = where(spec, req.query as Query);
-  const r = await exec(`UPDATE branding_photos b JOIN riders r ON r.id = b.rider_id LEFT JOIN contracts k ON k.id = r.contract_id SET b.check_result = 'pending'${w.sql ? `${w.sql} AND` : ' WHERE'} b.check_result = 'failed'`, w.params);
+  const r = await exec(`UPDATE branding_photos b SET check_result = 'pending' FROM riders r LEFT JOIN contracts k ON k.id = r.contract_id ${w.sql ? `${w.sql} AND` : ' WHERE'} r.id = b.rider_id AND b.check_result = 'failed'`, w.params);
   res.json({ queued: r.affectedRows });
 });
 brandingRouter.post('/branding/run-queue', can('performance.update'), async (_req, res) => res.json({ available: false }));

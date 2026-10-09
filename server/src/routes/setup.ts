@@ -31,16 +31,16 @@ setupRouter.get('/status', async (_req, res) => {
 const dbRules = { host: { req: true }, port: { type: 'int' as const, min: 1, max: 65535 }, user: { req: true }, password: {}, database: { req: true, max: 64 } };
 const toDb = (b: any): DbConfig => {
   const v = clean(b, dbRules);
-  return { host: v.host, port: v.port ?? 3306, user: v.user, password: v.password ?? '', database: v.database };
+  return { host: v.host, port: v.port ?? 5432, user: v.user, password: v.password ?? '', database: v.database, ssl: !['localhost', '127.0.0.1'].includes(v.host) };
 };
 
 setupRouter.post('/db/test', async (req, res) => {
-  try { await testConnection(toDb(req.body)); res.json({ ok: true }); }
+  try { await testConnection(process.env.DATABASE_URL ? dbConfig()! : toDb(req.body)); res.json({ ok: true }); }
   catch (e: any) { res.status(422).json({ error: 'db_connect_failed', params: { detail: e.message } }); }
 });
 
 setupRouter.post('/db/save', async (req, res) => {
-  const c = toDb(req.body);
+  const c = process.env.DATABASE_URL ? dbConfig()! : toDb(req.body);
   try { await testConnection(c, true); }
   catch (e: any) { return res.status(422).json({ error: 'db_connect_failed', params: { detail: e.message } }); }
   saveDbConfig(c);

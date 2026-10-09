@@ -1,0 +1,49 @@
+{
+  "checkedAt": "2026-10-09T07:27:15.561Z",
+  "projectRef": "mzsjtckqoqjinsjafnfb",
+  "database": {
+    "protected_tables": 64,
+    "application_policies": 64,
+    "browser_grants": 0,
+    "request_role_privileged": false,
+    "browser_role_membership": false,
+    "runtime_role_privileged": false,
+    "runtime_owner_membership": false
+  },
+  "apiSecurity": "passed locally and on Supabase",
+  "databaseIsolation": "passed on isolated Supabase schema",
+  "staffAuthorization": "Express permission checks refreshed each request",
+  "riderAuthorization": "PostgreSQL row policies plus API ownership checks",
+  "trustedBroker": "Sign-in, settings, audit, notification delivery and scheduled jobs retain server-only postgres access",
+  "restrictedLogin": "mandoob_runtime: database isolation, API permission/ownership tests, all five built-in roles, and live miza reads passed",
+  "rolesTested": [
+    "Super Admin",
+    "Fleet Manager",
+    "Documents Officer",
+    "Data Entry",
+    "Viewer",
+    "custom limited role",
+    "two riders",
+    "unauthenticated guest"
+  ],
+  "tests": {
+    "localFullSmoke": "passed",
+    "supabaseFullSmoke": "passed",
+    "restrictedLoginApiSecurity": "passed",
+    "builtInRoles": "passed",
+    "concurrentRiderRls": "passed",
+    "internalMessagesAndAttachments": "passed",
+    "ownershipReassignmentDenied": "passed",
+    "ownerRoleEscalationDenied": "passed",
+    "concurrentLeaveLetterNumbering": "passed",
+    "ownerSignInAnd10ApplicationReads": "passed",
+    "serverAndWebTypecheck": "passed",
+    "webProductionBuild": "passed",
+    "sqlTests": "passed"
+  },
+  "testSchemaRemoved": true,
+  "limitations": [
+    "Staff module permissions are enforced in Express; PostgreSQL staff policy does not repeat the module permission matrix.",
+    "SMTP delivery and external provider sync require the user’s production configuration."
+  ]
+}

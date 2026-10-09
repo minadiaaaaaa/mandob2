@@ -119,7 +119,7 @@ async function saveRecord(req: Request, v: Record<string, any>, id = 0) {
     if (id) await exec('UPDATE daily_performance SET ?, updated_at = UTC_TIMESTAMP() WHERE id = ?', [v, id]);
     else return (await exec('INSERT INTO daily_performance SET ?', [{ ...v, source: 'manual', created_by: req.user!.id }])).insertId;
   } catch (e: any) {
-    if (e?.code === 'ER_DUP_ENTRY') fieldError('work_date', 'perf_day_taken');
+    if (e?.code === '23505') fieldError('work_date', 'perf_day_taken');
     throw e;
   }
   return id;

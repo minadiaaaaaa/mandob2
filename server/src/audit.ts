@@ -1,3 +1,4 @@
+import { asSystem } from './db.js';
 import type { Request } from 'express';
 import { exec } from './db.js';
 
@@ -13,12 +14,12 @@ const scrub = (o: unknown) => o && typeof o === 'object'
   : o ?? null;
 
 // Every write action is recorded with who, on what, and the values before and after. Secrets never are.
-export async function audit(req: Request | null, e: Entry) {
+async function auditInternal(req: Request | null, e: Entry) {
   try {
     await exec(`INSERT INTO audit_log (action, entity_type, entity_id, actor_type, actor_id, actor_name, status, severity, ip, route, request_id, user_agent, before_json, after_json, details)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
       e.action, e.entity_type ?? null, e.entity_id == null ? null : String(e.entity_id),
-      e.actor_type ?? (req?.user ? 'user' : 'guest'), e.actor_id ?? req?.user?.id ?? null, e.actor_name ?? req?.user?.full_name ?? null,
+      e.actor_type ?? (req?.user ? 'user' : req?.rider ? 'rider' : 'guest'), e.actor_id ?? req?.user?.id ?? req?.rider?.id ?? null, e.actor_name ?? req?.user?.full_name ?? null,
       e.status ?? 'success', e.severity ?? 'info',
       req ? (req.ip ?? '').replace(/^::ffff:/, '') : null, req ? `${req.method} ${req.originalUrl}`.slice(0, 255) : null, req?.rid ?? null,
       req ? (req.headers['user-agent'] ?? '').slice(0, 255) : null,
@@ -29,3 +30,5 @@ export async function audit(req: Request | null, e: Entry) {
     console.error('audit failed', err);
   }
 }
+
+export function audit(...args: Parameters<typeof auditInternal>) { return asSystem(() => auditInternal(...args)); }

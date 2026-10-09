@@ -92,7 +92,7 @@ requestsRouter.post('/change-requests/:id/approve', can('rider_portal.review_req
       await exec("UPDATE rider_change_requests SET status = 'approved', review_note = ?, reviewed_by = ?, reviewed_at = UTC_TIMESTAMP() WHERE id = ?", [v.note ?? null, req.user!.id, cr.id]);
     });
   } catch (e: any) {
-    if (e?.code === 'ER_DUP_ENTRY') fail(409, 'request_value_taken');
+    if (e?.code === '23505') fail(409, 'request_value_taken');
     throw e;
   }
   await audit(req, { action: 'change_request.approve', entity_type: 'rider', entity_id: cr.rider_id, after: cr.payload, details: `#${cr.id} ${cr.type}` });

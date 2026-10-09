@@ -1,10 +1,12 @@
+import { asSystem } from '../db.js';
 import { Router, type Request } from 'express';
 import multer from 'multer';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import { crc32 } from 'node:zlib';
-import { DATA_DIR, STORAGE_DIR, dbConfig, exec, one, q, setSetting, setting, settingInt } from '../db.js';
+import { DATA_DIR, STORAGE_DIR, DB_SCHEMA, exec, one, q, tx, setSetting, setting, settingInt } from '../db.js';
+import { identifier } from '../sql.js';
 import { clean, eq, fail, list, listAll, sendExport, type Query, type Spec } from '../http.js';
 import { can } from '../auth.js';
 import { audit } from '../audit.js';
@@ -16,7 +18,7 @@ import { sendMail } from '../mail.js';
 export const maintenanceRouter = Router();
 
 // ======================================================================== 11.7 system errors
-export async function logError(e: any, req?: Request, level: 'error' | 'critical' | 'warning' = 'error') {
+async function logErrorInternal(e: any, req?: Request, level: 'error' | 'critical' | 'warning' = 'error') {
   try {
     await exec('INSERT INTO error_log (level, code, module, message, route, method, user_id, request_id, stack) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [
       level, String(e?.code ?? e?.name ?? 'Error').slice(0, 80), req ? String(req.originalUrl.split('?')[0].split('/')[2] ?? '').slice(0, 80) : 'server',
@@ -240,7 +242,7 @@ function walk(dir: string, out: string[] = []) {
   return out;
 }
 async function tableNames() {
-  return (await q<any>('SELECT TABLE_NAME t FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = ?', [dbConfig()!.database, 'BASE TABLE'])).map((r) => r.t).filter((t) => !SKIP.has(t));
+  return (await q<any>('SELECT table_name t FROM information_schema.tables WHERE table_schema = ? AND table_type = ?', [DB_SCHEMA, 'BASE TABLE'])).map((r) => r.t).filter((t) => !SKIP.has(t));
 }
 
 export async function createBackup(type: 'full' | 'db' | 'files', kind: 'manual' | 'auto' | 'safety', note: string | null, userId: number | null) {
@@ -383,20 +385,38 @@ maintenanceRouter.post('/backups/:id/restore', can('backups.restore'), async (re
     // a full safety backup of the current state first, so going back stays possible
     const safety = await createBackup('full', 'safety', `before restoring #${b.id}`, req.user!.id);
     let tables = 0; let files = 0;
+    const allowed = new Set(await tableNames());
+    const datasets = new Map<string, any[]>();
     for (const [name, data] of entries!) {
-      if (!name.startsWith('db/')) continue;
+      if (!name.startsWith('db/') || !name.endsWith('.json')) continue;
       const t = name.slice(3, -5);
-      if (SKIP.has(t) || !/^\w+$/.test(t)) continue;
-      const rows = JSON.parse(data.toString());
-      await exec(`SET FOREIGN_KEY_CHECKS = 0; DELETE FROM \`${t}\`; SET FOREIGN_KEY_CHECKS = 1;`);
-      for (let i = 0; i < rows.length; i += 500) {
-        const chunk = rows.slice(i, i + 500);
-        const cols = Object.keys(chunk[0]);
-        await exec(`SET FOREIGN_KEY_CHECKS = 0; INSERT INTO \`${t}\` (${cols.map((c) => `\`${c}\``).join(',')}) VALUES ?; SET FOREIGN_KEY_CHECKS = 1;`,
-          [chunk.map((r: any) => cols.map((c) => (r[c] !== null && typeof r[c] === 'object' ? JSON.stringify(r[c]) : r[c])))]);
-      }
-      tables++;
+      if (!allowed.has(t)) fail(422, 'validation');
+      datasets.set(t, JSON.parse(data.toString()));
     }
+    // Restore parents before children and delete in the opposite order, atomically.
+    const deps = await q<{child:string;parent:string}>(`SELECT c.relname child, p.relname parent FROM pg_constraint f JOIN pg_class c ON c.oid=f.conrelid JOIN pg_class p ON p.oid=f.confrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE f.contype='f' AND n.nspname=?`, [DB_SCHEMA]);
+    const ordered: string[] = [], visiting = new Set<string>();
+    const visit = (t: string) => {
+      if (ordered.includes(t)) return;
+      if (visiting.has(t)) throw new Error('Cyclic backup dependencies');
+      visiting.add(t);
+      for (const d of deps) if (d.child === t && d.parent !== t && datasets.has(d.parent)) visit(d.parent);
+      visiting.delete(t); ordered.push(t);
+    };
+    for (const t of datasets.keys()) visit(t);
+    await tx(async () => {
+      for (const t of [...ordered].reverse()) await exec(`DELETE FROM ${identifier(t)}`);
+      for (const t of ordered) {
+        const rows = datasets.get(t)!;
+        for (let i = 0; i < rows.length; i += 500) {
+          const chunk = rows.slice(i, i + 500), cols = Object.keys(chunk[0]);
+          await exec(`INSERT INTO ${identifier(t)} (${cols.map(identifier).join(',')}) VALUES ?`, [chunk.map(r => cols.map(c => r[c]))]);
+        }
+        const identities = await q<{column_name:string}>('SELECT column_name FROM information_schema.columns WHERE table_schema=? AND table_name=? AND is_identity=?',[DB_SCHEMA,t,'YES']);
+        for (const col of identities) await q(`SELECT setval(pg_get_serial_sequence(?, ?), GREATEST(COALESCE(MAX(${identifier(col.column_name)}), 0), 1), COUNT(*) > 0) FROM ${identifier(t)}`,[`${DB_SCHEMA}.${t}`,col.column_name]);
+        tables++;
+      }
+    });
     const archived = new Set<string>();
     for (const [name, data] of entries!) {
       if (!name.startsWith('files/')) continue;
@@ -419,3 +439,5 @@ maintenanceRouter.post('/backups/:id/restore', can('backups.restore'), async (re
     throw e;
   } finally { restoring = false; }
 });
+
+export function logError(...args: Parameters<typeof logErrorInternal>) { return asSystem(() => logErrorInternal(...args)); }

@@ -1,0 +1,30 @@
+{
+  "checkedAt": "2026-10-08T22:03:01.264Z",
+  "engine": "PGlite (local PostgreSQL, in memory)",
+  "tables": 64,
+  "columns": 730,
+  "foreignKeys": 40,
+  "defaults": {
+    "settings": 112,
+    "roles": 5,
+    "rolePermissions": 807,
+    "cities": 25,
+    "emailTemplates": 17
+  },
+  "checks": [
+    "schema executes",
+    "all columns preserved",
+    "all foreign keys preserved",
+    "seed is repeatable",
+    "64 tables have RLS",
+    "browser roles have no table or sequence privileges",
+    "RLS blocks rows after accidental SELECT grant",
+    "enum and 0/1 constraints",
+    "foreign key rejection",
+    "cascade deletion",
+    "prefix unique indexes",
+    "exact decimal amounts",
+    "JSONB"
+  ],
+  "remoteSupabaseApplied": false
+}

@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import { createHash, randomBytes, randomInt, scrypt as _scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
-import { exec, one, q, settingInt } from './db.js';
+import { exec, one, q, settingInt, withActor } from './db.js';
 import { HttpError } from './http.js';
 import { audit } from './audit.js';
 
@@ -108,6 +108,7 @@ export async function login(req: Request, res: Response) {
       CEIL(TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), locked_until) / 60) lock_minutes
     FROM users u WHERE username = ? OR email = ?`, [typed, typed]);
   if (!u) return reject(req, typed, null, 'unknown_user', 'bad_credentials');
+  if (!(await one('SELECT 1 FROM roles WHERE id = ? AND is_active = 1', [u.role_id]))) return reject(req, typed, u.id, 'role_disabled', 'account_suspended');
   if (u.status === 'disabled') return reject(req, typed, u.id, 'account_disabled', 'account_suspended');
   if (u.status === 'locked') {
     if (u.locked_until && u.lock_over) await exec("UPDATE users SET status = 'active', locked_until = NULL WHERE id = ?", [u.id]);
@@ -157,7 +158,7 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
   const tok = readCookie(req, COOKIE);
   if (!tok) return next();
   const s = await one<any>(`SELECT s.id sid, s.expires_at < UTC_TIMESTAMP() expired, u.id, u.username, u.full_name, u.email, u.role_id, u.locale, u.status, r.name role_name
-    FROM sessions s JOIN users u ON u.id = s.user_id JOIN roles r ON r.id = u.role_id WHERE s.token_hash = ? AND s.status = 'active'`, [sha256(tok)]);
+    FROM sessions s JOIN users u ON u.id = s.user_id JOIN roles r ON r.id = u.role_id AND r.is_active = 1 WHERE s.token_hash = ? AND s.status = 'active'`, [sha256(tok)]);
   if (!s) return next();
   if (s.expired) {
     await exec("UPDATE sessions SET status = 'expired', ended_at = UTC_TIMESTAMP() WHERE id = ?", [s.sid]);
@@ -166,7 +167,7 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
   if (s.status !== 'active' || (await ipBlocked(clientIp(req)))) return next();
   await exec('UPDATE sessions SET last_activity_at = UTC_TIMESTAMP() WHERE id = ? AND last_activity_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 SECOND)', [s.sid]);
   req.user = { id: s.id, username: s.username, full_name: s.full_name, email: s.email, role_id: s.role_id, role_name: s.role_name, locale: s.locale, perms: await permsOf(s.role_id), sessionId: s.sid };
-  next();
+  withActor({ kind: 'staff', id: s.id }, next);
 }
 
 export function requireUser(req: Request, _res: Response, next: NextFunction) {

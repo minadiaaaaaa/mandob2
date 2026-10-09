@@ -3,3 +3,9 @@ node_modules/
 server/data/
 web/dist/
 *.log
+
+# Local credentials and dashboard proof screenshots
+.env.*
+!.env.example
+database/supabase/*-proof.png
+database/supabase/mcp-authorization.png
