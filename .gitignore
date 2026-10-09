@@ -9,3 +9,6 @@ web/dist/
 !.env.example
 database/supabase/*-proof.png
 database/supabase/mcp-authorization.png
+
+# Generated QA reports (retain locally, never version test data)
+.qa-reports/

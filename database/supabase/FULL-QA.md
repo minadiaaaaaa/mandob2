@@ -43,4 +43,4 @@ Run server unit tests/typecheck and the web build with their existing npm script
 
 SMTP delivery was exercised with the application's local test transport, not a real customer's mail account. HungerStation synchronization was tested through token-authenticated ingestion and its expected sign-in-required path; live provider login needs configured credentials/extension. Automatic scan OCR currently returns `unavailable`; manual entry and scan ownership work. No Cloudflare deployment was part of this run. Headless browser checks use Chromium/Edge; other browser engines and large-scale load testing were not performed. The web build passes with a bundle-size advisory.
 
-Detailed machine-readable results are the adjacent `*-verification.json` reports and `full-permissions.json`. Passing these checks is evidence for the listed scenarios, not a guarantee against every possible defect.
+Detailed machine-readable results are local `.qa-reports/*-verification.json` reports and `.qa-reports/full-permissions.json` (ignored by Git). Passing these checks is evidence for the listed scenarios, not a guarantee against every possible defect.

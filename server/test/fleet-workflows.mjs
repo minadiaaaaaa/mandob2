@@ -1,7 +1,102 @@
-import assert from 'node:assert/strict';import fs from 'node:fs';
-const origin=process.argv[2]||'http://127.0.0.1:4100';assert.ok(/^http:\/\/(localhost|127\.0\.0\.1):(4100|4200)$/.test(origin));let cookie='';const results=[];
-async function call(method,path,body,expected=200){const r=await fetch(origin+'/api'+path,{method,headers:{cookie,connection:'close',...(body?{'content-type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});const sc=r.headers.get('set-cookie');if(sc)cookie=sc.split(';')[0];const data=await r.json();results.push({method,path,status:r.status,expected,error:data.error});assert.equal(r.status,expected,JSON.stringify(results.at(-1)));return data}
-const ch=await call('GET','/auth/challenge');await call('POST','/auth/login',{username:'admin',password:'Admin12345!',challengeId:ch.id,code:ch.code});const vehicle=(await call('GET','/vehicles')).rows[0];
-const reg={vehicle_id:vehicle.id,serial:'QA-REG-1',owner:'QA Owner',user_rider_id:4000001,issue_date:'2037-01-01',expiry_date:'2038-01-01'};const created=await call('POST','/vehicle-registrations',reg);await call('POST','/vehicle-registrations',reg,422);await call('PATCH','/vehicle-registrations/'+created.id,{notes:'Updated'});assert.equal((await call('GET','/vehicle-registrations/'+created.id)).notes,'Updated');await call('PATCH','/vehicle-registrations/'+created.id,{expiry_date:'2036-01-01'},422);const renewed=await call('POST','/vehicle-registrations/'+created.id+'/renew',{new_number:'QA-REG-2',new_expiry:'2039-01-01',cost:100});assert.ok(renewed.id);assert.equal((await call('GET','/vehicle-registrations/'+created.id)).is_current,0);assert.equal((await call('GET','/vehicle-registrations/'+renewed.id)).is_current,1);
-const fuel={number:'QA-FUEL-1',provider:'QA Provider',rider_id:4000001,balance:100,monthly_limit:500};const fc=await call('POST','/fuel-cards',fuel);await call('POST','/fuel-cards',fuel,422);await call('PATCH','/fuel-cards/'+fc.id,{balance:1.234},422);await call('POST','/fuel-cards/'+fc.id+'/block',{});assert.equal((await call('GET','/fuel-cards/'+fc.id)).status,'blocked');await call('POST','/fuel-cards/'+fc.id+'/unblock',{});assert.equal((await call('GET','/fuel-cards/'+fc.id)).status,'active');await call('DELETE','/fuel-cards/'+fc.id,undefined,409);await call('PATCH','/fuel-cards/'+fc.id,{balance:0});await call('DELETE','/fuel-cards/'+fc.id);await call('GET','/fuel-cards/'+fc.id,undefined,404);await call('POST','/fuel-cards',{...fuel,number:'QA-FUEL-UI'});
-fs.writeFileSync('../database/supabase/fleet-workflow-verification.json',JSON.stringify({generatedAt:new Date().toISOString(),origin,total:results.length,results},null,2));console.log('FLEET WORKFLOWS PASSED:',results.length);
+import { reportFile } from "./support/reports.mjs";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+const origin = process.argv[2] || "http://127.0.0.1:4100";
+assert.ok(/^http:\/\/(localhost|127\.0\.0\.1):(4100|4200)$/.test(origin));
+let cookie = "";
+const results = [];
+async function call(method, path, body, expected = 200) {
+  const r = await fetch(origin + "/api" + path, {
+    method,
+    headers: {
+      cookie,
+      connection: "close",
+      ...(body ? { "content-type": "application/json" } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const sc = r.headers.get("set-cookie");
+  if (sc) cookie = sc.split(";")[0];
+  const data = await r.json();
+  results.push({ method, path, status: r.status, expected, error: data.error });
+  assert.equal(r.status, expected, JSON.stringify(results.at(-1)));
+  return data;
+}
+const ch = await call("GET", "/auth/challenge");
+await call("POST", "/auth/login", {
+  username: "admin",
+  password: "Admin12345!",
+  challengeId: ch.id,
+  code: ch.code,
+});
+const vehicle = (await call("GET", "/vehicles")).rows[0];
+const reg = {
+  vehicle_id: vehicle.id,
+  serial: "QA-REG-1",
+  owner: "QA Owner",
+  user_rider_id: 4000001,
+  issue_date: "2037-01-01",
+  expiry_date: "2038-01-01",
+};
+const created = await call("POST", "/vehicle-registrations", reg);
+await call("POST", "/vehicle-registrations", reg, 422);
+await call("PATCH", "/vehicle-registrations/" + created.id, {
+  notes: "Updated",
+});
+assert.equal(
+  (await call("GET", "/vehicle-registrations/" + created.id)).notes,
+  "Updated",
+);
+await call(
+  "PATCH",
+  "/vehicle-registrations/" + created.id,
+  { expiry_date: "2036-01-01" },
+  422,
+);
+const renewed = await call(
+  "POST",
+  "/vehicle-registrations/" + created.id + "/renew",
+  { new_number: "QA-REG-2", new_expiry: "2039-01-01", cost: 100 },
+);
+assert.ok(renewed.id);
+assert.equal(
+  (await call("GET", "/vehicle-registrations/" + created.id)).is_current,
+  0,
+);
+assert.equal(
+  (await call("GET", "/vehicle-registrations/" + renewed.id)).is_current,
+  1,
+);
+const fuel = {
+  number: "QA-FUEL-1",
+  provider: "QA Provider",
+  rider_id: 4000001,
+  balance: 100,
+  monthly_limit: 500,
+};
+const fc = await call("POST", "/fuel-cards", fuel);
+await call("POST", "/fuel-cards", fuel, 422);
+await call("PATCH", "/fuel-cards/" + fc.id, { balance: 1.234 }, 422);
+await call("POST", "/fuel-cards/" + fc.id + "/block", {});
+assert.equal((await call("GET", "/fuel-cards/" + fc.id)).status, "blocked");
+await call("POST", "/fuel-cards/" + fc.id + "/unblock", {});
+assert.equal((await call("GET", "/fuel-cards/" + fc.id)).status, "active");
+await call("DELETE", "/fuel-cards/" + fc.id, undefined, 409);
+await call("PATCH", "/fuel-cards/" + fc.id, { balance: 0 });
+await call("DELETE", "/fuel-cards/" + fc.id);
+await call("GET", "/fuel-cards/" + fc.id, undefined, 404);
+await call("POST", "/fuel-cards", { ...fuel, number: "QA-FUEL-UI" });
+fs.writeFileSync(
+  reportFile("fleet-workflow-verification.json"),
+  JSON.stringify(
+    {
+      generatedAt: new Date().toISOString(),
+      origin,
+      total: results.length,
+      results,
+    },
+    null,
+    2,
+  ),
+);
+console.log("FLEET WORKFLOWS PASSED:", results.length);

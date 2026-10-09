@@ -1,14 +1,30 @@
-import {randomBytes} from 'node:crypto';
-import {readFileSync,writeFileSync} from 'node:fs';
-import {join} from 'node:path';
-import {dbConfig,executeScript,ROOT,closeDb} from '../src/db.js';
-const config=dbConfig();if(!config?.user.endsWith('.mzsjtckqoqjinsjafnfb'))throw Error('Only mandob may be provisioned');
-if(process.env.DATABASE_APP_URL)throw Error('Restricted connection already configured; credentials preserved');
-const password=randomBytes(32).toString('hex');
+import { randomBytes } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { dbConfig, executeScript, ROOT, closeDb } from "../src/db.js";
+const config = dbConfig();
+if (!config?.user.endsWith(".mzsjtckqoqjinsjafnfb"))
+  throw Error("Only mandob may be provisioned");
+if (process.env.DATABASE_APP_URL)
+  throw Error(
+    "Restricted connection already configured; credentials preserved",
+  );
+const password = randomBytes(32).toString("hex");
 await executeScript(`DO $$ BEGIN IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='mandoob_runtime') THEN CREATE ROLE mandoob_runtime LOGIN NOINHERIT NOBYPASSRLS; END IF; END $$;
 ALTER ROLE mandoob_runtime LOGIN NOINHERIT NOBYPASSRLS PASSWORD '${password}';
 GRANT mandoob_request TO mandoob_runtime;
 GRANT CONNECT ON DATABASE postgres TO mandoob_runtime;`);
-const url=new URL(process.env.DATABASE_URL!);url.username='mandoob_runtime.mzsjtckqoqjinsjafnfb';url.password=password;
-const file=join(ROOT,'../.env');let env=readFileSync(file,'utf8');env=env.replace(/^DATABASE_APP_URL=.*\r?\n?/m,'');writeFileSync(file,env.trimEnd()+'\nDATABASE_APP_URL='+url.toString()+'\n');
-await closeDb();console.log('Restricted runtime login provisioned; credential saved only in ignored .env');
+const url = new URL(process.env.DATABASE_URL!);
+url.username = "mandoob_runtime.mzsjtckqoqjinsjafnfb";
+url.password = password;
+const file = join(ROOT, "../.env");
+let env = readFileSync(file, "utf8");
+env = env.replace(/^DATABASE_APP_URL=.*\r?\n?/m, "");
+writeFileSync(
+  file,
+  env.trimEnd() + "\nDATABASE_APP_URL=" + url.toString() + "\n",
+);
+await closeDb();
+console.log(
+  "Restricted runtime login provisioned; credential saved only in ignored .env",
+);

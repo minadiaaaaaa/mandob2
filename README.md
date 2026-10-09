@@ -20,8 +20,8 @@ Stack: Node 24 + Express + PostgreSQL on Supabase (server), React + Vite + Tailw
 **1. Get the code and the dependencies**
 
 ```bash
-git clone https://github.com/Fadysamy9/tayson-logistics.git
-cd tayson-logistics
+git clone https://github.com/Fadysamy9/mandoob.git
+cd mandoob
 pnpm setup                 # installs server/ and web/ dependencies
 ```
 
@@ -40,6 +40,7 @@ Fill in `.env`:
 | Key | Meaning | Default |
 |---|---|---|
 | `DATABASE_URL` | PostgreSQL session pooler URL; percent-encode password characters | required |
+| `DATABASE_APP_URL` | restricted runtime connection provisioned by `server/test/provision-runtime.ts`; required for RLS | required |
 | `DB_SSL_CA_FILE` | Supabase CA certificate, relative to `server/` | `../database/supabase/prod-ca-2021.crt` |
 | `DB_POOL_SIZE` | maximum server database connections | `5` |
 | `HOST` | listening address; set deliberately for remote deployment | `127.0.0.1` |
@@ -71,12 +72,10 @@ Open http://localhost:5173/setup and go through the six steps:
 | Address | Who | How |
 |---|---|---|
 | http://localhost:5173/admin/login | office staff | username or email, password, and the 6-character code shown on the screen |
-| http://localhost:5173/rider/login | riders | the rider ID from the rider file; a password is asked only after the rider sets one |
+| http://localhost:5173/rider/login | riders | the rider ID and the initial password set by office staff |
 | http://localhost:5173/ | anyone | public website |
 
-Every new rider can use the portal straight away; the office does not create accounts. On the first sign-in the
-rider is sent to *Security* to verify an email and set a password. The verification and password-reset codes are
-emailed, so **SMTP must be set up** for those two steps to work.
+Office staff must set the initial portal password in the rider file before the rider can sign in. ID-only login is blocked. Riders can verify their email and change their password in *Security*. Email verification and password-reset codes require **SMTP to be configured**.
 
 ## Run it in production
 
@@ -107,7 +106,7 @@ Daily performance, ratings, branding photos and the live board can be read from 
 
 ```bash
 pnpm typecheck                                      # server and web type checks
-node server/test/smoke.mjs http://localhost:4000    # end-to-end test
+node server/test/smoke.mjs http://localhost:4100    # end-to-end test
 ```
 
 Run the smoke test on a **fresh** install whose Super Admin is `admin@example.com` / `Admin12345!` (username
@@ -197,3 +196,5 @@ Each one has a `ponytail:` note in the code where it applies.
 - **Languages.** Arabic and English cover everything. Bengali and Urdu cover the core interface and the whole rider
   portal; other admin screens fall back to English, as the guide describes.
 - **12.16 rider guides.** Only the Arabic PDF (`rider-portal-guide-ar.pdf`) is in the repository.
+
+Generated QA reports are saved in `.qa-reports/` and ignored by Git. The historical coverage summary is in `database/supabase/FULL-QA.md`; use `server/test/qa-run.ps1` for the isolated full suite.
