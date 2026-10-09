@@ -78,6 +78,10 @@
 
 ## التحقق الأمني
 
-التقرير الموسّع لاختبارات كل أنواع المستخدمين والواجهة وSupabase والإصلاحات موجود في [FULL-QA.md](FULL-QA.md)، مع النتائج التفصيلية بصيغة JSON بجواره. إعادة تشغيل مجموعة الاختبارات السحابية تتم من `server/test/qa-run.ps1` بعد تجهيز Playwright وبناء الواجهة؛ مساحة الاختبار منفصلة وتُحذف عند انتهاء التشغيل.
+التقرير الموسّع لاختبارات كل أنواع المستخدمين والواجهة وSupabase والإصلاحات موجود في [FULL-QA.md](FULL-QA.md)، مع النتائج التفصيلية بصيغة JSON في مجلد `.qa-reports/` المحلي. إعادة تشغيل مجموعة الاختبارات السحابية تتم من `server/test/qa-run.ps1` بعد تجهيز Playwright وبناء الواجهة؛ مساحة الاختبار منفصلة وتُحذف عند انتهاء التشغيل.
 
 `server/test/security.mjs` يختبر الضيف، الموظف بلا صلاحيات، منح وسحب صلاحيات الجلسة، تعطيل الحساب، ملكية الملفات ومحاولة اجتياز المسار وعزل المندوب. يعمل ضمن smoke قبل اختبار تحديد معدل الدخول. `server/test/security-db.ts` يختبر RLS مباشرة على schema اختبار فقط: مندوبان متزامنان، منع إعادة الملكية، منع anon/authenticated، إعادة الدور بعد rollback. ملفات الاختبار لا تشغل على public. `security-verification.json` يسجل التحقق النهائي. لإعادة توليد السياسات شغل `node database/supabase/generate-rls.mjs`.
+
+## Generated reports
+
+QA and validation JSON outputs are local evidence under the repository root `.qa-reports/` and are ignored by Git. Historical report filenames mentioned above refer to that directory. `manifest.json` remains versioned because schema validation uses it. See `FULL-QA.md` for the archived coverage summary.
