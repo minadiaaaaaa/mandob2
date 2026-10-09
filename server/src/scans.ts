@@ -34,7 +34,7 @@ scansRouter.post('/', upload.single('file'), async (req, res) => {
 });
 
 scansRouter.get('/:token', (req, res) => {
-  const meta = readMeta(req.params.token);
+  const meta = ownMeta(req, req.params.token);
   if (!meta) fail(410, 'scan_gone');
   res.setHeader('Content-Type', meta!.mime);
   res.send(readFileSync(join(TMP, req.params.token)));
@@ -43,25 +43,33 @@ scansRouter.get('/:token', (req, res) => {
 // Automatic reading of documents. The original platform reads text PDFs directly and uses OCR for images.
 // ponytail: no reading engine yet — every reader answers "unavailable" and the form stays usable for manual entry.
 scansRouter.post('/:token/read', (req, res) => {
-  if (!readMeta(req.params.token)) fail(410, 'scan_gone');
+  if (!ownMeta(req, req.params.token)) fail(410, 'scan_gone');
   res.json({ status: 'unavailable', fields: [] });
 });
 
 scansRouter.delete('/:token', (req, res) => {
+  if (!/^[a-f0-9]{24}$/.test(req.params.token)) fail(404, 'scan_gone');
+  ownMeta(req, req.params.token);
   for (const f of [req.params.token, `${req.params.token}.json`]) if (existsSync(join(TMP, f))) unlinkSync(join(TMP, f));
   res.json({ ok: true });
 });
 
-function readMeta(token: string): { name: string; mime: string; size: number } | null {
+function readMeta(token: string): { name: string; mime: string; size: number; user: number } | null {
   if (!/^[a-f0-9]{24}$/.test(token)) return null;
   const p = join(TMP, `${token}.json`);
   return existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : null;
 }
 
+function ownMeta(req: Request, token: string) {
+  const meta = readMeta(token);
+  if (meta && meta.user !== req.user?.id) fail(404, 'scan_gone');
+  return meta;
+}
+
 // Moves a scan from the temporary area onto a record as its current attachment.
 export async function claimScan(req: Request, token: string | null | undefined, entityType: string, entityId: string | number, attachmentType: string | null = null, note: string | null = null) {
   if (!token) return null;
-  const meta = readMeta(token);
+  const meta = ownMeta(req, token);
   if (!meta) fail(410, 'scan_gone');
   const buffer = readFileSync(join(TMP, token));
   const id = await attach(req, entityType, entityId, { buffer, mimetype: meta!.mime, size: meta!.size, originalname: Buffer.from(meta!.name, 'utf8').toString('latin1') } as Express.Multer.File, attachmentType, note);

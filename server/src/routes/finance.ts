@@ -90,7 +90,7 @@ financeRouter.patch('/finance/fines/:id', can('finance.manage'), async (req, res
   try {
     await exec('UPDATE fines SET ?, updated_at = UTC_TIMESTAMP() WHERE id = ?', [v, before.id]);
   } catch (e: any) {
-    if (e?.code === 'ER_DUP_ENTRY') fail(409, 'fine_would_duplicate');
+    if (e?.code === '23505') fail(409, 'fine_would_duplicate');
     throw e;
   }
   await audit(req, { action: 'fine.update', entity_type: 'fine', entity_id: before.id, before, after: v, severity: v.status && v.status !== before.status ? 'warning' : 'info' });

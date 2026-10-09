@@ -1,0 +1,1125 @@
+{
+  "tables": [
+    {
+      "table": "settings",
+      "columns": [
+        "key",
+        "value",
+        "type",
+        "category",
+        "description",
+        "editable",
+        "updated_at"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "roles",
+      "columns": [
+        "id",
+        "name",
+        "description",
+        "is_active",
+        "created_at"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "role_permissions",
+      "columns": [
+        "role_id",
+        "perm"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "users",
+      "columns": [
+        "id",
+        "username",
+        "full_name",
+        "email",
+        "password_hash",
+        "role_id",
+        "status",
+        "locked_until",
+        "locale",
+        "last_login_at",
+        "created_at",
+        "updated_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "sessions",
+      "columns": [
+        "id",
+        "token_hash",
+        "user_id",
+        "ip",
+        "user_agent",
+        "status",
+        "created_at",
+        "last_activity_at",
+        "expires_at",
+        "ended_at"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "login_challenges",
+      "columns": [
+        "id",
+        "code",
+        "ip",
+        "attempts",
+        "expires_at",
+        "used_at"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "login_attempts",
+      "columns": [
+        "id",
+        "username_typed",
+        "user_id",
+        "success",
+        "reason",
+        "ip",
+        "user_agent",
+        "created_at"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "blocked_ips",
+      "columns": [
+        "id",
+        "ip",
+        "reason",
+        "failed_attempts",
+        "status",
+        "expires_at",
+        "blocked_by",
+        "created_at"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "audit_log",
+      "columns": [
+        "id",
+        "created_at",
+        "action",
+        "entity_type",
+        "entity_id",
+        "actor_type",
+        "actor_id",
+        "actor_name",
+        "status",
+        "severity",
+        "ip",
+        "route",
+        "request_id",
+        "user_agent",
+        "before_json",
+        "after_json",
+        "details"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "cities",
+      "columns": [
+        "id",
+        "name_ar",
+        "name_en",
+        "is_active"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "companies",
+      "columns": [
+        "id",
+        "name",
+        "email",
+        "operator_id",
+        "is_active",
+        "created_at"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "contracts",
+      "columns": [
+        "id",
+        "company_id",
+        "name",
+        "description",
+        "is_active",
+        "created_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "riders",
+      "columns": [
+        "id",
+        "full_name",
+        "name_en",
+        "alias",
+        "national_id",
+        "status",
+        "company_id",
+        "contract_id",
+        "city_id",
+        "hire_date",
+        "occupation",
+        "phone",
+        "account_holder_phone",
+        "email",
+        "language",
+        "nationality",
+        "birth_date",
+        "birth_place",
+        "blood_type",
+        "notes",
+        "portal_enabled",
+        "portal_password_hash",
+        "portal_password_set_at",
+        "created_at",
+        "updated_at"
+      ],
+      "foreignKeys": 3
+    },
+    {
+      "table": "transport_licenses",
+      "columns": [
+        "id",
+        "number",
+        "city_id",
+        "issue_date",
+        "expiry_date",
+        "activity_ar",
+        "activity_en",
+        "status",
+        "notes",
+        "created_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "rider_documents",
+      "columns": [
+        "id",
+        "rider_id",
+        "doc_type",
+        "doc_number",
+        "id_kind",
+        "version_number",
+        "place_of_issue",
+        "license_type",
+        "license_type_en",
+        "cert_type",
+        "issuing_authority",
+        "issue_date_hijri",
+        "expiry_date_hijri",
+        "transport_license_id",
+        "card_category",
+        "beneficiary_company_id",
+        "contract_summary",
+        "work_locations",
+        "issue_date",
+        "expiry_date",
+        "status",
+        "is_current",
+        "notes",
+        "created_by",
+        "created_at"
+      ],
+      "foreignKeys": 3
+    },
+    {
+      "table": "applicants",
+      "columns": [
+        "id",
+        "full_name",
+        "name_en",
+        "phone",
+        "national_id",
+        "nationality",
+        "birth_date",
+        "city_id",
+        "status",
+        "heard_from",
+        "featured",
+        "featured_reason",
+        "featured_by",
+        "featured_at",
+        "notes",
+        "has_vehicle",
+        "vehicle_type",
+        "vehicle_plate",
+        "vehicle_maker",
+        "vehicle_model",
+        "vehicle_year",
+        "rider_id",
+        "reviewed_by",
+        "reviewed_at",
+        "created_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "vehicles",
+      "columns": [
+        "id",
+        "plate",
+        "plate_key",
+        "plate_en",
+        "vehicle_type",
+        "registration_type",
+        "maker",
+        "model",
+        "color",
+        "year",
+        "chassis",
+        "weight",
+        "capacity",
+        "ownership",
+        "status",
+        "odometer",
+        "created_at"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "operation_cards",
+      "columns": [
+        "id",
+        "number",
+        "transport_license_id",
+        "issue_date",
+        "expiry_date",
+        "renew_date",
+        "status",
+        "notes",
+        "created_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "operation_card_vehicles",
+      "columns": [
+        "card_id",
+        "vehicle_id",
+        "is_current"
+      ],
+      "foreignKeys": 2
+    },
+    {
+      "table": "vehicle_registrations",
+      "columns": [
+        "id",
+        "vehicle_id",
+        "serial",
+        "owner",
+        "owner_id_no",
+        "user_rider_id",
+        "user_name",
+        "user_id_no",
+        "issue_date",
+        "expiry_date",
+        "status",
+        "is_current",
+        "notes",
+        "created_at"
+      ],
+      "foreignKeys": 2
+    },
+    {
+      "table": "insurance_companies",
+      "columns": [
+        "id",
+        "name_ar",
+        "name_en",
+        "phone",
+        "website",
+        "is_active",
+        "created_at"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "insurance_policies",
+      "columns": [
+        "id",
+        "number",
+        "company_id",
+        "type",
+        "issue_date",
+        "start_date",
+        "expiry_date",
+        "status",
+        "notes",
+        "created_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "vehicle_insurance",
+      "columns": [
+        "id",
+        "vehicle_id",
+        "policy_id",
+        "sub_policy",
+        "start_date",
+        "expiry_date",
+        "status",
+        "is_current",
+        "notes",
+        "created_at"
+      ],
+      "foreignKeys": 2
+    },
+    {
+      "table": "vehicle_assignments",
+      "columns": [
+        "id",
+        "rider_id",
+        "vehicle_id",
+        "start_date",
+        "end_date",
+        "is_current",
+        "created_at"
+      ],
+      "foreignKeys": 2
+    },
+    {
+      "table": "fuel_cards",
+      "columns": [
+        "id",
+        "number",
+        "provider",
+        "status",
+        "issue_date",
+        "balance",
+        "monthly_limit",
+        "rider_id",
+        "vehicle_id",
+        "created_at"
+      ],
+      "foreignKeys": 2
+    },
+    {
+      "table": "oil_schedules",
+      "columns": [
+        "id",
+        "vehicle_id",
+        "interval_days",
+        "warn_days",
+        "last_change",
+        "created_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "oil_changes",
+      "columns": [
+        "id",
+        "vehicle_id",
+        "change_date",
+        "odometer",
+        "performed_by",
+        "cost",
+        "notes",
+        "created_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "renewals",
+      "columns": [
+        "id",
+        "doc_kind",
+        "doc_id",
+        "new_doc_id",
+        "owner_type",
+        "owner_label",
+        "previous_number",
+        "new_number",
+        "previous_expiry",
+        "new_expiry",
+        "operation",
+        "renewal_date",
+        "cost",
+        "reference",
+        "notes",
+        "recorded_by",
+        "created_at"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "attachments",
+      "columns": [
+        "id",
+        "entity_type",
+        "entity_id",
+        "attachment_type",
+        "file_name",
+        "stored_name",
+        "mime",
+        "size",
+        "note",
+        "is_current",
+        "uploaded_by",
+        "created_at"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "secrets",
+      "columns": [
+        "name",
+        "value",
+        "description",
+        "encrypted",
+        "updated_at"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "notifications",
+      "columns": [
+        "id",
+        "user_id",
+        "rider_id",
+        "category",
+        "severity",
+        "title",
+        "body",
+        "params",
+        "entity_type",
+        "entity_id",
+        "link",
+        "dedupe",
+        "read_at",
+        "emailed_at",
+        "created_at"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "notification_prefs",
+      "columns": [
+        "user_id",
+        "category",
+        "in_app",
+        "email"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "leaves",
+      "columns": [
+        "id",
+        "letter_no",
+        "seq_year",
+        "seq",
+        "rider_id",
+        "leave_type",
+        "start_date",
+        "end_date",
+        "reason",
+        "reason_paragraph",
+        "internal_note",
+        "status",
+        "answer_note",
+        "answered_by",
+        "answered_at",
+        "source",
+        "stamped",
+        "created_by",
+        "created_at",
+        "updated_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "rider_absences",
+      "columns": [
+        "id",
+        "rider_id",
+        "external_id",
+        "start_at",
+        "end_at",
+        "days",
+        "reason",
+        "paid",
+        "status",
+        "contract",
+        "company_comment",
+        "internal_note",
+        "source",
+        "created_at",
+        "updated_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "advances",
+      "columns": [
+        "id",
+        "number",
+        "seq_year",
+        "seq",
+        "rider_id",
+        "amount",
+        "installments",
+        "request_date",
+        "first_due",
+        "deduct_from",
+        "reason",
+        "notes",
+        "status",
+        "decided_by",
+        "decided_at",
+        "decision_note",
+        "payout_method",
+        "disbursed_on",
+        "disbursed_by",
+        "created_by",
+        "created_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "advance_installments",
+      "columns": [
+        "id",
+        "advance_id",
+        "n",
+        "due_date",
+        "amount",
+        "paid",
+        "status",
+        "paid_on",
+        "waive_reason",
+        "updated_by",
+        "updated_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "rider_change_requests",
+      "columns": [
+        "id",
+        "rider_id",
+        "type",
+        "doc_type",
+        "payload",
+        "snapshot",
+        "rider_note",
+        "status",
+        "review_note",
+        "reviewed_by",
+        "reviewed_at",
+        "created_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "rider_issues",
+      "columns": [
+        "id",
+        "rider_id",
+        "subject",
+        "category",
+        "priority",
+        "status",
+        "opened_by",
+        "assignee_id",
+        "staff_read_at",
+        "rider_read_at",
+        "last_activity_at",
+        "resolved_at",
+        "closed_at",
+        "created_by",
+        "created_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "rider_issue_messages",
+      "columns": [
+        "id",
+        "issue_id",
+        "author",
+        "user_id",
+        "body",
+        "internal",
+        "created_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "fines",
+      "columns": [
+        "id",
+        "rider_id",
+        "fine_date",
+        "invoice_no",
+        "category",
+        "amount",
+        "company",
+        "currency",
+        "status",
+        "internal_note",
+        "created_at",
+        "updated_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "wallet_snapshots",
+      "columns": [
+        "rider_id",
+        "snapshot_date",
+        "balance",
+        "created_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "wallet_entries",
+      "columns": [
+        "id",
+        "rider_id",
+        "entry_date",
+        "description",
+        "amount",
+        "created_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "billing",
+      "columns": [
+        "id",
+        "rider_id",
+        "month",
+        "contract",
+        "completed_orders",
+        "basic_payment",
+        "distance_payment",
+        "ftr_bonus",
+        "rider_payment_basic",
+        "rider_payment_scoring",
+        "fine_acceptance",
+        "fine_contact",
+        "fine_declined",
+        "fine_late",
+        "fine_no_show",
+        "fine_no_show_special",
+        "fine_daily_acceptance",
+        "fine_missed_days",
+        "ded_stacking",
+        "ded_car",
+        "ded_google",
+        "total_deductions",
+        "rider_balance",
+        "pending_balance",
+        "amount_excl_vat",
+        "vat",
+        "amount_incl_vat",
+        "net_ftr",
+        "created_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "daily_performance",
+      "columns": [
+        "id",
+        "rider_id",
+        "work_date",
+        "contract_id",
+        "batch",
+        "tga_status",
+        "error_codes",
+        "shifts",
+        "working_days",
+        "planned_hours",
+        "actual_hours",
+        "break_hours",
+        "lost_hours",
+        "attendance_rate",
+        "acceptance_rate",
+        "contact_rate",
+        "no_shows",
+        "no_show_rate",
+        "notified",
+        "accepted",
+        "completed",
+        "stacked",
+        "declined",
+        "cancelled",
+        "deductions",
+        "not_accepted",
+        "manual_undispatched",
+        "chat_response_rate",
+        "source",
+        "created_by",
+        "created_at",
+        "updated_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "branding_photos",
+      "columns": [
+        "id",
+        "rider_id",
+        "captured_at",
+        "photo_url",
+        "contract_name",
+        "check_result",
+        "override_result",
+        "override_by",
+        "card_review",
+        "card_note",
+        "card_by",
+        "card_at",
+        "source_review",
+        "source_by",
+        "source_at",
+        "suspect_card",
+        "suspect_screen",
+        "measurements",
+        "checked_at",
+        "created_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "monthly_ratings",
+      "columns": [
+        "id",
+        "rider_id",
+        "month",
+        "segment",
+        "final_score",
+        "on_time",
+        "fail_rate_score",
+        "gross_orders",
+        "completed",
+        "completed_in_time",
+        "failed_by_rider",
+        "verification_requests",
+        "verification_success",
+        "verification_rate",
+        "city",
+        "contract",
+        "source",
+        "updated_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "rating_cutoffs",
+      "columns": [
+        "month",
+        "segment",
+        "min_final",
+        "min_otd",
+        "min_fr",
+        "city_riders"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "sync_sources",
+      "columns": [
+        "code",
+        "enabled",
+        "sync_from",
+        "create_riders",
+        "report_url"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "sync_runs",
+      "columns": [
+        "id",
+        "source",
+        "report_day",
+        "status",
+        "trigger_type",
+        "started_at",
+        "finished_at",
+        "rows_read",
+        "added",
+        "replaced",
+        "user_id",
+        "message"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "live_board",
+      "columns": [
+        "rider_id",
+        "name",
+        "status",
+        "seen_at",
+        "lat",
+        "lng",
+        "located_at",
+        "shift_start",
+        "shift_end",
+        "worked_min",
+        "late_min",
+        "breaks",
+        "break_min",
+        "completed",
+        "cancelled",
+        "active_orders",
+        "wallet",
+        "work_day"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "live_points",
+      "columns": [
+        "id",
+        "rider_id",
+        "at",
+        "work_day",
+        "lat",
+        "lng",
+        "accuracy",
+        "status",
+        "has_order"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "live_days",
+      "columns": [
+        "rider_id",
+        "work_day",
+        "shifts",
+        "worked_min",
+        "late_min",
+        "breaks",
+        "break_min",
+        "completed",
+        "cancelled",
+        "wallet"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "email_templates",
+      "columns": [
+        "tkey",
+        "name",
+        "subject",
+        "body_html",
+        "placeholders",
+        "grp",
+        "is_system",
+        "is_required",
+        "is_active",
+        "updated_at"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "email_log",
+      "columns": [
+        "id",
+        "template_key",
+        "to_email",
+        "to_name",
+        "cc",
+        "subject",
+        "body",
+        "account",
+        "status",
+        "error_code",
+        "error_message",
+        "entity_type",
+        "entity_id",
+        "retries",
+        "provider_id",
+        "created_at",
+        "sent_at",
+        "last_attempt_at"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "error_log",
+      "columns": [
+        "id",
+        "created_at",
+        "level",
+        "code",
+        "module",
+        "message",
+        "route",
+        "method",
+        "user_id",
+        "request_id",
+        "stack"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "cron_runs",
+      "columns": [
+        "id",
+        "job",
+        "started_at",
+        "finished_at",
+        "outcome",
+        "records",
+        "notifications",
+        "emails",
+        "error",
+        "details",
+        "manual"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "backups",
+      "columns": [
+        "id",
+        "file_name",
+        "status",
+        "type",
+        "kind",
+        "note",
+        "tables_n",
+        "rows_n",
+        "files_n",
+        "missing_files",
+        "size",
+        "encrypted",
+        "key_fp",
+        "checksum",
+        "error",
+        "created_by",
+        "created_at"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "restores",
+      "columns": [
+        "id",
+        "backup_id",
+        "file_name",
+        "status",
+        "user_id",
+        "details",
+        "created_at"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "languages",
+      "columns": [
+        "code",
+        "name_native",
+        "name_en",
+        "dir",
+        "font",
+        "flag",
+        "created_at"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "translation_overrides",
+      "columns": [
+        "lang",
+        "tkey",
+        "value",
+        "updated_by",
+        "updated_at"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "rider_accounts",
+      "columns": [
+        "rider_id",
+        "verified_email",
+        "email_verified_at",
+        "locale",
+        "last_login_at"
+      ],
+      "foreignKeys": 1
+    },
+    {
+      "table": "rider_sessions",
+      "columns": [
+        "id",
+        "token_hash",
+        "rider_id",
+        "ip",
+        "user_agent",
+        "status",
+        "created_at",
+        "last_activity_at",
+        "expires_at",
+        "ended_at"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "rider_login_attempts",
+      "columns": [
+        "id",
+        "typed",
+        "rider_id",
+        "success",
+        "reason",
+        "ip",
+        "user_agent",
+        "created_at"
+      ],
+      "foreignKeys": 0
+    },
+    {
+      "table": "rider_codes",
+      "columns": [
+        "id",
+        "rider_id",
+        "purpose",
+        "email",
+        "code_hash",
+        "attempts",
+        "expires_at",
+        "used_at",
+        "created_at"
+      ],
+      "foreignKeys": 0
+    }
+  ],
+  "defaults": {
+    "settings": 112,
+    "roles": 5,
+    "rolePermissions": 807,
+    "cities": 25,
+    "emailTemplates": 17
+  }
+}

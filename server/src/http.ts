@@ -17,8 +17,9 @@ export const fail = (status: number, code: string, params: Record<string, unknow
 export function errorHandler(err: any, _req: Request, res: Response, _next: NextFunction) {
   if (err instanceof HttpError) return res.status(err.status).json({ error: err.code, params: err.params, fields: err.fields });
   if (err?.setup) return res.status(503).json({ error: 'setup_required', setup: true });
-  if (err?.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'duplicate', params: { detail: err.sqlMessage } });
-  if (err?.code === 'ER_ROW_IS_REFERENCED_2') return res.status(409).json({ error: 'in_use' });
+  if (err?.code === '23505') return res.status(409).json({ error: 'duplicate' });
+  if (err?.code === '23503') return res.status(409).json({ error: 'in_use' });
+  if (['23502', '23514', '22001', '22P02'].includes(err?.code)) return res.status(422).json({ error: 'validation' });
   if (err?.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'file_too_large' });
   console.error(err);
   res.status(500).json({ error: 'server_error' });

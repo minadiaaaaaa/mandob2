@@ -402,7 +402,7 @@ async function saveAssignment(req: Request, v: Record<string, any>, id = 0) {
     // The rider's (or this pair's) previous current assignment is closed on the new start date.
     await exec('UPDATE vehicle_assignments SET is_current = 0, end_date = ? WHERE rider_id = ? AND is_current = 1 AND id <> ?', [v.start_date, v.rider_id, id]);
   }
-  const overlap = await one<any>(`SELECT id FROM vehicle_assignments WHERE rider_id = ? AND id <> ? AND start_date < COALESCE(?, '9999-12-31') AND COALESCE(end_date, '9999-12-31') > ?`,
+  const overlap = await one<any>(`SELECT id FROM vehicle_assignments WHERE rider_id = ? AND id <> ? AND start_date < COALESCE(?::date, '9999-12-31') AND COALESCE(end_date, '9999-12-31') > ?`,
     [v.rider_id, id, v.end_date, v.start_date]);
   if (overlap) warnings.push({ code: 'overlapping_dates', id: overlap.id });
   return warnings;
@@ -640,8 +640,7 @@ function oilSpec(day: string, within: number | null): Spec {
 }
 // The schedule follows the latest change in the history; if the history is emptied it stays as it is.
 async function rollForward(vehicleId: number) {
-  const r = await exec(`UPDATE oil_schedules s JOIN (SELECT vehicle_id, MAX(change_date) m FROM oil_changes WHERE vehicle_id = ? GROUP BY vehicle_id) h ON h.vehicle_id = s.vehicle_id
-    SET s.last_change = h.m WHERE s.last_change <> h.m`, [vehicleId]);
+  const r = await exec(`UPDATE oil_schedules s SET last_change = h.m FROM (SELECT vehicle_id, MAX(change_date) m FROM oil_changes WHERE vehicle_id = ? GROUP BY vehicle_id) h WHERE h.vehicle_id = s.vehicle_id AND s.last_change <> h.m`, [vehicleId]);
   return r.affectedRows;
 }
 const OS_RULES = { vehicle_id: { req: true, type: 'int' as const }, interval_days: { req: true, type: 'int' as const, min: 1, max: 3650 }, warn_days: { type: 'int' as const, min: 0, max: 365 }, last_change: { req: true, type: 'date' as const } };

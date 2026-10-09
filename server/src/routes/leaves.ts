@@ -1,3 +1,4 @@
+import { asSystem } from '../db.js';
 import { Router, type Request } from 'express';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -216,7 +217,8 @@ async function stampFor(req: Request, status: string) {
 export async function createLeave(req: Request | null, v: Record<string, any>, source: 'office' | 'rider') {
   const year = Number(v.start_date.slice(0, 4));
   return tx(async () => {
-    const [{ n }] = await q<any>('SELECT COALESCE(MAX(seq), 0) + 1 n FROM leaves WHERE seq_year = ? FOR UPDATE', [year]);
+    await q('SELECT pg_advisory_xact_lock(41002, ?::int)', [year]);
+    const [{ n }] = await asSystem(() => q<any>('SELECT COALESCE(MAX(seq), 0) + 1 n FROM leaves WHERE seq_year = ?', [year]));
     const letter_no = `LV-${year}-${String(n).padStart(4, '0')}`;
     const stamped = req && source === 'office' ? await stampFor(req, 'pending') : 0;
     const r = await exec('INSERT INTO leaves SET ?', [{ ...v, seq_year: year, seq: n, letter_no, source, stamped, created_by: source === 'office' ? req?.user?.id ?? null : null }]);

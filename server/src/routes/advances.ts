@@ -120,7 +120,8 @@ advancesRouter.post('/advances', can('advances.create'), async (req, res) => {
   if (open >= allowed) fieldError('rider_id', 'advance_open_exists', { n: allowed });
   const year = Number(v.request_date.slice(0, 4));
   const out = await tx(async () => {
-    const [{ n }] = await q<any>('SELECT COALESCE(MAX(seq), 0) + 1 n FROM advances WHERE seq_year = ? FOR UPDATE', [year]);
+    await q('SELECT pg_advisory_xact_lock(41001, ?::int)', [year]);
+    const [{ n }] = await q<any>('SELECT COALESCE(MAX(seq), 0) + 1 n FROM advances WHERE seq_year = ?', [year]);
     const number = `ADV-${year}-${String(n).padStart(4, '0')}`;
     const ins = await exec('INSERT INTO advances SET ?', [{ ...v, seq_year: year, seq: n, number, created_by: req.user!.id }]);
     return { id: ins.insertId, number };

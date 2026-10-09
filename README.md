@@ -4,7 +4,7 @@ A rebuild of the system described in `Logistics-Services-User-Guide.pdf`: an adm
 operators that run riders on HungerStation and similar apps. It has an admin panel (`/admin`), a rider portal
 (`/rider`) and a public site (`/`). Screens, fields, rules and wording follow the guide.
 
-Stack: Node 24 + Express + MySQL 8 (server), React + Vite + Tailwind (web), 4 languages (ar, en, bn, ur) with RTL.
+Stack: Node 24 + Express + PostgreSQL on Supabase (server), React + Vite + Tailwind (web), 4 languages (ar, en, bn, ur) with RTL.
 
 ## Requirements
 
@@ -12,7 +12,7 @@ Stack: Node 24 + Express + MySQL 8 (server), React + Vite + Tailwind (web), 4 la
 |---|---|---|
 | Node.js | 24 or newer | the server runs TypeScript directly through `tsx` |
 | pnpm | 9 or newer | `npm install -g pnpm` |
-| MySQL | 8.0 or newer | an empty database is enough; the app creates the tables |
+| PostgreSQL | Supabase project | connect through the session pooler with TLS |
 | Git | any | to clone the repository |
 
 ## Run it locally (development)
@@ -20,19 +20,14 @@ Stack: Node 24 + Express + MySQL 8 (server), React + Vite + Tailwind (web), 4 la
 **1. Get the code and the dependencies**
 
 ```bash
-git clone https://github.com/Fadysamy9/mandoob.git
-cd mandoob
+git clone https://github.com/Fadysamy9/tayson-logistics.git
+cd tayson-logistics
 pnpm setup                 # installs server/ and web/ dependencies
 ```
 
-**2. Create the database** (MySQL shell or Workbench)
+**2. Create a Supabase project**
 
-```sql
-CREATE DATABASE logistics CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-```
-
-The tables are created by the setup wizard in step 5. The full structure is also in `database/schema.sql` (see
-[The database](#the-database)).
+Use Connect → Session pooler for an IPv4-compatible connection. The setup wizard creates the tables in an empty destination; an existing initialized schema is preserved. The PostgreSQL schema and defaults are in `database/supabase/`.
 
 **3. Settings file**
 
@@ -44,15 +39,15 @@ Fill in `.env`:
 
 | Key | Meaning | Default |
 |---|---|---|
-| `DB_HOST` / `DB_PORT` | MySQL address | `127.0.0.1` / `3306` |
-| `DB_USER` / `DB_PASSWORD` | MySQL account | `root` / empty |
-| `DB_NAME` | database name | `logistics` |
+| `DATABASE_URL` | PostgreSQL session pooler URL; percent-encode password characters | required |
+| `DB_SSL_CA_FILE` | Supabase CA certificate, relative to `server/` | `../database/supabase/prod-ca-2021.crt` |
+| `DB_POOL_SIZE` | maximum server database connections | `5` |
+| `HOST` | listening address; set deliberately for remote deployment | `127.0.0.1` |
 | `PORT` | API port | `4000` |
 | `TRUST_PROXY` | `1` behind Nginx or a load balancer, so lockouts see the real client IP | `0` |
 | `APP_KEY` | optional base64 32-byte key that encrypts secrets and backups; without it, `server/data/app.key` is generated | — |
 
-`.env` is in `.gitignore`. Never commit it. You can leave the database keys empty and type them in the wizard
-instead; the wizard saves them to `server/data/config.json`.
+`.env` is in `.gitignore`. Never commit it or send database credentials to the frontend. The wizard uses the configured server connection. An alternative PostgreSQL connection can be saved locally if `DATABASE_URL` is absent.
 
 **4. Start**
 
@@ -127,17 +122,14 @@ It changes data, so never run it against a live database.
 
 ## The database
 
-- `server/src/schema.sql` is the source the app runs. Every statement is idempotent, and it is applied at install
-  and again at the first request after each start. A new version therefore adds its tables by itself; columns that a
-  later version widened are altered in `server/src/seed.ts`.
-- `database/schema.sql` is the full structure (64 tables, no data), exported from an installed MySQL 8 database. Use
-  it to review the model or to create the tables by hand:
+- `database/supabase/schema.sql` is the PostgreSQL structure (64 tables). The installer applies it only to an empty destination. Future schema changes require reviewed PostgreSQL migrations.
+- `database/supabase/seed.sql` contains repository defaults; it creates no accounts or operational data.
+- `server/src/sql.ts` binds query parameters and translates legacy application query templates to PostgreSQL. `mysql2` is no longer a runtime dependency.
+- The former MySQL schema files remain as migration references only; the application does not execute them.
+- Express enforces the existing staff/rider session permissions. Browser Data API access to application tables is closed with RLS and revoked grants; this application does not use Supabase Auth.
+- Backups restore inside a PostgreSQL transaction, respecting foreign-key order and repairing identity sequences. Uploaded files and encryption keys remain in `server/data/`; keep that directory with your database backup.
 
-  ```bash
-  mysql -u root -p logistics < database/schema.sql
-  ```
-
-  Then run the setup wizard: it skips the existing tables and adds the roles, settings and first admin.
+For the destructive smoke test, use `server/test/prepare-postgres.ts` with an isolated `DB_SCHEMA=mandoob_test_*`, a separate `APP_DATA_DIR`, `PORT=4100` and `DISABLE_SCHEDULER=1`. The preparation script refuses the public schema. Never point the smoke test at live operational data.
 
 Main groups of tables:
 

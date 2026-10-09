@@ -1,0 +1,25 @@
+{
+  "projectRef": "mzsjtckqoqjinsjafnfb",
+  "projectName": "mandob",
+  "url": "https://supabase.com/dashboard/project/mzsjtckqoqjinsjafnfb",
+  "method": "Supabase Dashboard SQL Editor",
+  "schemaApplied": true,
+  "seedApplied": true,
+  "verificationRows": [
+    "metricactualexpectedpassed",
+    "tables6464true",
+    "columns730730true",
+    "foreign_keys4040true",
+    "rls_enabled6464true",
+    "settings112112true",
+    "roles55true",
+    "role_permissions807807true",
+    "cities2525true",
+    "email_templates1717true",
+    "users00true",
+    "installed00true",
+    "browser_table_grants00true",
+    "browser_sequence_grants00true"
+  ],
+  "applicationConnected": false
+}

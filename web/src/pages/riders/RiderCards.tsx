@@ -4,7 +4,7 @@ import { Plus } from 'lucide-react';
 import { get, post } from '../../api';
 import { useAuth } from '../../auth';
 import { fmtDateTime, fmtNum, useI18n } from '../../i18n';
-import { Badge, Button, Card, Details, StatCard, useAction, useUi } from '../../ui/kit';
+import { Badge, Button, Card, Details, Field, Modal, StatCard, useAction, useUi } from '../../ui/kit';
 import { LEAVE_TONE } from '../ops/Leaves';
 import { FinancialSummary } from '../finance/Finance';
 import { RatingCard } from '../performance/Ratings';
@@ -80,6 +80,13 @@ function PortalAccountCard({ riderId }: { riderId: number | string }) {
   const [a, setA] = useState<any>(null);
   const load = useCallback(() => get(`/riders/${riderId}/portal`).then(setA).catch(() => {}), [riderId]);
   useEffect(() => { load(); }, [load]);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [password, setPassword] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
+  const savePassword = async () => {
+    const r = await run(() => post(`/riders/${riderId}/portal/reset-password`, { password, confirm: passwordConfirm }));
+    if (r) { setPasswordOpen(false); setPassword(''); setPasswordConfirm(''); load(); toast(t('portal_acc.reset_ok', { n: r.ended ?? 0 })); }
+  };
   if (!a) return null;
   const act = async (what: 'disable' | 'enable' | 'reset-password', okKey: string) => {
     if (!(await confirm({ title: t(`portal_acc.${what}_q`), body: t(`portal_acc.${what}_body`), tone: what === 'enable' ? 'primary' : 'danger', confirm: t(`portal_acc.${what}`) }))) return;
@@ -90,8 +97,13 @@ function PortalAccountCard({ riderId }: { riderId: number | string }) {
     <Card title={t('portal_acc.title')} actions={<>
       {a.portal_enabled ? <Button size="sm" variant="danger" onClick={() => act('disable', 'portal_acc.disabled_ok')}>{t('portal_acc.disable')}</Button>
         : <Button size="sm" variant="primary" onClick={() => act('enable', 'portal_acc.enabled_ok')}>{t('portal_acc.enable')}</Button>}
-      {a.has_password && <Button size="sm" onClick={() => act('reset-password', 'portal_acc.reset_ok')}>{t('portal_acc.reset-password')}</Button>}
+      <Button size="sm" onClick={() => setPasswordOpen(true)}>{t('portal_acc.assign_password')}</Button>
     </>}>
+      <Modal open={passwordOpen} onClose={() => { setPasswordOpen(false); setPassword(''); setPasswordConfirm(''); }} title={t('portal_acc.assign_password')} footer={<Button onClick={savePassword}>{t('common.confirm')}</Button>}>
+        <p className="mb-3 text-sm">{t('portal_acc.password_help')}</p>
+        <Field label={t('portal_acc.password')}><input className="input" type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} /></Field>
+        <Field label={t('portal_acc.confirm_password')}><input className="input" type="password" autoComplete="new-password" value={passwordConfirm} onChange={e => setPasswordConfirm(e.target.value)} /></Field>
+      </Modal>
       <Details cols={3} rows={[
         [t('portal_acc.access'), <Badge tone={a.portal_enabled ? 'green' : 'red'}>{a.portal_enabled ? t('portal_acc.enabled') : t('portal_acc.disabled')}</Badge>, true],
         [t('portal_acc.password'), a.has_password ? <>{t('portal_acc.set')} · <span className="num">{fmtDateTime(a.portal_password_set_at)}</span></> : t('portal_acc.not_set'), true],

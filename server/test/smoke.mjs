@@ -1,10 +1,12 @@
 // End-to-end check of the API against a FRESH install (it creates companies, riders, vehicles…).
 // Usage: node server/test/smoke.mjs http://localhost:4000   — admin user: admin / Admin12345!
 import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 const base = process.argv[2] ?? 'http://localhost:4100';
 let cookie = '';
 async function api(method, path, body, raw = false) {
-  const opts = { method, headers: { cookie } };
+  const opts = { method, headers: { cookie, connection: 'close' } };
   if (body instanceof FormData) opts.body = body;
   else if (body !== undefined) { opts.body = JSON.stringify(body); opts.headers['content-type'] = 'application/json'; }
   const r = await fetch(base + '/api' + path, opts);
@@ -459,7 +461,7 @@ console.log('ch11 ok');
 // --- ch12 rider portal: its own sessions, the rider side of requests, leaves and conversations
 let rcookie = '';
 async function rapi(method, path, body) {
-  const opts = { method, headers: { cookie: rcookie } };
+  const opts = { method, headers: { cookie: rcookie, connection: 'close' } };
   if (body instanceof FormData) opts.body = body;
   else if (body !== undefined) { opts.body = JSON.stringify(body); opts.headers['content-type'] = 'application/json'; }
   const r = await fetch(base + '/api' + path, opts);
@@ -475,9 +477,11 @@ assert.equal((await api('GET', '/portal/me')).error, 'rider_session_ended', 'a s
 assert.equal((await rapi('POST', '/portal/login', { rider_id: '9999999' })).error, 'portal_bad_credentials');
 assert.equal((await rapi('POST', '/portal/login', { rider_id: '4000001' })).error, 'portal_disabled', 'a suspended rider cannot sign in');
 ok(await api('POST', '/riders/bulk-edit', { ids: [4000001], changes: { status: 'active' } }), 'reactivate');
-assert.equal(ok(await rapi('POST', '/portal/login', { rider_id: '4000001' }), 'portal login').first, true, 'first sign-in with the ID alone');
+assert.equal((await rapi('POST','/portal/login',{rider_id:'4000001'})).error,'portal_password_not_ready');
+ok(await api('POST','/riders/4000001/portal/reset-password',{password:'InitialPass2026',confirm:'InitialPass2026'}),'provision');
+assert.equal(ok(await rapi('POST', '/portal/login', { rider_id: '4000001', password:'InitialPass2026' }), 'portal login').first, false);
 const pme = ok(await rapi('GET', '/portal/me'), 'portal me');
-assert.equal(pme.id, 4000001); assert.equal(pme.has_password, false);
+assert.equal(pme.id, 4000001); assert.equal(pme.has_password, true);
 const pov = ok(await rapi('GET', '/portal/overview'), 'overview');
 assert.equal(pov.completion.items.length, 7); assert.equal(pov.completion.items.find((i) => i.key === 'ajeer').status, 'expired');
 const ppf = ok(await rapi('GET', '/portal/profile'), 'profile');
@@ -485,7 +489,7 @@ assert.equal(ppf.national_id, '••••••9012', 'the ID number is masked
 const pperf = ok(await rapi('GET', '/portal/performance?from=2026-09-01&to=2026-09-30'), 'performance');
 assert.ok(pperf.total.completed >= 18); assert.equal(pperf.absence.days.find((d) => d.day === '2026-09-01').status, 'present');
 assert.equal((await rapi('GET', '/portal/performance?from=2026-09-30&to=2026-09-01')).fields?.from, 'start_after_end');
-assert.match(await (await fetch(base + '/api/portal/performance/export?from=2026-09-01&to=2026-09-30', { headers: { cookie: rcookie } })).text(), /2026-09-01/);
+assert.match(await (await fetch(base + '/api/portal/performance/export?from=2026-09-01&to=2026-09-30', { headers: { cookie: rcookie, connection: 'close' } })).text(), /2026-09-01/);
 ok(await rapi('GET', '/portal/ratings'), 'ratings'); ok(await rapi('GET', '/portal/attendance'), 'attendance');
 // update requests
 assert.equal((await rapi('POST', '/portal/requests', { type: 'contact', phone: '0551234567' })).fields?.phone, 'same_as_current');
@@ -534,14 +538,14 @@ ok(await rapi('POST', `/portal/issues/${iss.id}/messages`, rr), 'reply to a reso
 assert.equal((await api('GET', `/issues/${iss.id}`)).status, 'open', 'the reply reopens it');
 assert.equal((await rapi('GET', '/portal/issues?status=open')).rows.length, 2);
 // security: verify the email, then the password
-assert.equal((await rapi('POST', '/portal/security/password', { password: 'Rider2026x', confirm: 'Rider2026x' })).error, 'verify_email_first');
+assert.equal((await rapi('POST', '/portal/security/password', { current:'InitialPass2026', password: 'Rider2026x', confirm: 'Rider2026x' })).error, 'verify_email_first');
 ok(await rapi('POST', '/portal/security/email', { email: 'Rider@Example.com' }), 'send code');
 const vcode = await lastCode();
 assert.equal((await rapi('POST', '/portal/security/email', { email: 'rider@example.com' })).error, 'code_wait');
 assert.equal((await rapi('POST', '/portal/security/email/verify', { code: vcode === '000000' ? '111111' : '000000' })).fields?.code, 'code_wrong');
 assert.equal(ok(await rapi('POST', '/portal/security/email/verify', { code: vcode }), 'verify').email, 'rider@example.com');
-assert.equal((await rapi('POST', '/portal/security/password', { password: 'onlyletters', confirm: 'onlyletters' })).fields?.password, 'portal_password_rules');
-ok(await rapi('POST', '/portal/security/password', { password: 'Rider2026x', confirm: 'Rider2026x' }), 'set password');
+assert.equal((await rapi('POST', '/portal/security/password', { current:'InitialPass2026', password: 'onlyletters', confirm: 'onlyletters' })).fields?.password, 'portal_password_rules');
+ok(await rapi('POST', '/portal/security/password', { current:'InitialPass2026', password: 'Rider2026x', confirm: 'Rider2026x' }), 'set password');
 const keep = rcookie;
 assert.equal((await rapi('POST', '/portal/login', { rider_id: '4000001' })).step, 'password');
 assert.equal((await rapi('POST', '/portal/login', { rider_id: '4000001', password: 'wrong-pass1' })).error, 'portal_bad_credentials');
@@ -558,9 +562,11 @@ ok(await rapi('POST', '/portal/login', { rider_id: '4000001', password: 'NewPass
 assert.equal(ok(await api('POST', '/riders/4000001/portal/disable'), 'disable').ended, 1);
 assert.equal((await rapi('POST', '/portal/login', { rider_id: '4000001', password: 'NewPass2026' })).error, 'portal_disabled');
 ok(await api('POST', '/riders/4000001/portal/enable'), 'enable');
-ok(await api('POST', '/riders/4000001/portal/reset-password'), 'office reset');
-assert.equal(ok(await rapi('POST', '/portal/login', { rider_id: '4000001' }), 'ID alone again').first, true);
+ok(await api('POST', '/riders/4000001/portal/reset-password',{password:'OfficePass2026',confirm:'OfficePass2026'}), 'office reset');
+assert.equal((await rapi('POST', '/portal/login', { rider_id: '4000001' })).step, 'password');
+assert.equal(ok(await rapi('POST', '/portal/login', { rider_id: '4000001',password:'OfficePass2026' }), 'office password').first, false);
 assert.ok((await rapi('GET', '/portal/security')).verified_email, 'the reset keeps the verified email');
+execFileSync(process.execPath, [fileURLToPath(new URL('./security.mjs', import.meta.url)), base], { stdio: 'inherit' });
 // 10 failures from one network block the sign-in for a while
 let blocked = false;
 for (let i = 0; i < 12 && !blocked; i++) blocked = (await rapi('POST', '/portal/login', { rider_id: '1' })).error === 'portal_too_many';

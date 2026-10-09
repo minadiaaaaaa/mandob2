@@ -13,7 +13,7 @@ const spec: Spec = {
     LEFT JOIN riders hr ON hr.id = a.rider_id
     LEFT JOIN riders mr ON a.rider_id IS NULL AND (mr.phone = a.phone OR (a.national_id IS NOT NULL AND mr.national_id = a.national_id))`,
   select: `a.*, ci.name_ar city_ar, ci.name_en city_en, hr.full_name hired_name, MIN(mr.id) matching_rider_id`,
-  groupBy: 'a.id',
+  groupBy: 'a.id, ci.id, hr.id',
   search: ['a.full_name', 'a.name_en', 'a.phone', 'a.national_id', 'CAST(a.id AS CHAR)'],
   filters: {
     status: inList('a.status'), city: eq('a.city_id'),
