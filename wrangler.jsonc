@@ -3,7 +3,7 @@
   "name": "mandoob-api-gateway",
   "account_id": "c9e703f4574934bcac430aed3f05752a",
   "main": "deploy/cloudflare/api-worker.mjs",
-  "compatibility_date": "2026-10-23",
+  "compatibility_date": "2026-10-22",
   "workers_dev": true,
   "vpc_services": [
     {
