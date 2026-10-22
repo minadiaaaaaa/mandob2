@@ -1,4 +1,6 @@
 node_modules/
+.vercel/
+.wrangler/
 .env
 server/data/
 web/dist/
@@ -12,3 +14,6 @@ database/supabase/mcp-authorization.png
 
 # Generated QA reports (retain locally, never version test data)
 .qa-reports/
+
+.vercel
+.env*
