@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "mandoob-api-gateway",
+  "main": "deploy/cloudflare/api-worker.mjs",
+  "compatibility_date": "2026-10-23",
+  "workers_dev": true,
+  "vpc_services": [
+    {
+      "binding": "MANDOOB_API",
+      "service_id": "01a125df-42c1-7880-b283-8e8549c056d8"
+    }
+  ]
+}
