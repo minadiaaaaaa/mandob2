@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://mandoob-api-gateway.mizadiaa04.workers.dev/api/:path*"
+      "destination": "https://mandoob-api-gateway.minadiaa65.workers.dev/api/:path*"
     },
     {
       "source": "/(.*)",
