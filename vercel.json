@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "pnpm -C web install --frozen-lockfile",
-  "buildCommand": "pnpm -C web build",
+  "installCommand": "npx --yes pnpm@10.34.7 -C web install --frozen-lockfile",
+  "buildCommand": "npx --yes pnpm@10.34.7 -C web build",
   "outputDirectory": "web/dist",
   "rewrites": [
     {
