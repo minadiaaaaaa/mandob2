@@ -71,8 +71,8 @@ export default function Login() {
             <Field label={t('login.username')}><input className="input" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} dir="ltr" /></Field>
             <Field label={t('login.password')}>
               <div className="relative">
-                <input className="input pe-9" type={show ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} dir="ltr" />
-                <button type="button" className="absolute end-2 top-2 text-zinc-400" title={show ? t('login.hide_password') : t('login.show_password')} onClick={() => setShow(!show)}>
+              <input className="input ps-9 focus:ring-1 focus:ring-brand/20" type={show ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} dir="ltr" />
+                <button type="button" className="absolute end-2 top-1/2 -translate-y-1/2 rounded p-1 text-zinc-400 transition hover:text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand" aria-label={show ? t('login.hide_password') : t('login.show_password')} aria-pressed={show} title={show ? t('login.hide_password') : t('login.show_password')} onClick={() => setShow(!show)}>
                   {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
               </div>
