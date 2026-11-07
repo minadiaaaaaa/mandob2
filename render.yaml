@@ -27,7 +27,7 @@ services:
       # Encrypts stored private keys. Generated once by Render and kept; changing it makes those keys unreadable.
       - key: APP_KEY
         generateValue: true
-      # mysql://user:password@host:port/defaultdb?ssl=1 (percent-encode special characters in the password)
+      # mysql://user:password@host:port/defaultdb?ssl-mode=REQUIRED (Aiven's Service URI as it is; ?ssl=1 also works)
       - key: DATABASE_URL
         sync: false
       # The database's CA certificate (Aiven › service › Overview › CA certificate), pasted as text

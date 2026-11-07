@@ -18,7 +18,9 @@ export function dbConfig(): DbConfig | null {
   if (process.env.DATABASE_URL) {
     const url = new URL(process.env.DATABASE_URL);
     if (!['mysql:', 'mariadb:'].includes(url.protocol)) throw new Error('DATABASE_URL must be mysql://user:password@host:3306/database');
-    return { host: url.hostname, port: Number(url.port || 3306), user: decodeURIComponent(url.username), password: decodeURIComponent(url.password), database: decodeURIComponent(url.pathname.slice(1)), ssl: url.searchParams.get('ssl') === '1' };
+    return { host: url.hostname, port: Number(url.port || 3306), user: decodeURIComponent(url.username), password: decodeURIComponent(url.password), database: decodeURIComponent(url.pathname.slice(1)),
+      // ?ssl=1, or the ssl-mode that hosted MySQL services such as Aiven put in their links
+      ssl: url.searchParams.get('ssl') === '1' || ['REQUIRED', 'VERIFY_CA', 'VERIFY_IDENTITY'].includes(String(url.searchParams.get('ssl-mode')).toUpperCase()) };
   }
   if (process.env.DB_USER && process.env.DB_NAME) return { host: process.env.DB_HOST || '127.0.0.1', port: Number(process.env.DB_PORT || 3306), user: process.env.DB_USER, password: process.env.DB_PASSWORD || '', database: process.env.DB_NAME, ssl: process.env.DB_SSL === '1' };
   if (existsSync(CONFIG_FILE)) {
