@@ -28,6 +28,8 @@ export const MATRIX: Record<string, Record<string, string[]>> = {
     stock: ['view', 'create', 'update', 'delete'],
     salary_rules: ['view', 'create', 'update', 'delete'],
     payroll: ['view', 'create', 'update', 'finalize', 'reopen', 'pay', 'export'],
+    // phase 7: tax invoices and credit notes (issue makes them final), settings switches the ZATCA sandbox
+    invoices: ['view', 'create', 'update', 'delete', 'issue', 'settings'],
   },
   advances: {
     advances: ['view', 'create', 'update', 'delete', 'upload', 'download', 'export', 'import', 'approve', 'reject', 'disburse', 'cancel', 'print'],

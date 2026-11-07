@@ -2,7 +2,7 @@
 // Routes stay thin: they call these rules instead of repeating them (routes/saas.ts, auth, portal, sync).
 import { asPlatform, exec, one, tx, withTenant } from '../db.js';
 import { audit } from '../audit.js';
-import { FREE_PLAN, LATER_QUOTAS, QUOTAS, QUOTA_KINDS, featureList, type Feature, type QuotaKind } from './plans.js';
+import { FREE_PLAN, QUOTAS, QUOTA_KINDS, featureList, type Feature, type QuotaKind } from './plans.js';
 
 export type Tenant = {
   id: number; slug: string; name: string; name_en: string | null; phone: string | null; email: string | null; plan_key: string;
@@ -43,7 +43,7 @@ export function standing(t: Tenant) {
 
 // The company's limits: its plan's, plus the extra places the owner granted (riders, staff, vehicles).
 // null means unlimited. `devices` is per staff account.
-export type Limits = Record<QuotaKind | (typeof LATER_QUOTAS)[number] | 'devices', number | null>;
+export type Limits = Record<QuotaKind | 'devices', number | null>;
 export async function limits(t: Tenant): Promise<Limits> {
   return limitsOf(await plan(t.plan_key), t);
 }
@@ -56,7 +56,6 @@ export function limitsOf(p: Plan | undefined, t: Tenant): Limits {
     const extra = Number((t as Record<string, unknown>)[`extra_${k}`] ?? 0);
     out[k] = base == null ? null : base + extra;
   }
-  for (const k of LATER_QUOTAS) out[k] = num(p?.[`max_${k}`]);
   out.devices = num(p?.max_devices);
   return out;
 }

@@ -5,7 +5,7 @@ import { asPlatform, setting, withTenant } from '../db.js';
 // ---------- quotas ----------
 // Counted now: each has its table and what "not counted" means there (a terminated rider, a switched-off contract…).
 // `owner`: the company owner's own account is not one of the plan's places.
-export type QuotaKind = 'riders' | 'vehicles' | 'users' | 'platforms' | 'contracts' | 'branches' | 'designations';
+export type QuotaKind = 'riders' | 'vehicles' | 'users' | 'platforms' | 'contracts' | 'branches' | 'designations' | 'invoice_buyers' | 'open_invoice_drafts' | 'invoices_month';
 export type Quota = { table: string; column: string; counted: string; off: { column: string; value: string | number }; owner?: boolean };
 export const QUOTAS: Record<QuotaKind, Quota> = {
   riders: { table: 'riders', column: 'max_riders', counted: "status <> 'terminated'", off: { column: 'status', value: 'terminated' } },
@@ -18,11 +18,17 @@ export const QUOTAS: Record<QuotaKind, Quota> = {
   branches: { table: 'branches', column: 'max_branches', counted: 'is_active = 1', off: { column: 'is_active', value: 0 } },
   // only custom job titles: Driver and Supervisor come with every company (written outside the check, domain/branches.ts)
   designations: { table: 'designations', column: 'max_designations', counted: 'is_active = 1 AND builtin_key IS NULL', off: { column: 'is_active', value: 0 } },
+  // phase 7, tax invoices: the buyers kept, the drafts not yet issued, and the invoices issued this month (UTC month).
+  // A new invoice is a draft (counted by the insert guard); issuing checks the month's count. Drafts come before the
+  // month here, so the insert guard on invoices counts drafts.
+  invoice_buyers: { table: 'invoice_buyers', column: 'max_invoice_buyers', counted: 'is_active = 1', off: { column: 'is_active', value: 0 } },
+  open_invoice_drafts: { table: 'invoices', column: 'max_open_invoice_drafts', counted: "status = 'draft'", off: { column: 'status', value: 'issued' } },
+  invoices_month: { table: 'invoices', column: 'max_invoices_month', counted: "status <> 'draft' AND issued_at >= DATE_FORMAT(UTC_TIMESTAMP(), '%Y-%m-01')", off: { column: 'status', value: 'draft' } },
 };
 export const QUOTA_KINDS = Object.keys(QUOTAS) as QuotaKind[];
 export const kindOfTable = (table: string) => QUOTA_KINDS.find((k) => QUOTAS[k].table === table);
-// Set on every plan now; counted by the phase that adds their screens (invoice buyers, open drafts and invoices a month: phase 7).
-export const LATER_QUOTAS = ['invoice_buyers', 'open_invoice_drafts', 'invoices_month'] as const;
+// Limits set on plans before their screens exist (none now: the invoice quotas are counted since phase 7).
+export const LATER_QUOTAS: readonly string[] = [];
 // devices each staff account may be signed in from at once (auth.ts)
 export const DEVICE_COLUMN = 'max_devices';
 export const LIMIT_COLUMNS = [...QUOTA_KINDS.map((k) => QUOTAS[k].column), ...LATER_QUOTAS.map((k) => `max_${k}`), DEVICE_COLUMN];

@@ -429,6 +429,80 @@ CREATE TABLE IF NOT EXISTS fin_stock_moves (
   KEY ix_t_item (tenant_id, item_id, move_date)
 );
 
+-- ======================================================================== tax invoices (phase 7)
+-- The companies the company invoices (a delivery platform, usually), with what a tax invoice must show of them.
+CREATE TABLE IF NOT EXISTS invoice_buyers (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  name VARCHAR(200) NOT NULL,
+  name_en VARCHAR(200) NULL,
+  vat_number VARCHAR(15) NULL,
+  cr_number VARCHAR(30) NULL,
+  address VARCHAR(300) NULL,
+  city VARCHAR(100) NULL,
+  postal_code VARCHAR(10) NULL,
+  country CHAR(2) NOT NULL DEFAULT 'SA',
+  email VARCHAR(150) NULL,
+  company_id INT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY uq_invoice_buyer_name (tenant_id, name),
+  UNIQUE KEY uq_invoice_buyer_tenant_id (tenant_id, id)
+);
+-- A tax invoice (type 388) or a credit note (381) against one. A draft changes freely; issuing gives it its number,
+-- counter (ICV), UUID, the hash of the one before it (PIH), its own hash and the QR, and then it never changes:
+-- it is corrected only by a credit note. The seller's details are copied in at issue.
+CREATE TABLE IF NOT EXISTS invoices (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  kind ENUM('invoice','credit') NOT NULL DEFAULT 'invoice',
+  status ENUM('draft','issued','credited') NOT NULL DEFAULT 'draft',
+  number VARCHAR(30) NULL,
+  icv INT NULL,
+  uuid CHAR(36) NULL,
+  buyer_id INT NOT NULL,
+  contract_id INT NULL,
+  original_id INT NULL,
+  issue_date DATE NULL,
+  supply_from DATE NULL,
+  supply_to DATE NULL,
+  credit_reason VARCHAR(255) NULL,
+  notes VARCHAR(500) NULL,
+  subtotal DECIMAL(12,2) NOT NULL DEFAULT 0,
+  vat_total DECIMAL(12,2) NOT NULL DEFAULT 0,
+  total DECIMAL(12,2) NOT NULL DEFAULT 0,
+  seller_json TEXT NULL,
+  buyer_json TEXT NULL,
+  pih VARCHAR(100) NULL,
+  invoice_hash VARCHAR(100) NULL,
+  qr TEXT NULL,
+  signature TEXT NULL,
+  zatca_status ENUM('none','sandbox_signed','reported','cleared','rejected') NOT NULL DEFAULT 'none',
+  issued_at DATETIME NULL,
+  issued_by INT NULL,
+  created_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY uq_invoice_number (tenant_id, number),
+  UNIQUE KEY uq_invoice_icv (tenant_id, icv),
+  UNIQUE KEY uq_invoice_tenant_id (tenant_id, id),
+  KEY ix_t_status (tenant_id, status, issued_at)
+);
+CREATE TABLE IF NOT EXISTS invoice_lines (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  invoice_id INT NOT NULL,
+  description VARCHAR(255) NOT NULL,
+  quantity DECIMAL(12,3) NOT NULL DEFAULT 1,
+  unit_price DECIMAL(12,2) NOT NULL DEFAULT 0,
+  vat_rate DECIMAL(5,2) NOT NULL DEFAULT 15,
+  net DECIMAL(12,2) NOT NULL DEFAULT 0,
+  vat DECIMAL(12,2) NOT NULL DEFAULT 0,
+  sort INT NOT NULL DEFAULT 0,
+  KEY ix_t_invoice (tenant_id, invoice_id)
+);
+
 -- ======================================================================== payroll (phase 6)
 -- How a rider is paid: a base salary, an amount per completed order, a bonus at a monthly order target, and what is
 -- deducted. A rule may be for one branch and/or one job title; the most specific active rule applies.

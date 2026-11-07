@@ -169,6 +169,20 @@ export const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    // Phase 7: tax invoices, credit notes and their buyers (tables in schema.sql); links include the company.
+    id: 9, name: 'tax invoices',
+    up: async () => {
+      for (const [table, column, target] of INVOICE_LINKS) {
+        const name = `fk_${table}_${column}`.slice(0, 64);
+        if (!(await constraintExists(table, name)))
+          await executeScript(`ALTER TABLE ${identifier(table)} ADD CONSTRAINT ${identifier(name)} FOREIGN KEY (tenant_id, ${identifier(column)}) REFERENCES ${identifier(target)} (tenant_id, id)`);
+      }
+    },
+  },
+];
+export const INVOICE_LINKS: [string, string, string][] = [
+  ['invoices', 'buyer_id', 'invoice_buyers'], ['invoices', 'original_id', 'invoices'], ['invoice_lines', 'invoice_id', 'invoices'],
 ];
 export const FINANCE_LINKS: [string, string, string][] = [
   ['fin_entries', 'account_id', 'fin_accounts'], ['fin_entries', 'category_id', 'fin_categories'], ['fin_entries', 'supplier_id', 'fin_suppliers'],
