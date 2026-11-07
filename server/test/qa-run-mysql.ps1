@@ -55,6 +55,7 @@ try {
     Stop-Api; Start-Api
     Step 'SaaS fleet-log.mjs (phase 4)' { node test/fleet-log.mjs http://127.0.0.1:4100 }
     Step 'SaaS employees.mjs (phase 5)' { node test/employees.mjs http://127.0.0.1:4100 }
+    Step 'SaaS finance.mjs (phase 6)' { node test/finance.mjs http://127.0.0.1:4100 }
     if ($env:QA_BROWSER_PATH) {
         foreach ($s in @('browser-qa.mjs','browser-details.mjs','browser-write.mjs','browser-public.mjs')) { Step "browser $s" { node "test/$s" http://127.0.0.1:4100 } }
         Stop-Api; Start-Api

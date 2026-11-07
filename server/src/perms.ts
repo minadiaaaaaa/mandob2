@@ -20,6 +20,15 @@ export const MATRIX: Record<string, Record<string, string[]>> = {
     absences: ['view', 'import', 'manage'],
     live_riders: ['view', 'manage'],
   },
+  // phase 6: the company's own money and payroll (sensitive: only Admin has them unless a role is given them)
+  company: {
+    company_finance: ['view', 'create', 'update', 'delete', 'export', 'void'],
+    obligations: ['view', 'create', 'update', 'delete', 'pay'],
+    assets: ['view', 'create', 'update', 'delete'],
+    stock: ['view', 'create', 'update', 'delete'],
+    salary_rules: ['view', 'create', 'update', 'delete'],
+    payroll: ['view', 'create', 'update', 'finalize', 'reopen', 'pay', 'export'],
+  },
   advances: {
     advances: ['view', 'create', 'update', 'delete', 'upload', 'download', 'export', 'import', 'approve', 'reject', 'disburse', 'cancel', 'print'],
     advance_installments: ['view', 'update', 'repay', 'waive', 'export'],

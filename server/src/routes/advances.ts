@@ -183,7 +183,7 @@ advancesRouter.post('/advances/:id/disburse', can('advances.disburse'), async (r
 });
 
 // The advance follows its instalments: "repaying" after the first repayment or waiver, "settled" when all are done.
-async function refresh(advanceId: number) {
+export async function refresh(advanceId: number) {
   const [s] = await q<any>(`SELECT COUNT(*) total, SUM(status IN ('paid','waived')) done, SUM(paid > 0 OR status = 'waived') touched FROM advance_installments WHERE advance_id = ?`, [advanceId]);
   const status = Number(s.done) === Number(s.total) ? 'settled' : Number(s.touched) > 0 ? 'repaying' : 'disbursed';
   await exec("UPDATE advances SET status = ? WHERE id = ? AND status IN ('disbursed','repaying','settled')", [status, advanceId]);

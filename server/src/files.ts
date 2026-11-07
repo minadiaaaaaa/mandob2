@@ -24,6 +24,7 @@ const MODULE_OF: Record<string, string> = {
   fuel_card: 'fuel_cards', oil_change: 'oil_changes', accident: 'vehicle_accidents', vehicle_service: 'vehicle_services', renewal: 'renewals', advance: 'advances', leave: 'leaves', absence: 'absences',
   // a full permission where the module has no "view"
   change_request: 'rider_portal.view_requests', issue_message: 'rider_portal.view_issues',
+  payroll_sheet: 'payroll', fin_entry: 'company_finance',
 };
 
 // The type a file really is, read from its first bytes (images and PDF only); null when it is none of them.

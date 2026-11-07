@@ -157,6 +157,27 @@ export const MIGRATIONS: Migration[] = [
       await q("UPDATE riders SET exit_date = DATE(COALESCE(updated_at, created_at)) WHERE status = 'terminated' AND exit_date IS NULL");
     },
   },
+  {
+    // Phase 6: company finance (accounts, categories, suppliers, entries, obligations, assets, stock) and payroll
+    // (salary rules, sheets, lines); tables in schema.sql. Every link includes the company.
+    id: 8, name: 'company finance and payroll',
+    up: async () => {
+      for (const [table, column, target] of FINANCE_LINKS) {
+        const name = `fk_${table}_${column}`.slice(0, 64);
+        if (!(await constraintExists(table, name)))
+          await executeScript(`ALTER TABLE ${identifier(table)} ADD CONSTRAINT ${identifier(name)} FOREIGN KEY (tenant_id, ${identifier(column)}) REFERENCES ${identifier(target)} (tenant_id, id)`);
+      }
+    },
+  },
+];
+export const FINANCE_LINKS: [string, string, string][] = [
+  ['fin_entries', 'account_id', 'fin_accounts'], ['fin_entries', 'category_id', 'fin_categories'], ['fin_entries', 'supplier_id', 'fin_suppliers'],
+  ['fin_obligations', 'supplier_id', 'fin_suppliers'], ['fin_obligations', 'category_id', 'fin_categories'], ['fin_obligations', 'account_id', 'fin_accounts'],
+  ['fin_obligation_dues', 'obligation_id', 'fin_obligations'], ['fin_obligation_dues', 'entry_id', 'fin_entries'],
+  ['fin_stock_moves', 'item_id', 'fin_stock_items'], ['fin_stock_moves', 'rider_id', 'riders'],
+  ['salary_rules', 'branch_id', 'branches'], ['salary_rules', 'designation_id', 'designations'],
+  ['payroll_sheets', 'branch_id', 'branches'], ['payroll_sheets', 'account_id', 'fin_accounts'], ['payroll_sheets', 'entry_id', 'fin_entries'],
+  ['payroll_lines', 'sheet_id', 'payroll_sheets'], ['payroll_lines', 'rider_id', 'riders'], ['payroll_lines', 'rule_id', 'salary_rules'],
 ];
 const RIDER_FILE_COLUMNS: [string, string][] = [
   ['visa_number', 'VARCHAR(30) NULL'], ['visa_type', 'VARCHAR(60) NULL'], ['visa_expiry', 'DATE NULL'],

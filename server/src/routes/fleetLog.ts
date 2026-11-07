@@ -10,6 +10,7 @@ import {
   ACCIDENT_AUTHORITIES, ACCIDENT_SEVERITIES, ACCIDENT_STAGES, SERVICE_STATUSES, SERVICE_TYPES, accidentUse, cancelService, checkFleetLinks,
   completeService, createAccident, createService, moveAccident, payService, startService, vehiclePapers, type AccidentStage,
 } from '../domain/fleetLog.js';
+import { categoryByKey, checkEntry, createEntry } from '../domain/companyFinance.js';
 
 export const fleetLogRouter = Router();
 const id = (req: { params: Record<string, string | string[]> }) => String(req.params.id);
@@ -103,10 +104,19 @@ fleetLogRouter.post('/vehicle-services/:id/cancel', can('vehicle_services.update
   res.json({ ok: true });
 });
 fleetLogRouter.post('/vehicle-services/:id/pay', can('vehicle_services.pay'), async (req, res) => {
-  const v = clean(req.body, { amount: { req: true, type: 'num' }, paid_on: { type: 'date' }, ref: { max: 100 } });
+  const v = clean(req.body, { amount: { req: true, type: 'num' }, paid_on: { type: 'date' }, ref: { max: 100 }, account_id: { type: 'int' } });
   const day = await today();
   if (v.paid_on && v.paid_on > day) fail(422, 'date_in_future');
+  // paid from one of the company's accounts: the money-out entry is written too (Maintenance), checked first
+  const entry = v.account_id ? { entry_date: v.paid_on ?? day, direction: 'out' as const, account_id: v.account_id, category_id: await categoryByKey('maintenance'),
+    amount: v.amount, description: `service #${id(req)}`, reference: v.ref ?? null, source_type: 'service', source_id: Number(id(req)) } : null;
+  if (entry) await checkEntry(entry, day);
   await payService(id(req), { amount: v.amount, paid_on: v.paid_on ?? day, ref: v.ref });
+  if (entry) {
+    // a second payment of the same service replaces the entry of the first
+    await exec("UPDATE fin_entries SET voided_at = UTC_TIMESTAMP(), void_reason = 'service payment changed' WHERE source_type = 'service' AND source_id = ? AND voided_at IS NULL", [Number(id(req))]);
+    await createEntry(entry, req.user!.id, day);
+  }
   await audit(req, { action: 'vehicle_service.pay', entity_type: 'vehicle_service', entity_id: id(req), after: v });
   res.json({ ok: true });
 });

@@ -79,6 +79,8 @@ function useSections(): Section[] {
     ] },
     { key: 'finance', label: t('nav.finance'), icon: <Wallet />, items: [
       i('/admin/advances', 'nav.advances', 'advances.view'),
+      i('/admin/company-finance', 'nav.company_finance', ['company_finance.view', 'obligations.view', 'assets.view', 'stock.view']),
+      i('/admin/payroll', 'nav.payroll', 'payroll.view'),
       i('/admin/finance/fines', 'nav.fines', 'finance.view'),
       i('/admin/finance/wallet', 'nav.wallet', 'finance.view'),
       i('/admin/finance/billing', 'nav.billing', 'finance.view'),

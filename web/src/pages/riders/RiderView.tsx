@@ -68,6 +68,7 @@ export default function RiderView() {
         subtitle={<span className="num">#{r.id}{r.alias && ` · ${r.alias}`}</span>}
         actions={<>
           {can('riders.update') && <Link to={`/admin/riders/${id}/edit`}><Button icon={<Pencil className="size-4" />}>{t('common.edit')}</Button></Link>}
+          {can('payroll.view') && <Link to={`/admin/riders/${id}/settlement`}><Button>{t('stl.title')}</Button></Link>}
           {can('riders.delete') && <Button variant="danger" icon={<Trash2 className="size-4" />} onClick={remove}>{t('common.delete')}</Button>}
           <Link to="/admin/riders"><Button variant="ghost">{t('riders.back_to_list')}</Button></Link>
         </>} />

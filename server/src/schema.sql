@@ -287,6 +287,212 @@ CREATE TABLE IF NOT EXISTS rider_bank_accounts (
   KEY ix_t_rider (tenant_id, rider_id)
 );
 
+-- ======================================================================== company finance (phase 6)
+-- Where the company's money sits (a cash box or a bank account) and how it starts.
+CREATE TABLE IF NOT EXISTS fin_accounts (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  name VARCHAR(100) NOT NULL,
+  kind ENUM('cash','bank') NOT NULL DEFAULT 'cash',
+  bank_name VARCHAR(100) NULL,
+  iban VARCHAR(34) NULL,
+  opening_balance DECIMAL(12,2) NOT NULL DEFAULT 0,
+  opening_date DATE NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY uq_fin_account_name (tenant_id, name),
+  UNIQUE KEY uq_fin_account_tenant_id (tenant_id, id)
+);
+-- What money is for (fuel, salaries, rent…), money in or out; the built-in ones can be renamed or switched off.
+CREATE TABLE IF NOT EXISTS fin_categories (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  name_ar VARCHAR(100) NOT NULL,
+  name_en VARCHAR(100) NULL,
+  kind ENUM('income','expense') NOT NULL,
+  builtin_key VARCHAR(30) NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_fin_category_name (tenant_id, kind, name_ar),
+  UNIQUE KEY uq_fin_category_builtin (tenant_id, builtin_key),
+  UNIQUE KEY uq_fin_category_tenant_id (tenant_id, id)
+);
+CREATE TABLE IF NOT EXISTS fin_suppliers (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  name VARCHAR(150) NOT NULL,
+  phone VARCHAR(30) NULL,
+  vat_number VARCHAR(20) NULL,
+  notes VARCHAR(255) NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_fin_supplier_name (tenant_id, name),
+  UNIQUE KEY uq_fin_supplier_tenant_id (tenant_id, id)
+);
+-- Every movement of money, in or out of one account. An entry is never edited in its amount, account or date: a
+-- wrong one is voided (kept, with the reason) and entered again. A transfer is two entries with one transfer_group.
+-- source_type / source_id: what created it (obligation_due, service, payroll, transfer, manual).
+CREATE TABLE IF NOT EXISTS fin_entries (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  entry_date DATE NOT NULL,
+  direction ENUM('in','out') NOT NULL,
+  account_id INT NOT NULL,
+  category_id INT NULL,
+  supplier_id INT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  description VARCHAR(255) NULL,
+  reference VARCHAR(100) NULL,
+  source_type VARCHAR(30) NOT NULL DEFAULT 'manual',
+  source_id INT NULL,
+  transfer_group CHAR(16) NULL,
+  voided_at DATETIME NULL,
+  void_reason VARCHAR(255) NULL,
+  created_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_fin_entry_tenant_id (tenant_id, id),
+  KEY ix_t_date (tenant_id, entry_date),
+  KEY ix_t_account (tenant_id, account_id, entry_date),
+  KEY ix_t_source (tenant_id, source_type, source_id)
+);
+-- Bills the company has to pay: once, or every month (rent, installments). Each payment due is a row of
+-- fin_obligation_dues, made ahead as time passes; paying one writes the money-out entry.
+CREATE TABLE IF NOT EXISTS fin_obligations (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  title VARCHAR(150) NOT NULL,
+  kind ENUM('once','monthly') NOT NULL DEFAULT 'once',
+  supplier_id INT NULL,
+  category_id INT NULL,
+  account_id INT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NULL,
+  status ENUM('active','ended') NOT NULL DEFAULT 'active',
+  notes VARCHAR(255) NULL,
+  created_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY uq_fin_obligation_tenant_id (tenant_id, id)
+);
+CREATE TABLE IF NOT EXISTS fin_obligation_dues (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  obligation_id INT NOT NULL,
+  due_date DATE NOT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  status ENUM('due','paid','skipped') NOT NULL DEFAULT 'due',
+  paid_on DATE NULL,
+  entry_id INT NULL,
+  UNIQUE KEY uq_fin_due (tenant_id, obligation_id, due_date),
+  KEY ix_t_status_due (tenant_id, status, due_date)
+);
+-- What the company owns (motorcycles it bought, equipment) and what it keeps in stock (helmets, boxes, uniforms).
+CREATE TABLE IF NOT EXISTS fin_assets (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  name VARCHAR(150) NOT NULL,
+  category VARCHAR(100) NULL,
+  value DECIMAL(12,2) NOT NULL DEFAULT 0,
+  purchase_date DATE NULL,
+  status ENUM('in_use','disposed') NOT NULL DEFAULT 'in_use',
+  disposed_on DATE NULL,
+  notes VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  KEY ix_t_status (tenant_id, status)
+);
+CREATE TABLE IF NOT EXISTS fin_stock_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  name VARCHAR(150) NOT NULL,
+  unit VARCHAR(30) NULL,
+  min_quantity DECIMAL(12,2) NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_fin_stock_name (tenant_id, name),
+  UNIQUE KEY uq_fin_stock_tenant_id (tenant_id, id)
+);
+CREATE TABLE IF NOT EXISTS fin_stock_moves (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  item_id INT NOT NULL,
+  move_date DATE NOT NULL,
+  direction ENUM('in','out') NOT NULL,
+  quantity DECIMAL(12,2) NOT NULL,
+  unit_cost DECIMAL(12,2) NULL,
+  rider_id BIGINT NULL,
+  note VARCHAR(255) NULL,
+  created_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY ix_t_item (tenant_id, item_id, move_date)
+);
+
+-- ======================================================================== payroll (phase 6)
+-- How a rider is paid: a base salary, an amount per completed order, a bonus at a monthly order target, and what is
+-- deducted. A rule may be for one branch and/or one job title; the most specific active rule applies.
+CREATE TABLE IF NOT EXISTS salary_rules (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  name VARCHAR(100) NOT NULL,
+  branch_id INT NULL,
+  designation_id INT NULL,
+  base_salary DECIMAL(12,2) NOT NULL DEFAULT 0,
+  per_order DECIMAL(12,2) NOT NULL DEFAULT 0,
+  target_orders INT NULL,
+  target_bonus DECIMAL(12,2) NOT NULL DEFAULT 0,
+  deduct_fines TINYINT(1) NOT NULL DEFAULT 1,
+  deduct_advances TINYINT(1) NOT NULL DEFAULT 1,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY uq_salary_rule_name (tenant_id, name),
+  UNIQUE KEY uq_salary_rule_tenant_id (tenant_id, id)
+);
+-- One salary sheet per month (and branch, or all branches): draft → finalized (locked) → paid (with signed proof).
+-- An incomplete finalized sheet can be reopened; a paid one stays as it is.
+CREATE TABLE IF NOT EXISTS payroll_sheets (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  period CHAR(7) NOT NULL,
+  branch_id INT NULL,
+  status ENUM('draft','finalized','paid') NOT NULL DEFAULT 'draft',
+  total_net DECIMAL(12,2) NOT NULL DEFAULT 0,
+  riders INT NOT NULL DEFAULT 0,
+  finalized_at DATETIME NULL,
+  finalized_by INT NULL,
+  paid_on DATE NULL,
+  paid_by INT NULL,
+  account_id INT NULL,
+  entry_id INT NULL,
+  notes VARCHAR(255) NULL,
+  created_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY uq_payroll_period (tenant_id, period, branch_id),
+  UNIQUE KEY uq_payroll_tenant_id (tenant_id, id)
+);
+CREATE TABLE IF NOT EXISTS payroll_lines (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  sheet_id INT NOT NULL,
+  rider_id BIGINT NOT NULL,
+  rule_id INT NULL,
+  orders INT NOT NULL DEFAULT 0,
+  base DECIMAL(12,2) NOT NULL DEFAULT 0,
+  orders_pay DECIMAL(12,2) NOT NULL DEFAULT 0,
+  bonus DECIMAL(12,2) NOT NULL DEFAULT 0,
+  addition DECIMAL(12,2) NOT NULL DEFAULT 0,
+  fines DECIMAL(12,2) NOT NULL DEFAULT 0,
+  advances DECIMAL(12,2) NOT NULL DEFAULT 0,
+  deduction DECIMAL(12,2) NOT NULL DEFAULT 0,
+  net DECIMAL(12,2) NOT NULL DEFAULT 0,
+  note VARCHAR(255) NULL,
+  UNIQUE KEY uq_payroll_line (tenant_id, sheet_id, rider_id),
+  KEY ix_t_rider (tenant_id, rider_id)
+);
+
 -- Servicing log (phase 4): every visit to the workshop, from scheduled to completed (or cancelled). While one is in
 -- progress the vehicle is under maintenance. The cost and its payment are kept on the record.
 CREATE TABLE IF NOT EXISTS vehicle_services (

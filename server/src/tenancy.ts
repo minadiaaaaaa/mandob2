@@ -9,11 +9,11 @@
 
 export const TENANT_TABLES = new Set([
   'advance_installments', 'advances', 'applicants', 'attachments', 'audit_log', 'billing', 'branches', 'branding_photos', 'companies', 'contracts',
-  'cron_runs', 'daily_performance', 'designations', 'email_log', 'email_templates', 'error_log', 'fines', 'fuel_cards', 'insurance_companies',
+  'cron_runs', 'daily_performance', 'designations', 'email_log', 'fin_accounts', 'fin_assets', 'fin_categories', 'fin_entries', 'fin_obligation_dues', 'fin_obligations', 'fin_stock_items', 'fin_stock_moves', 'fin_suppliers', 'email_templates', 'error_log', 'fines', 'fuel_cards', 'insurance_companies',
   'insurance_policies', 'leaves', 'live_board', 'live_days', 'live_points', 'login_attempts', 'monthly_ratings', 'notification_prefs',
-  'notifications', 'oil_changes', 'oil_schedules', 'operation_card_vehicles', 'operation_cards', 'platform_id_transfers', 'platform_ids', 'rating_cutoffs', 'renewals',
+  'notifications', 'oil_changes', 'payroll_lines', 'payroll_sheets', 'oil_schedules', 'operation_card_vehicles', 'operation_cards', 'platform_id_transfers', 'platform_ids', 'rating_cutoffs', 'renewals',
   'rider_absences', 'rider_accounts', 'rider_bank_accounts', 'rider_change_requests', 'rider_codes', 'rider_documents', 'rider_issue_messages', 'rider_issues',
-  'rider_login_attempts', 'rider_sessions', 'riders', 'role_permissions', 'roles', 'secrets', 'sessions', 'settings',
+  'rider_login_attempts', 'rider_sessions', 'riders', 'role_permissions', 'roles', 'salary_rules', 'secrets', 'sessions', 'settings',
   'subscription_payments', 'sync_runs', 'sync_sources', 'transport_licenses', 'users', 'vehicle_accident_events', 'vehicle_accidents', 'vehicle_assignments', 'vehicle_insurance', 'vehicle_services',
   'vehicle_registrations', 'vehicles', 'wallet_entries', 'wallet_snapshots',
 ]);

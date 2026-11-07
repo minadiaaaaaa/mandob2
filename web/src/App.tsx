@@ -24,6 +24,8 @@ import {
 import { BranchesPage, DesignationsPage } from './pages/system/Branches';
 import { PlatformIdsImport, PlatformIdsPage } from './pages/riders/PlatformIds';
 import { ExitedPage, RiderPapersPage } from './pages/riders/Employees';
+import { CompanyFinancePage } from './pages/finance/CompanyFinance';
+import { PayrollPage, PayrollSheetPage, SettlementPage } from './pages/finance/Payroll';
 import { CompaniesList, CompanyForm, CompanyView, ContractForm, ContractsList, ContractView } from './pages/performance/Companies';
 import { BlockedIps, Profile, RoleEdit, RolesList, RoleView, SessionsList, UserForm, UsersList, UserView } from './pages/admin/Access';
 import { AttachmentsIndex, AuditLog, LoginAttempts, Settings } from './pages/system/System';
@@ -120,6 +122,10 @@ export default function App() {
         <Route path="platform-ids" element={g('platform_ids.view', <PlatformIdsPage />)} />
         <Route path="riders/exited" element={g('riders.view', <ExitedPage />)} />
         <Route path="riders/papers" element={g('riders.view', <RiderPapersPage />)} />
+        <Route path="riders/:id/settlement" element={g('payroll.view', <SettlementPage />)} />
+        <Route path="company-finance" element={g('company_finance.view', <CompanyFinancePage />)} />
+        <Route path="payroll" element={g('payroll.view', <PayrollPage />)} />
+        <Route path="payroll/:id" element={g('payroll.view', <PayrollSheetPage />)} />
         <Route path="platform-ids/import" element={g('platform_ids.import', <PlatformIdsImport />)} />
 
         <Route path="leaves" element={g('leaves.view', <LeavesList />)} />
