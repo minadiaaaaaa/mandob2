@@ -1,6 +1,6 @@
 import { Router, type Request } from 'express';
 import { exec, one, q, tx } from '../db.js';
-import { clean, eq, fail, fieldError, inList, list, listAll, sendExport, today, where, type Query, type Spec } from '../http.js';
+import { clean, eq, fail, fieldError, inList, list, listAll, sendExport, today, where, type Query, type Spec, mustExist } from '../http.js';
 import { can } from '../auth.js';
 import { audit } from '../audit.js';
 import { cellBool, cellDate, cellNum, cellStr, importRoutes, type ImportDef } from '../importer.js';
@@ -107,6 +107,7 @@ applicantsRouter.patch('/applicants/:id', can('applicants.update'), async (req, 
 });
 
 applicantsRouter.post('/applicants/:id/feature', can('applicants.update'), async (req, res) => {
+  await mustExist('applicants', req.params.id);
   const on = req.body.featured ? 1 : 0;
   await exec('UPDATE applicants SET featured = ?, featured_by = ?, featured_at = ? WHERE id = ?', [on, on ? req.user!.id : null, on ? new Date() : null, req.params.id]);
   await audit(req, { action: on ? 'applicant.feature' : 'applicant.unfeature', entity_type: 'applicant', entity_id: req.params.id });
@@ -142,6 +143,7 @@ async function deleteApplicants(req: Request, list: number[]) {
   for (const id of list) await audit(req, { action: 'applicant.delete', entity_type: 'applicant', entity_id: id, severity: 'warning' });
 }
 applicantsRouter.delete('/applicants/:id', can('applicants.delete'), async (req, res) => {
+  await mustExist('applicants', req.params.id);
   await deleteApplicants(req, [Number(req.params.id)]);
   res.json({ ok: true });
 });

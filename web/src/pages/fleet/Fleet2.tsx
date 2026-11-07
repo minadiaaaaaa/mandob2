@@ -185,7 +185,7 @@ export function PoliciesList() {
     { key: 'number', header: t('pol.number'), sort: 'number', render: (r) => <span className="font-medium num">{r.number}</span> },
     { key: 'insurer', header: t('pol.insurer'), sort: 'company', render: insurer },
     { key: 'type', header: t('pol.type'), render: (r) => t(`pol.type.${r.type}`) },
-    { key: 'expiry', header: t('pol.expiry_date'), sort: 'expiry', render: (r) => <ExpiryDate date={r.expiry_date} days={r.days_left} /> },
+    { key: 'expiry', header: t('pol.expiry_date'), sort: 'expiry', render: (r) => <ExpiryDate date={r.expiry_date} days={r.days_left} kind="insurance_policy" /> },
     { key: 'status', header: t('pol.status'), sort: 'status', render: (r) => st3(t, r.status) },
     { key: 'vehicles', header: t('pol.vehicles'), render: (r) => <span className="num">{r.vehicles}</span> },
     { key: 'actions', header: t('common.actions'), render: (r) => <div className="flex">
@@ -256,7 +256,7 @@ export function PolicyView() {
     <>
       <PageHeader title={<span className="num">{p.number}</span>} back="/admin/insurance/policies" subtitle={<span className="flex items-center gap-2">{can('insurance_companies.view') ? <Link className="text-brand" to={`/admin/insurance/companies/${p.company_id}`}>{company}</Link> : company} · {t(`pol.type.${p.type}`)} {st3(t, p.status)}</span>}
         actions={can('insurance_policies.update') && <Link to={`/admin/insurance/policies/${id}/edit`}><Button icon={<Pencil className="size-4" />}>{t('common.edit')}</Button></Link>} />
-      <div className="mb-4 grid gap-3 sm:grid-cols-2"><StatCard label={t('pol.expiry_date')} value={p.expiry_date} sub={<Remaining days={p.days_left} />} /><StatCard label={t('pol.vehicles')} value={fmtNum(p.vehicles)} /></div>
+      <div className="mb-4 grid gap-3 sm:grid-cols-2"><StatCard label={t('pol.expiry_date')} value={p.expiry_date} sub={<Remaining days={p.days_left} kind="insurance_policy" />} /><StatCard label={t('pol.vehicles')} value={fmtNum(p.vehicles)} /></div>
       <Card title={t('pol.details')}><Details rows={[[t('pol.issue_date'), p.issue_date], [t('pol.start_date'), p.start_date], [t('pol.expiry_date'), p.expiry_date], [t('common.notes'), p.notes]]} /></Card>
       {can('insurance_policies.renew') && (
         <Card title={t('pol.renew')} className="mt-4">
@@ -287,7 +287,7 @@ export function CoversList() {
   const policies = useOptions<any>('/insurance/policies/options');
   const insurers = useOptions<any>('/insurance/companies/options');
   const s = list.stats ?? {};
-  const within = Number(list.query.within) || 30;
+  const within = Number(list.query.within) || undefined;
   const remove = async (ids: (string | number)[]) => {
     if (!(await confirm({ title: t('vi.delete_q') }))) return;
     if (await run(() => (ids.length > 1 ? post('/insurance/vehicles/bulk-delete', { ids }) : del(`/insurance/vehicles/${ids[0]}`)), t('common.deleted'))) { list.setSelected(new Set()); list.reload(); }
@@ -296,7 +296,7 @@ export function CoversList() {
     { key: 'plate', header: t('vi.plate'), sort: 'plate', render: (r) => <div><div className="font-medium">{r.plate}</div><div className="text-xs text-zinc-500">{[r.maker, r.model].filter(Boolean).join(' ')}</div></div> },
     { key: 'policy', header: t('vi.policy'), sort: 'policy', render: (r) => <div><span className="num">{r.policy_number}</span><div className="text-xs text-zinc-500">{lang === 'ar' ? r.company_ar : r.company_en || r.company_ar}</div></div> },
     { key: 'sub', header: t('vi.sub_policy'), render: (r) => <span className="num">{r.sub_policy ?? '—'}</span> },
-    { key: 'expiry', header: t('vi.expiry_date'), sort: 'remaining', render: (r) => <ExpiryDate date={r.expiry_date} days={r.days_left} window={within} /> },
+    { key: 'expiry', header: t('vi.expiry_date'), sort: 'remaining', render: (r) => <ExpiryDate date={r.expiry_date} days={r.days_left} window={within} kind="vehicle_insurance" /> },
     { key: 'status', header: t('vi.status'), sort: 'status', render: (r) => st3(t, r.status) },
     { key: 'current', header: t('vi.current'), render: (r) => (r.is_current ? <Badge tone="green">✓</Badge> : '—') },
   ];
@@ -370,7 +370,7 @@ export function CoverView() {
       <PageHeader title={<Link to={`/admin/vehicles/${c.vehicle_id}`} className="hover:text-brand">{c.plate}</Link>} back="/admin/insurance/vehicles" subtitle={st3(t, c.status)}
         actions={can('vehicle_insurance.update') && <Link to={`/admin/insurance/vehicles/${id}/edit`}><Button icon={<Pencil className="size-4" />}>{t('common.edit')}</Button></Link>} />
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
-        <StatCard label={t('vi.expiry_date')} value={c.expiry_date} sub={<Remaining days={c.days_left} />} />
+        <StatCard label={t('vi.expiry_date')} value={c.expiry_date} sub={<Remaining days={c.days_left} kind="vehicle_insurance" />} />
         <StatCard label={t('vi.current')} value={c.is_current ? t('common.yes') : t('common.no')} />
         <StatCard label={t('pol.insurer')} value={lang === 'ar' ? c.company_ar : c.company_en || c.company_ar} />
       </div>

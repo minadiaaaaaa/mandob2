@@ -1,11 +1,14 @@
 import { Router, type Request } from 'express';
 import { exec, one, q, tx } from '../db.js';
-import { HttpError, clean, fail, fieldError, inList, eq, list, listAll, sendExport, today, where, type Spec, type Query } from '../http.js';
+import { HttpError, clean, fail, fieldError, inList, eq, list, listAll, sendExport, today, where, type Spec, type Query, mustExist } from '../http.js';
 import { can, has } from '../auth.js';
 import { audit } from '../audit.js';
+import { markPaused } from './saas.js';
 import { claimScan } from '../scans.js';
 import { removeAttachment } from '../files.js';
 import { cellDate, cellStr, importRoutes, type ImportDef } from '../importer.js';
+import { NOT_COUNTED, comesBack, ensureQuota, withQuota } from '../domain/quotas.js';
+import { RIDER_STATUSES } from '../domain/rules.js';
 
 export const ridersRouter = Router();
 
@@ -91,7 +94,7 @@ export async function assignVehicle(req: Request, riderId: number, vehicleId: nu
 // ---------- list ----------
 const riderRules = {
   full_name: { req: true, max: 150 }, name_en: { max: 150 }, alias: { max: 150 }, national_id: { max: 30 },
-  status: { enum: ['active', 'inactive', 'suspended', 'terminated'] }, company_id: { type: 'int' as const }, contract_id: { type: 'int' as const },
+  status: { enum: [...RIDER_STATUSES] }, company_id: { type: 'int' as const }, contract_id: { type: 'int' as const },
   city_id: { type: 'int' as const }, hire_date: { type: 'date' as const }, occupation: { max: 150 }, phone: { type: 'phone' as const, max: 30 },
   account_holder_phone: { type: 'phone' as const, max: 30 }, email: { type: 'email' as const, max: 150 }, language: { enum: ['ar', 'en', 'bn'] },
   nationality: { max: 100 }, birth_date: { type: 'date' as const }, birth_place: { max: 150 },
@@ -142,7 +145,7 @@ ridersRouter.get('/riders', can('riders.view'), async (req, res) => {
   const [stats] = await q(`SELECT COUNT(*) total, COALESCE(SUM(r.status = 'active'),0) active, COALESCE(SUM(r.status = 'inactive'),0) inactive,
     COALESCE(SUM(r.status = 'suspended'),0) suspended, COALESCE(SUM(r.status = 'terminated'),0) \`terminated\`, COALESCE(SUM(va.id IS NOT NULL),0) with_vehicle,
     COALESCE(SUM(r.company_id IS NULL),0) no_company, COALESCE(SUM(r.contract_id IS NULL),0) no_contract ${spec.from}${w.sql}`, w.params);
-  res.json({ ...data, stats });
+  res.json({ ...data, rows: await markPaused('riders', data.rows as { id: unknown }[]), stats });
 });
 
 ridersRouter.get('/riders/export', can('riders.export'), async (req, res) => {
@@ -238,6 +241,7 @@ ridersRouter.patch('/riders/:id', can('riders.update'), async (req, res) => {
   const v = clean(body, riderRules, true);
   await checkRider(v, id, before);
   await tx(async () => {
+    if (comesBack('riders', before.status, v.status)) await ensureQuota('riders', 1);
     if (Object.keys(v).length) await exec('UPDATE riders SET ?, updated_at = UTC_TIMESTAMP() WHERE id = ?', [v, id]);
     if ('vehicle_id' in body) await assignVehicle(req, id, body.vehicle_id ? Number(body.vehicle_id) : null);
   });
@@ -282,6 +286,7 @@ async function deleteRiders(req: Request, ids: number[]) {
   for (const id of ids) await audit(req, { action: 'rider.delete', entity_type: 'rider', entity_id: id, severity: 'critical' });
 }
 ridersRouter.delete('/riders/:id', can('riders.delete'), async (req, res) => {
+  await mustExist('riders', req.params.id);
   await deleteRiders(req, [Number(req.params.id)]);
   res.json({ ok: true });
 });
@@ -296,7 +301,7 @@ ridersRouter.post('/riders/bulk-edit', can('riders.update'), async (req, res) =>
   if (!ids.length) fail(422, 'nothing_selected');
   if (ids.length > 200) fail(422, 'max_200');
   const changes = clean(req.body.changes ?? {}, {
-    company_id: { type: 'int' }, contract_id: { type: 'int' }, city_id: { type: 'int' }, status: { enum: ['active', 'inactive', 'suspended', 'terminated'] },
+    company_id: { type: 'int' }, contract_id: { type: 'int' }, city_id: { type: 'int' }, status: { enum: [...RIDER_STATUSES] },
   }, true);
   for (const [k, val] of Object.entries(changes)) if (val === null) fieldError(k, 'choose_value');
   if (!Object.keys(changes).length) fail(422, 'no_field_chosen');
@@ -314,7 +319,14 @@ ridersRouter.post('/riders/bulk-edit', can('riders.update'), async (req, res) =>
     const bad = await q('SELECT r.id FROM riders r JOIN contracts k ON k.id = r.contract_id WHERE r.id IN (?) AND k.company_id <> ?', [ids, changes.company_id]);
     if (bad.length) fieldError('company_id', 'contract_other_company');
   }
-  const r = await exec('UPDATE riders SET ?, updated_at = UTC_TIMESTAMP() WHERE id IN (?)', [changes, ids]);
+  const r = await tx(async () => {
+    // terminated riders switched back on take places again
+    if (changes.status && changes.status !== NOT_COUNTED.riders) {
+      const [{ n }] = await q<{ n: number }>('SELECT COUNT(*) n FROM riders WHERE id IN (?) AND status = ?', [ids, NOT_COUNTED.riders]);
+      await ensureQuota('riders', Number(n));
+    }
+    return exec('UPDATE riders SET ?, updated_at = UTC_TIMESTAMP() WHERE id IN (?)', [changes, ids]);
+  });
   await audit(req, { action: 'rider.bulk_edit', entity_type: 'rider', entity_id: ids.join(',').slice(0, 60), after: changes, details: `${ids.length} riders` });
   res.json({ updated: r.affectedRows });
 });
@@ -480,7 +492,8 @@ export const riderImport: ImportDef = {
     }
     if (ex) {
       if (ctx.mode === 'skip') return 'skipped';
-      if (Object.keys(values).length) await exec('UPDATE riders SET ?, updated_at = UTC_TIMESTAMP() WHERE id = ?', [values, ex.id]);
+      if (Object.keys(values).length) await withQuota('riders', comesBack('riders', ex.status, values.status) ? 1 : 0, () =>
+        exec('UPDATE riders SET ?, updated_at = UTC_TIMESTAMP() WHERE id = ?', [values, ex.id]));
       return 'replaced';
     }
     if (!_id) return 'failed';            // matched on ID number and not registered: needs a rider id

@@ -3,6 +3,16 @@ import ExcelJS from 'exceljs';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, q, setting } from './db.js';
+import { identifier } from './sql.js';
+
+// MySQL / MariaDB error codes the API answers as client errors instead of 500.
+export const DB_ERRORS = {
+  duplicate: 'ER_DUP_ENTRY',
+  inUse: ['ER_ROW_IS_REFERENCED_2', 'ER_ROW_IS_REFERENCED', 'ER_NO_REFERENCED_ROW_2', 'ER_NO_REFERENCED_ROW'],
+  invalid: ['ER_BAD_NULL_ERROR', 'ER_NO_DEFAULT_FOR_FIELD', 'ER_DATA_TOO_LONG', 'ER_TRUNCATED_WRONG_VALUE', 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD',
+    'WARN_DATA_TRUNCATED', 'ER_WARN_DATA_OUT_OF_RANGE', 'ER_CHECK_CONSTRAINT_VIOLATED', 'ER_CONSTRAINT_FAILED', 'ER_INVALID_JSON_TEXT'],
+};
+export const isClientDbError = (code: unknown) => code === DB_ERRORS.duplicate || DB_ERRORS.inUse.includes(code as string) || DB_ERRORS.invalid.includes(code as string);
 
 // ---------- errors: codes, not prose, so the client shows them in the user's language ----------
 export class HttpError extends Error {
@@ -20,9 +30,9 @@ export function errorHandler(err: any, _req: Request, res: Response, _next: Next
   if (err?.type === 'entity.too.large') return res.status(413).json({ error: 'request_too_large' });
   if (['encoding.unsupported', 'charset.unsupported'].includes(err?.type)) return res.status(415).json({ error: 'unsupported_encoding' });
   if (err?.setup) return res.status(503).json({ error: 'setup_required', setup: true });
-  if (err?.code === '23505') return res.status(409).json({ error: 'duplicate' });
-  if (err?.code === '23503') return res.status(409).json({ error: 'in_use' });
-  if (['23502', '23514', '22001', '22P02'].includes(err?.code)) return res.status(422).json({ error: 'validation' });
+  if (err?.code === DB_ERRORS.duplicate) return res.status(409).json({ error: 'duplicate' });
+  if (DB_ERRORS.inUse.includes(err?.code)) return res.status(409).json({ error: 'in_use' });
+  if (DB_ERRORS.invalid.includes(err?.code)) return res.status(422).json({ error: 'validation' });
   if (err?.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'file_too_large' });
   console.error(err);
   res.status(500).json({ error: 'server_error' });
@@ -234,4 +244,11 @@ export async function sendExport(req: Request, res: Response, opts: {
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   await wb.xlsx.write(res);
   res.end();
+}
+
+// A change or delete of one record answers 404 when the record is not there (in this company), instead of
+// "ok" plus an audit entry for something that never happened.
+export async function mustExist(table: string, id: unknown, column = 'id') {
+  const [row] = await q(`SELECT 1 FROM ${identifier(table)} WHERE ${identifier(column)} = ? LIMIT 1`, [id]);
+  if (!row) fail(404, 'not_found');
 }

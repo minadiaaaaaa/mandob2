@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { FileDown } from 'lucide-react';
 import { download, get, type Query } from '../api';
+import { useAuth } from '../auth';
 import { fmtNum, useI18n } from '../i18n';
 import { Badge, Button, cx, toneText, useAction, type Tone } from './kit';
 
@@ -29,22 +30,50 @@ export function useCityName() {
   }, [lang]);
 }
 
+// ---------- the business rules, as the server defines them (GET /meta/rules) ----------
+// Statuses and each document's alert period live on the server (domain/rules.ts); screens never keep their own copy.
+export type ExpiryKind = 'id' | 'license' | 'health' | 'driver_card' | 'ajeer' | 'operation_card' | 'vehicle_registration' | 'transport_license' | 'vehicle_insurance' | 'insurance_policy';
+export type Rules = { statuses: { rider: string[]; vehicle: string[]; user: string[] }; expiry_days: Record<ExpiryKind, number> };
+const rulesCache = new Map<number, { at: number; rules: Promise<Rules> }>();
+export function useRules(): Rules | null {
+  const { me } = useAuth();
+  const [rules, setRules] = useState<Rules | null>(null);
+  useEffect(() => {
+    if (!me) return;
+    // read again after a minute, so a changed alert window reaches open screens without a reload
+    const cached = rulesCache.get(me.id);
+    if (!cached || Date.now() - cached.at > 60_000)
+      rulesCache.set(me.id, { at: Date.now(), rules: get<Rules>('/meta/rules').catch((e) => { rulesCache.delete(me.id); throw e; }) });
+    let live = true;
+    rulesCache.get(me.id)!.rules.then((r) => live && setRules(r)).catch(() => {});
+    return () => { live = false; };
+  }, [me]);
+  return rules;
+}
+// the window a document type is "expiring soon" in: a screen filter wins, then the company's setting
+function useWindow(kind?: ExpiryKind, window?: number) {
+  const rules = useRules();
+  return window ?? (kind ? rules?.expiry_days[kind] : undefined) ?? 30;
+}
+
 // ---------- expiry colours used across documents and fleet screens ----------
 export const expiryTone = (days: number | null | undefined, window = 30): Tone =>
   days === null || days === undefined ? 'grey' : days < 0 ? 'red' : days <= window ? 'amber' : 'green';
 
-export function Remaining({ days, window = 30, notRecorded }: { days: number | null | undefined; window?: number; notRecorded?: string }) {
+export function Remaining({ days, window, kind, notRecorded }: { days: number | null | undefined; window?: number; kind?: ExpiryKind; notRecorded?: string }) {
   const { t } = useI18n();
+  const win = useWindow(kind, window);
   if (days === null || days === undefined) return <span className="text-zinc-500">{notRecorded ?? t('docs.not_recorded')}</span>;
   const text = days < 0 ? t('docs.expired_ago', { n: fmtNum(-days) }) : days === 0 ? t('docs.expires_today') : t('docs.days_left', { n: fmtNum(days) });
-  return <span className={cx('text-xs font-medium', toneText(expiryTone(days, window)))}>{text}</span>;
+  return <span className={cx('text-xs font-medium', toneText(expiryTone(days, win)))}>{text}</span>;
 }
-export function ExpiryDate({ date, days, window = 30 }: { date: string | null | undefined; days: number | null | undefined; window?: number }) {
+export function ExpiryDate({ date, days, window, kind }: { date: string | null | undefined; days: number | null | undefined; window?: number; kind?: ExpiryKind }) {
+  const win = useWindow(kind, window);
   if (!date) return <span className="text-zinc-400">—</span>;
   return (
     <div>
-      <span className={cx('num font-medium', toneText(expiryTone(days, window)))}>{date}</span>
-      <div><Remaining days={days} window={window} /></div>
+      <span className={cx('num font-medium', toneText(expiryTone(days, win)))}>{date}</span>
+      <div><Remaining days={days} window={win} /></div>
     </div>
   );
 }

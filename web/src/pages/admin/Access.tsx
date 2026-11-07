@@ -447,13 +447,14 @@ export function Profile() {
   const { confirm, toast } = useUi();
   const [p, setP] = useState<any>(null);
   const [sessions, setSessions] = useState<any[]>([]);
+  const [devices, setDevices] = useState<{ active: number; max_devices: number | null } | null>(null);
   const [attempts, setAttempts] = useState<any[]>([]);
   const [more, setMore] = useState(false);
   const form = useForm<Record<string, any>>({ full_name: '', email: '', locale: '' });
   const pw = useForm<Record<string, any>>({ current: '', password: '', confirm: '' });
   const load = useCallback(async () => {
-    const [pp, ss, aa] = await Promise.all([get('/profile'), get('/profile/sessions'), get('/profile/attempts', { limit: more ? 100 : 20 })]);
-    setP(pp); setSessions(ss); setAttempts(aa); form.reset({ full_name: pp.full_name, email: pp.email, locale: pp.locale ?? '' });
+    const [pp, ss, aa, dd] = await Promise.all([get('/profile'), get('/profile/sessions'), get('/profile/attempts', { limit: more ? 100 : 20 }), get<{ active: number; max_devices: number | null }>('/profile/devices')]);
+    setP(pp); setSessions(ss); setAttempts(aa); setDevices(dd); form.reset({ full_name: pp.full_name, email: pp.email, locale: pp.locale ?? '' });
   }, [more]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [load]);
   if (!p) return <Loading />;
@@ -484,7 +485,7 @@ export function Profile() {
           </div></Card>
         </form>
       </div>
-      <Card title={t('profile.my_devices')} className="mt-4" pad={false}>
+      <Card title={t('profile.my_devices')} subtitle={devices?.max_devices != null ? t('profile.devices_count', { n: devices.active, max: devices.max_devices }) : undefined} className="mt-4" pad={false}>
         <table className="w-full text-sm"><thead className="bg-zinc-50 text-xs text-zinc-500 dark:bg-zinc-900"><tr>{['sessions.status', 'sessions.ip', 'sessions.device', 'sessions.started', 'sessions.last_activity', 'sessions.expires', 'common.actions'].map((k) => <th key={k} className="px-3 py-2 text-start">{t(k)}</th>)}</tr></thead>
           <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">{sessions.map((s) => (
             <tr key={s.id}><td className="px-3 py-2"><Badge tone={SESSION_STATUS[s.status]}>{t(`sessions.status.${s.status}`)}</Badge> {s.current && <Badge tone="blue">{t('profile.this_device')}</Badge>}</td>

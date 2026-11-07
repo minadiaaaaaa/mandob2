@@ -24,7 +24,6 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
   catch { throw new ApiError(0, 'network'); }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    if (data.setup && !location.pathname.startsWith('/setup')) location.assign('/setup');
     if (res.status === 401 && data.error === 'session_ended') window.dispatchEvent(new Event('lsp:unauthorized'));
     if (res.status === 401 && (data.error === 'rider_session_ended' || data.error === 'portal_disabled') && path !== '/portal/me') window.dispatchEvent(new Event('lsp:rider-unauthorized'));
     throw new ApiError(res.status, data.error ?? 'server_error', data.params ?? {}, data.fields ?? {});

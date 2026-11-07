@@ -3,7 +3,8 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { get } from './api';
 import { setOrgTimezone, useI18n, type Lang } from './i18n';
 
-export type Me = { id: number; username: string; full_name: string; email: string; role: string; locale: Lang | null; perms: string[]; org_language: Lang };
+export type Company = { id: number; name: string; slug: string; plan_key: string; state: 'trial' | 'active' | 'expired' | 'suspended'; days_left: number; ends_at: string | null; usable: boolean };
+export type Me = { id: number; username: string; full_name: string; email: string; role: string; locale: Lang | null; perms: string[]; org_language: Lang; platform_owner: boolean; company: Company | null };
 export type Org = Record<string, string> & { logos: Record<string, number> };
 
 type Ctx = { me: Me | null; loading: boolean; can: (...perms: string[]) => boolean; refresh: () => Promise<void>; org: Org | null; refreshOrg: () => Promise<void> };

@@ -9,6 +9,7 @@ import { CheckInput, Grid, SaveBar, SelectInput, TextArea, TextInput, useForm } 
 import { DataTable, FilterBar, FilterSelect, useList, type Column } from '../../ui/table';
 import { Attachments } from '../../ui/files';
 import { ExportButton, invalidateOptions, useOptions } from '../../ui/common';
+import { PlanCounter } from '../../ui/plan';
 
 const Active = ({ on }: { on: boolean }) => { const { t } = useI18n(); return <Badge tone={on ? 'green' : 'grey'}>{on ? t('common.active') : t('common.disabled')}</Badge>; };
 
@@ -54,7 +55,7 @@ export function CompaniesList() {
   ];
   return (
     <>
-      <PageHeader title={t('co.title')} actions={<>
+      <PageHeader title={t('co.title')} subtitle={<PlanCounter kind="platforms" />} actions={<>
         <ExportButton path="/companies/export" query={list.query} label={t('common.export_csv')} />
         {can('companies.create') && <Link to="/admin/companies/new"><Button variant="primary" icon={<Plus className="size-4" />}>{t('co.new')}</Button></Link>}
       </>} />
@@ -147,7 +148,7 @@ export function ContractsList() {
   ];
   return (
     <>
-      <PageHeader title={t('ct.title')} actions={<>
+      <PageHeader title={t('ct.title')} subtitle={<PlanCounter kind="contracts" />} actions={<>
         <ExportButton path="/contracts/export" query={list.query} label={t('common.export_csv')} />
         {can('contracts.create') && <Link to={`/admin/contracts/new${list.query.company ? `?company=${list.query.company}` : ''}`}><Button variant="primary" icon={<Plus className="size-4" />} disabled={!companies.some((c: any) => c.is_active)}>{t('ct.new')}</Button></Link>}
       </>} />

@@ -5,11 +5,13 @@ import { useAuth } from '../../auth';
 import { fmtNum, useI18n } from '../../i18n';
 import { Alert, Button, IconButton, PageHeader, StatCard, StatGrid, toneIf, useAction, useUi } from '../../ui/kit';
 import { DataTable, FilterBar, FilterDate, FilterSelect, useList, type Column } from '../../ui/table';
-import { ExportButton, useCityName, useOptions } from '../../ui/common';
+import { ExportButton, useCityName, useOptions, useRules } from '../../ui/common';
 import { DOC_TYPES, DocMark, MissingDocs, RiderStatus } from './shared';
+import { PausedMark, PlanCounter } from '../../ui/plan';
 
 export default function RidersList() {
   const { t } = useI18n();
+  const rules = useRules(); // statuses come from the server (GET /meta/rules)
   const { can } = useAuth();
   const nav = useNavigate();
   const run = useAction();
@@ -33,7 +35,7 @@ export default function RidersList() {
   const columns: Column<any>[] = [
     { key: 'rider', header: t('riders.rider'), sort: 'rider', render: (r) => (
       <div className="min-w-48">
-        <div className="flex flex-wrap items-center gap-1.5"><Link to={`/admin/riders/${r.id}`} className="font-medium hover:text-brand">{r.full_name}</Link><DocMark types={r.doc_types} expired={r.docs_expired} /></div>
+        <div className="flex flex-wrap items-center gap-1.5"><Link to={`/admin/riders/${r.id}`} className={r.paused ? 'font-medium text-zinc-400' : 'font-medium hover:text-brand'}>{r.full_name}</Link>{r.paused && <PausedMark />}<DocMark types={r.doc_types} expired={r.docs_expired} /></div>
         {r.alias && <div className="text-xs text-zinc-500">{r.alias}</div>}
         <div className="text-xs text-zinc-500 num">#{r.id}</div>
       </div>
@@ -56,7 +58,7 @@ export default function RidersList() {
 
   return (
     <>
-      <PageHeader title={t('riders.title')} actions={<>
+      <PageHeader title={t('riders.title')} subtitle={<PlanCounter kind="riders" />} actions={<>
         {can('riders.export') && <ExportButton path="/riders/export" query={list.query} label={t('riders.export')} />}
         {can('riders.import') && <Button size="sm" onClick={() => run(() => download('/riders/import/template'))}>{t('import.download_template')}</Button>}
         {can('riders.import') && <Link to="/admin/riders/import"><Button size="sm" icon={<FileUp className="size-3.5" />}>{t('import.import_file')}</Button></Link>}
@@ -77,7 +79,7 @@ export default function RidersList() {
         <FilterSelect list={list} name="company" label={t('riders.company')} options={companies.map((c: any) => ({ value: c.id, label: c.name }))} />
         <FilterSelect list={list} name="contract" label={t('riders.contract')} options={contracts.map((c: any) => ({ value: c.id, label: c.name }))} />
         <FilterSelect list={list} name="city" label={t('riders.city')} options={cities.map((c: any) => ({ value: c.id, label: city(c) }))} />
-        <FilterSelect list={list} name="status" label={t('riders.status')} options={['active', 'inactive', 'suspended', 'terminated'].map((v) => ({ value: v, label: t(`rider.status.${v}`) }))} />
+        <FilterSelect list={list} name="status" label={t('riders.status')} options={(rules?.statuses.rider ?? []).map((v) => ({ value: v, label: t(`rider.status.${v}`) }))} />
         <FilterSelect list={list} name="vehicle" label={t('riders.vehicle')} options={[{ value: 'yes', label: t('riders.has_vehicle') }, { value: 'no', label: t('riders.no_vehicle') }]} />
         <FilterSelect list={list} name="vehicle_type" label={t('riders.vehicle_type')} options={['car', 'motorcycle', 'bicycle', 'scooter', 'van', 'truck'].map((v) => ({ value: v, label: t(`vehicle.type.${v}`) }))} />
         <FilterSelect list={list} name="documents" label={t('riders.documents')} options={['complete', 'incomplete', 'some_expired', 'none'].map((v) => ({ value: v, label: t(`riders.docs.${v}`) }))} />

@@ -75,6 +75,7 @@ export const MATRIX: Record<string, Record<string, string[]>> = {
     platform_settings: ['view', 'update', 'export'],
     secrets: ['view', 'update', 'create', 'delete'],
     languages: ['view', 'manage'],
+    subscription: ['view', 'manage'],
   },
 };
 
@@ -90,8 +91,14 @@ const pick = (groups: string[], keep: (module: string, action: string) => boolea
 
 const ACCESS_AND_SENSITIVE = new Set([
   'users', 'roles', 'permissions', 'sessions', 'blocked_ips', 'logs', 'audit_log', 'login_log', 'cron_jobs',
-  'backups', 'system_settings', 'organization', 'smtp', 'email_log', 'email_templates', 'secrets', 'platform_settings', 'languages',
+  'backups', 'system_settings', 'organization', 'smtp', 'email_log', 'email_templates', 'secrets', 'platform_settings', 'languages', 'subscription',
 ]);
+
+// Super Admin belongs to the platform owner alone (company 0). In each subscribed company the same full role is
+// called Admin and reaches only that company; the platform pages stay closed to it (platformOnly in auth.ts).
+export const SUPER_ADMIN = 'Super Admin';
+export const COMPANY_ADMIN = 'Admin';
+export const adminRoleName = (tenant: number) => (tenant === 0 ? SUPER_ADMIN : COMPANY_ADMIN);
 
 // The five built-in roles as the guide describes their state at installation.
 export const BUILTIN_ROLES: { name: string; description: string; perms: string[] }[] = [

@@ -7,7 +7,7 @@ import { useI18n } from '../../i18n';
 import { Alert, Badge, Button, Card, Field, Loading, PageHeader } from '../../ui/kit';
 import { ComboInput, Grid, SaveBar, SelectInput, TextArea, TextInput, useFieldError, useForm, type ComboOption } from '../../ui/forms';
 import { ScanUpload, type Scan } from '../../ui/files';
-import { Remaining, useCityName, useOptions } from '../../ui/common';
+import { Remaining, useCityName, useOptions, type ExpiryKind, useRules } from '../../ui/common';
 import { DOC_MODULE, DOC_TYPES, type DocType } from './shared';
 
 const EMPTY = { id: '', full_name: '', name_en: '', alias: '', national_id: '', status: 'active', company_id: '', contract_id: '', city_id: '', hire_date: '',
@@ -20,6 +20,7 @@ export default function RiderForm() {
   const { id } = useParams();
   const editing = !!id;
   const { t } = useI18n();
+  const rules = useRules(); // statuses come from the server (GET /meta/rules)
   const { can } = useAuth();
   const nav = useNavigate();
   const city = useCityName();
@@ -134,7 +135,7 @@ export default function RiderForm() {
           onClick={() => setDoc(type, { open: !st.open, values: Object.keys(st.values).length ? st.values : docDefaults(type) })}>
           <span className="font-medium">{t(`docs.${type}`)}</span>
           {cur?.expiry_date && <span className="text-xs text-zinc-500">{t('docs.valid_until')} <span className="num">{cur.expiry_date}</span></span>}
-          {cur && <Remaining days={cur.days_left} />}
+          {cur && <Remaining days={cur.days_left} kind={type as ExpiryKind} />}
           {prepared(type) && <Badge tone="blue">{t('riders.doc_prepared')}</Badge>}
           {errs && Object.keys(errs).length > 0 && <Badge tone="red">{t('riders.doc_refused')}</Badge>}
           <span className="ms-auto">{st.open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}</span>
@@ -188,7 +189,7 @@ export default function RiderForm() {
               <TextInput form={form} name="name_en" label={t('riders.name_en')} maxLength={150} dir="ltr" />
               <TextInput form={form} name="alias" label={t('riders.alias')} maxLength={150} hint={t('riders.alias_hint')} />
               <TextInput form={form} name="national_id" label={t('riders.national_id')} maxLength={30} dir="ltr" />
-              <SelectInput form={form} name="status" label={t('riders.status')} empty={false} options={['active', 'inactive', 'suspended', 'terminated'].map((v) => ({ value: v, label: t(`rider.status.${v}`) }))} />
+              <SelectInput form={form} name="status" label={t('riders.status')} empty={false} options={(rules?.statuses.rider ?? []).map((v) => ({ value: v, label: t(`rider.status.${v}`) }))} />
             </Grid>
           </Card>
           <Card title={t('riders.sec.operations')}>

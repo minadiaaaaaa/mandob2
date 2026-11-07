@@ -1,1067 +1,1132 @@
--- Mandoob (مندوب): full database structure (64 tables, no data).
--- Exported from an installed MySQL 8 database. The app creates the same tables by itself from
--- server/src/schema.sql on first run (setup wizard), so this file is for reference, review, or a manual setup.
--- Manual use: mysql -u root -p logistics < database/schema.sql   (then run the /setup wizard for roles, settings and the first admin)
+-- Mandoob (مندوب): full MySQL / MariaDB structure (67 tables, no data).
+-- The app creates the same tables by itself from server/src/schema.sql (setup wizard), so this file is only for a manual setup:
+-- phpMyAdmin › choose the database › Import › this file, then open /setup for roles, settings and the first admin.
+-- Works on MySQL 8 and MariaDB 10.6+.
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
-CREATE TABLE IF NOT EXISTS `advance_installments` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `advance_id` int NOT NULL,
-  `n` int NOT NULL,
-  `due_date` date NOT NULL,
-  `amount` decimal(12,2) NOT NULL,
-  `paid` decimal(12,2) NOT NULL DEFAULT '0.00',
-  `status` enum('due','partial','paid','waived') NOT NULL DEFAULT 'due',
-  `paid_on` date DEFAULT NULL,
-  `waive_reason` varchar(300) DEFAULT NULL,
-  `updated_by` int DEFAULT NULL,
-  `updated_at` datetime DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `advance_id` (`advance_id`,`n`),
-  KEY `status` (`status`,`due_date`),
-  CONSTRAINT `advance_installments_ibfk_1` FOREIGN KEY (`advance_id`) REFERENCES `advances` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `advances` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `number` varchar(20) NOT NULL,
-  `seq_year` smallint NOT NULL,
-  `seq` int NOT NULL,
-  `rider_id` bigint NOT NULL,
-  `amount` decimal(12,2) NOT NULL,
-  `installments` int NOT NULL DEFAULT '1',
-  `request_date` date NOT NULL,
-  `first_due` date DEFAULT NULL,
-  `deduct_from` enum('salary','commission','wallet','other') NOT NULL DEFAULT 'salary',
-  `reason` varchar(500) DEFAULT NULL,
-  `notes` varchar(500) DEFAULT NULL,
-  `status` enum('pending','approved','rejected','disbursed','repaying','settled','cancelled') NOT NULL DEFAULT 'pending',
-  `decided_by` int DEFAULT NULL,
-  `decided_at` datetime DEFAULT NULL,
-  `decision_note` varchar(500) DEFAULT NULL,
-  `payout_method` enum('cash','bank','wallet','other') DEFAULT NULL,
-  `disbursed_on` date DEFAULT NULL,
-  `disbursed_by` int DEFAULT NULL,
-  `created_by` int DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `number` (`number`),
-  UNIQUE KEY `seq_year` (`seq_year`,`seq`),
-  KEY `rider_id` (`rider_id`,`status`),
-  CONSTRAINT `advances_ibfk_1` FOREIGN KEY (`rider_id`) REFERENCES `riders` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `applicants` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `full_name` varchar(150) NOT NULL,
-  `name_en` varchar(150) DEFAULT NULL,
-  `phone` varchar(20) NOT NULL,
-  `national_id` varchar(30) DEFAULT NULL,
-  `nationality` varchar(100) DEFAULT NULL,
-  `birth_date` date DEFAULT NULL,
-  `city_id` int DEFAULT NULL,
-  `status` enum('new','review','approved','rejected','withdrawn','hired') NOT NULL DEFAULT 'new',
-  `heard_from` varchar(100) DEFAULT NULL,
-  `featured` tinyint(1) NOT NULL DEFAULT '0',
-  `featured_reason` varchar(255) DEFAULT NULL,
-  `featured_by` int DEFAULT NULL,
-  `featured_at` datetime DEFAULT NULL,
-  `notes` varchar(500) DEFAULT NULL,
-  `has_vehicle` tinyint(1) NOT NULL DEFAULT '0',
-  `vehicle_type` varchar(50) DEFAULT NULL,
-  `vehicle_plate` varchar(30) DEFAULT NULL,
-  `vehicle_maker` varchar(60) DEFAULT NULL,
-  `vehicle_model` varchar(60) DEFAULT NULL,
-  `vehicle_year` smallint DEFAULT NULL,
-  `rider_id` bigint DEFAULT NULL,
-  `reviewed_by` int DEFAULT NULL,
-  `reviewed_at` datetime DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `phone` (`phone`),
-  UNIQUE KEY `national_id` (`national_id`),
-  KEY `city_id` (`city_id`),
-  CONSTRAINT `applicants_ibfk_1` FOREIGN KEY (`city_id`) REFERENCES `cities` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `attachments` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `entity_type` varchar(40) NOT NULL,
-  `entity_id` varchar(40) NOT NULL,
-  `attachment_type` varchar(40) DEFAULT NULL,
-  `file_name` varchar(255) NOT NULL,
-  `stored_name` varchar(255) NOT NULL,
-  `mime` varchar(100) NOT NULL,
-  `size` int NOT NULL,
-  `note` varchar(255) DEFAULT NULL,
-  `is_current` tinyint(1) NOT NULL DEFAULT '1',
-  `uploaded_by` int DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `entity_type` (`entity_type`,`entity_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `audit_log` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `action` varchar(80) NOT NULL,
-  `entity_type` varchar(60) DEFAULT NULL,
-  `entity_id` varchar(60) DEFAULT NULL,
-  `actor_type` enum('user','system','api','guest','job','rider') NOT NULL DEFAULT 'user',
-  `actor_id` int DEFAULT NULL,
-  `actor_name` varchar(150) DEFAULT NULL,
-  `status` enum('success','failed','error','pending','denied') NOT NULL DEFAULT 'success',
-  `severity` enum('info','warning','error','critical') NOT NULL DEFAULT 'info',
-  `ip` varchar(64) DEFAULT NULL,
-  `route` varchar(255) DEFAULT NULL,
-  `request_id` varchar(40) DEFAULT NULL,
-  `user_agent` varchar(255) DEFAULT NULL,
-  `before_json` json DEFAULT NULL,
-  `after_json` json DEFAULT NULL,
-  `details` varchar(1000) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `created_at` (`created_at`),
-  KEY `entity_type` (`entity_type`,`entity_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `backups` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `file_name` varchar(255) NOT NULL,
-  `status` enum('running','completed','failed') NOT NULL DEFAULT 'running',
-  `type` enum('full','db','files') NOT NULL DEFAULT 'full',
-  `kind` enum('manual','auto','safety','upload','registered') NOT NULL DEFAULT 'manual',
-  `note` varchar(500) DEFAULT NULL,
-  `tables_n` int DEFAULT NULL,
-  `rows_n` int DEFAULT NULL,
-  `files_n` int DEFAULT NULL,
-  `missing_files` int DEFAULT NULL,
-  `size` bigint DEFAULT NULL,
-  `encrypted` tinyint(1) NOT NULL DEFAULT '1',
-  `key_fp` varchar(20) DEFAULT NULL,
-  `checksum` char(64) DEFAULT NULL,
-  `error` varchar(1000) DEFAULT NULL,
-  `created_by` int DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `file_name` (`file_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `billing` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `rider_id` bigint NOT NULL,
-  `month` char(7) NOT NULL,
-  `contract` varchar(150) DEFAULT NULL,
-  `completed_orders` int DEFAULT NULL,
-  `basic_payment` decimal(12,2) DEFAULT NULL,
-  `distance_payment` decimal(12,2) DEFAULT NULL,
-  `ftr_bonus` decimal(12,2) DEFAULT NULL,
-  `rider_payment_basic` decimal(12,2) DEFAULT NULL,
-  `rider_payment_scoring` decimal(12,2) DEFAULT NULL,
-  `fine_acceptance` decimal(12,2) DEFAULT NULL,
-  `fine_contact` decimal(12,2) DEFAULT NULL,
-  `fine_declined` decimal(12,2) DEFAULT NULL,
-  `fine_late` decimal(12,2) DEFAULT NULL,
-  `fine_no_show` decimal(12,2) DEFAULT NULL,
-  `fine_no_show_special` decimal(12,2) DEFAULT NULL,
-  `fine_daily_acceptance` decimal(12,2) DEFAULT NULL,
-  `fine_missed_days` decimal(12,2) DEFAULT NULL,
-  `ded_stacking` decimal(12,2) DEFAULT NULL,
-  `ded_car` decimal(12,2) DEFAULT NULL,
-  `ded_google` decimal(12,2) DEFAULT NULL,
-  `total_deductions` decimal(12,2) DEFAULT NULL,
-  `rider_balance` decimal(12,2) DEFAULT NULL,
-  `pending_balance` decimal(12,2) DEFAULT NULL,
-  `amount_excl_vat` decimal(12,2) DEFAULT NULL,
-  `vat` decimal(12,2) DEFAULT NULL,
-  `amount_incl_vat` decimal(12,2) DEFAULT NULL,
-  `net_ftr` decimal(12,2) DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `rider_id` (`rider_id`,`month`),
-  KEY `month` (`month`),
-  CONSTRAINT `billing_ibfk_1` FOREIGN KEY (`rider_id`) REFERENCES `riders` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `blocked_ips` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `ip` varchar(64) NOT NULL,
-  `reason` varchar(500) NOT NULL,
-  `failed_attempts` int NOT NULL DEFAULT '0',
-  `status` enum('blocked','lifted') NOT NULL DEFAULT 'blocked',
-  `expires_at` datetime DEFAULT NULL,
-  `blocked_by` int DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `ip` (`ip`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `branding_photos` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `rider_id` bigint NOT NULL,
-  `captured_at` datetime NOT NULL,
-  `photo_url` varchar(1000) NOT NULL,
-  `contract_name` varchar(150) DEFAULT NULL,
-  `check_result` enum('pending','fine','blurred','no_face','unreadable','failed') NOT NULL DEFAULT 'pending',
-  `override_result` enum('fine','blurred','no_face','unreadable') DEFAULT NULL,
-  `override_by` int DEFAULT NULL,
-  `card_review` enum('none','visible','not_visible','unclear') NOT NULL DEFAULT 'none',
-  `card_note` varchar(300) DEFAULT NULL,
-  `card_by` int DEFAULT NULL,
-  `card_at` datetime DEFAULT NULL,
-  `source_review` enum('none','direct','screen','unclear') NOT NULL DEFAULT 'none',
-  `source_by` int DEFAULT NULL,
-  `source_at` datetime DEFAULT NULL,
-  `suspect_card` tinyint(1) NOT NULL DEFAULT '0',
-  `suspect_screen` tinyint(1) NOT NULL DEFAULT '0',
-  `measurements` json DEFAULT NULL,
-  `checked_at` datetime DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `rider_id` (`rider_id`,`captured_at`),
-  KEY `captured_at` (`captured_at`),
-  CONSTRAINT `branding_photos_ibfk_1` FOREIGN KEY (`rider_id`) REFERENCES `riders` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `cities` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `name_ar` varchar(100) NOT NULL,
-  `name_en` varchar(100) DEFAULT NULL,
-  `is_active` tinyint(1) NOT NULL DEFAULT '1',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `name_ar` (`name_ar`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `companies` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `name` varchar(100) NOT NULL,
-  `email` varchar(150) DEFAULT NULL,
-  `operator_id` varchar(50) DEFAULT NULL,
-  `is_active` tinyint(1) NOT NULL DEFAULT '1',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `contracts` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `company_id` int NOT NULL,
-  `name` varchar(255) NOT NULL,
-  `description` varchar(500) DEFAULT NULL,
-  `is_active` tinyint(1) NOT NULL DEFAULT '1',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `company_id` (`company_id`,`name`),
-  CONSTRAINT `contracts_ibfk_1` FOREIGN KEY (`company_id`) REFERENCES `companies` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `cron_runs` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `job` varchar(40) NOT NULL,
-  `started_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `finished_at` datetime DEFAULT NULL,
-  `outcome` enum('running','completed','failed') NOT NULL DEFAULT 'running',
-  `records` int NOT NULL DEFAULT '0',
-  `notifications` int NOT NULL DEFAULT '0',
-  `emails` int NOT NULL DEFAULT '0',
-  `error` varchar(1000) DEFAULT NULL,
-  `details` json DEFAULT NULL,
-  `manual` tinyint(1) NOT NULL DEFAULT '0',
-  PRIMARY KEY (`id`),
-  KEY `job` (`job`,`started_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `daily_performance` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `rider_id` bigint NOT NULL,
-  `work_date` date NOT NULL,
-  `contract_id` int DEFAULT NULL,
-  `batch` varchar(50) DEFAULT NULL,
-  `tga_status` varchar(50) DEFAULT NULL,
-  `error_codes` varchar(50) DEFAULT NULL,
-  `shifts` int DEFAULT NULL,
-  `working_days` int DEFAULT NULL,
-  `planned_hours` decimal(7,2) DEFAULT NULL,
-  `actual_hours` decimal(7,2) DEFAULT NULL,
-  `break_hours` decimal(7,2) DEFAULT NULL,
-  `lost_hours` decimal(7,2) DEFAULT NULL,
-  `attendance_rate` decimal(7,4) DEFAULT NULL,
-  `acceptance_rate` decimal(7,4) DEFAULT NULL,
-  `contact_rate` decimal(7,4) DEFAULT NULL,
-  `no_shows` int DEFAULT NULL,
-  `no_show_rate` decimal(7,4) DEFAULT NULL,
-  `notified` int DEFAULT NULL,
-  `accepted` int DEFAULT NULL,
-  `completed` int DEFAULT NULL,
-  `stacked` int DEFAULT NULL,
-  `declined` int DEFAULT NULL,
-  `cancelled` int DEFAULT NULL,
-  `deductions` int DEFAULT NULL,
-  `not_accepted` int DEFAULT NULL,
-  `manual_undispatched` int DEFAULT NULL,
-  `chat_response_rate` decimal(7,4) DEFAULT NULL,
-  `source` enum('manual','import','sync') NOT NULL DEFAULT 'manual',
-  `created_by` int DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` datetime DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `rider_id` (`rider_id`,`work_date`),
-  KEY `work_date` (`work_date`),
-  CONSTRAINT `daily_performance_ibfk_1` FOREIGN KEY (`rider_id`) REFERENCES `riders` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `email_log` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `template_key` varchar(80) DEFAULT NULL,
-  `to_email` varchar(255) NOT NULL,
-  `to_name` varchar(150) DEFAULT NULL,
-  `cc` varchar(500) DEFAULT NULL,
-  `subject` varchar(255) NOT NULL,
-  `body` mediumtext,
-  `account` enum('system','riders') NOT NULL DEFAULT 'system',
-  `status` enum('queued','sent','failed') NOT NULL DEFAULT 'queued',
-  `error_code` varchar(60) DEFAULT NULL,
-  `error_message` varchar(1000) DEFAULT NULL,
-  `entity_type` varchar(40) DEFAULT NULL,
-  `entity_id` varchar(40) DEFAULT NULL,
-  `retries` int NOT NULL DEFAULT '0',
-  `provider_id` varchar(255) DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `sent_at` datetime DEFAULT NULL,
-  `last_attempt_at` datetime DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `created_at` (`created_at`),
-  KEY `status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `email_templates` (
-  `tkey` varchar(80) NOT NULL,
-  `name` varchar(150) NOT NULL,
-  `subject` varchar(255) NOT NULL,
-  `body_html` text NOT NULL,
-  `placeholders` varchar(500) DEFAULT NULL,
-  `grp` enum('documents','advances','security','portal','system') NOT NULL DEFAULT 'system',
-  `is_system` tinyint(1) NOT NULL DEFAULT '0',
-  `is_required` tinyint(1) NOT NULL DEFAULT '0',
-  `is_active` tinyint(1) NOT NULL DEFAULT '1',
-  `updated_at` datetime DEFAULT NULL,
-  PRIMARY KEY (`tkey`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `error_log` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `level` enum('info','warning','error','critical') NOT NULL DEFAULT 'error',
-  `code` varchar(80) DEFAULT NULL,
-  `module` varchar(80) DEFAULT NULL,
-  `message` varchar(1000) NOT NULL,
-  `route` varchar(255) DEFAULT NULL,
-  `method` varchar(10) DEFAULT NULL,
-  `user_id` int DEFAULT NULL,
-  `request_id` varchar(40) DEFAULT NULL,
-  `stack` text,
-  PRIMARY KEY (`id`),
-  KEY `created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `fines` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `rider_id` bigint NOT NULL,
-  `fine_date` date NOT NULL,
-  `invoice_no` varchar(60) NOT NULL DEFAULT '',
-  `category` varchar(255) NOT NULL,
-  `amount` decimal(12,2) NOT NULL,
-  `company` varchar(150) DEFAULT NULL,
-  `currency` varchar(3) NOT NULL DEFAULT 'SAR',
-  `status` enum('open','disputed','waived','deducted') NOT NULL DEFAULT 'open',
-  `internal_note` varchar(500) DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` datetime DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_fine` (`rider_id`,`fine_date`,`invoice_no`,`category`(150),`amount`),
-  KEY `fine_date` (`fine_date`),
-  CONSTRAINT `fines_ibfk_1` FOREIGN KEY (`rider_id`) REFERENCES `riders` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `fuel_cards` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `number` varchar(50) NOT NULL,
-  `provider` varchar(100) DEFAULT NULL,
-  `status` enum('active','blocked','expired') NOT NULL DEFAULT 'active',
-  `issue_date` date DEFAULT NULL,
-  `balance` decimal(12,2) NOT NULL DEFAULT '0.00',
-  `monthly_limit` decimal(12,2) DEFAULT NULL,
-  `rider_id` bigint DEFAULT NULL,
-  `vehicle_id` int DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `number` (`number`),
-  KEY `rider_id` (`rider_id`),
-  KEY `vehicle_id` (`vehicle_id`),
-  CONSTRAINT `fuel_cards_ibfk_1` FOREIGN KEY (`rider_id`) REFERENCES `riders` (`id`),
-  CONSTRAINT `fuel_cards_ibfk_2` FOREIGN KEY (`vehicle_id`) REFERENCES `vehicles` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `insurance_companies` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `name_ar` varchar(150) NOT NULL,
-  `name_en` varchar(150) DEFAULT NULL,
-  `phone` varchar(30) DEFAULT NULL,
-  `website` varchar(255) DEFAULT NULL,
-  `is_active` tinyint(1) NOT NULL DEFAULT '1',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `name_ar` (`name_ar`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `insurance_policies` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `number` varchar(50) NOT NULL,
-  `company_id` int NOT NULL,
-  `type` enum('third_party','comprehensive') NOT NULL DEFAULT 'third_party',
-  `issue_date` date DEFAULT NULL,
-  `start_date` date DEFAULT NULL,
-  `expiry_date` date NOT NULL,
-  `status` enum('valid','expired','cancelled') NOT NULL DEFAULT 'valid',
-  `notes` varchar(500) DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `number` (`number`),
-  KEY `company_id` (`company_id`),
-  CONSTRAINT `insurance_policies_ibfk_1` FOREIGN KEY (`company_id`) REFERENCES `insurance_companies` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `languages` (
-  `code` varchar(10) NOT NULL,
-  `name_native` varchar(60) NOT NULL,
-  `name_en` varchar(60) NOT NULL,
-  `dir` enum('rtl','ltr') NOT NULL DEFAULT 'ltr',
-  `font` varchar(100) DEFAULT NULL,
-  `flag` varchar(16) DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `leaves` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `letter_no` varchar(20) NOT NULL,
-  `seq_year` smallint NOT NULL,
-  `seq` int NOT NULL,
-  `rider_id` bigint NOT NULL,
-  `leave_type` enum('emergency','annual','sick','unpaid','other') NOT NULL DEFAULT 'emergency',
-  `start_date` date NOT NULL,
-  `end_date` date NOT NULL,
-  `reason` varchar(500) NOT NULL,
-  `reason_paragraph` varchar(1000) DEFAULT NULL,
-  `internal_note` text,
-  `status` enum('pending','approved','rejected','cancelled') NOT NULL DEFAULT 'pending',
-  `answer_note` varchar(500) DEFAULT NULL,
-  `answered_by` int DEFAULT NULL,
-  `answered_at` datetime DEFAULT NULL,
-  `source` enum('office','rider') NOT NULL DEFAULT 'office',
-  `stamped` tinyint(1) NOT NULL DEFAULT '0',
-  `created_by` int DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` datetime DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `letter_no` (`letter_no`),
-  UNIQUE KEY `seq_year` (`seq_year`,`seq`),
-  KEY `rider_id` (`rider_id`,`start_date`),
-  CONSTRAINT `leaves_ibfk_1` FOREIGN KEY (`rider_id`) REFERENCES `riders` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `live_board` (
-  `rider_id` bigint NOT NULL,
-  `name` varchar(150) DEFAULT NULL,
-  `status` varchar(40) DEFAULT NULL,
-  `seen_at` datetime NOT NULL,
-  `lat` decimal(9,6) DEFAULT NULL,
-  `lng` decimal(9,6) DEFAULT NULL,
-  `located_at` datetime DEFAULT NULL,
-  `shift_start` varchar(10) DEFAULT NULL,
-  `shift_end` varchar(10) DEFAULT NULL,
-  `worked_min` int DEFAULT NULL,
-  `late_min` int DEFAULT NULL,
-  `breaks` int DEFAULT NULL,
-  `break_min` int DEFAULT NULL,
-  `completed` int DEFAULT NULL,
-  `cancelled` int DEFAULT NULL,
-  `active_orders` int DEFAULT NULL,
-  `wallet` decimal(12,2) DEFAULT NULL,
-  `work_day` date DEFAULT NULL,
-  PRIMARY KEY (`rider_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `live_days` (
-  `rider_id` bigint NOT NULL,
-  `work_day` date NOT NULL,
-  `shifts` int DEFAULT NULL,
-  `worked_min` int DEFAULT NULL,
-  `late_min` int DEFAULT NULL,
-  `breaks` int DEFAULT NULL,
-  `break_min` int DEFAULT NULL,
-  `completed` int DEFAULT NULL,
-  `cancelled` int DEFAULT NULL,
-  `wallet` decimal(12,2) DEFAULT NULL,
-  PRIMARY KEY (`rider_id`,`work_day`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `live_points` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `rider_id` bigint NOT NULL,
-  `at` datetime NOT NULL,
-  `work_day` date NOT NULL,
-  `lat` decimal(9,6) NOT NULL,
-  `lng` decimal(9,6) NOT NULL,
-  `accuracy` int DEFAULT NULL,
-  `status` varchar(40) DEFAULT NULL,
-  `has_order` tinyint(1) NOT NULL DEFAULT '0',
-  PRIMARY KEY (`id`),
-  KEY `rider_id` (`rider_id`,`work_day`,`at`),
-  KEY `at` (`at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `login_attempts` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `username_typed` varchar(150) DEFAULT NULL,
-  `user_id` int DEFAULT NULL,
-  `success` tinyint(1) NOT NULL,
-  `reason` varchar(40) DEFAULT NULL,
-  `ip` varchar(64) DEFAULT NULL,
-  `user_agent` varchar(255) DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `ip` (`ip`,`created_at`),
-  KEY `user_id` (`user_id`,`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `login_challenges` (
-  `id` char(32) NOT NULL,
-  `code` char(6) NOT NULL,
-  `ip` varchar(64) DEFAULT NULL,
-  `attempts` int NOT NULL DEFAULT '0',
-  `expires_at` datetime NOT NULL,
-  `used_at` datetime DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `monthly_ratings` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `rider_id` bigint NOT NULL,
-  `month` char(7) NOT NULL,
-  `segment` char(1) DEFAULT NULL,
-  `final_score` decimal(7,4) DEFAULT NULL,
-  `on_time` decimal(7,4) DEFAULT NULL,
-  `fail_rate_score` decimal(7,4) DEFAULT NULL,
-  `gross_orders` int DEFAULT NULL,
-  `completed` int DEFAULT NULL,
-  `completed_in_time` int DEFAULT NULL,
-  `failed_by_rider` int DEFAULT NULL,
-  `verification_requests` int DEFAULT NULL,
-  `verification_success` int DEFAULT NULL,
-  `verification_rate` decimal(7,4) DEFAULT NULL,
-  `city` varchar(100) DEFAULT NULL,
-  `contract` varchar(150) DEFAULT NULL,
-  `source` enum('sync','file','manual') NOT NULL DEFAULT 'file',
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `rider_id` (`rider_id`,`month`),
-  KEY `month` (`month`),
-  CONSTRAINT `monthly_ratings_ibfk_1` FOREIGN KEY (`rider_id`) REFERENCES `riders` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `notification_prefs` (
-  `user_id` int NOT NULL,
-  `category` varchar(40) NOT NULL,
-  `in_app` tinyint(1) NOT NULL DEFAULT '1',
-  `email` tinyint(1) NOT NULL DEFAULT '0',
-  PRIMARY KEY (`user_id`,`category`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `notifications` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `user_id` int DEFAULT NULL,
-  `rider_id` bigint DEFAULT NULL,
-  `category` enum('document_expiry','oil_change','advance_status','installment_due','backup','security','performance','system','general') NOT NULL DEFAULT 'general',
-  `severity` enum('info','warning','critical') NOT NULL DEFAULT 'info',
-  `title` varchar(120) NOT NULL,
-  `body` varchar(120) DEFAULT NULL,
-  `params` json DEFAULT NULL,
-  `entity_type` varchar(40) DEFAULT NULL,
-  `entity_id` varchar(40) DEFAULT NULL,
-  `link` varchar(255) DEFAULT NULL,
-  `dedupe` varchar(190) DEFAULT NULL,
-  `read_at` datetime DEFAULT NULL,
-  `emailed_at` datetime DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `dedupe` (`dedupe`),
-  KEY `user_id` (`user_id`,`read_at`),
-  KEY `rider_id` (`rider_id`,`read_at`),
-  KEY `created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `oil_changes` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `vehicle_id` int NOT NULL,
-  `change_date` date NOT NULL,
-  `odometer` int DEFAULT NULL,
-  `performed_by` varchar(150) DEFAULT NULL,
-  `cost` decimal(12,2) DEFAULT NULL,
-  `notes` varchar(300) DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `vehicle_id` (`vehicle_id`,`change_date`),
-  CONSTRAINT `oil_changes_ibfk_1` FOREIGN KEY (`vehicle_id`) REFERENCES `vehicles` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `oil_schedules` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `vehicle_id` int NOT NULL,
-  `interval_days` int NOT NULL,
-  `warn_days` int NOT NULL DEFAULT '7',
-  `last_change` date NOT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `vehicle_id` (`vehicle_id`),
-  CONSTRAINT `oil_schedules_ibfk_1` FOREIGN KEY (`vehicle_id`) REFERENCES `vehicles` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `operation_card_vehicles` (
-  `card_id` int NOT NULL,
-  `vehicle_id` int NOT NULL,
-  `is_current` tinyint(1) NOT NULL DEFAULT '1',
-  PRIMARY KEY (`card_id`,`vehicle_id`),
-  KEY `vehicle_id` (`vehicle_id`),
-  CONSTRAINT `operation_card_vehicles_ibfk_1` FOREIGN KEY (`card_id`) REFERENCES `operation_cards` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `operation_card_vehicles_ibfk_2` FOREIGN KEY (`vehicle_id`) REFERENCES `vehicles` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `operation_cards` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `number` varchar(50) NOT NULL,
-  `transport_license_id` int NOT NULL,
-  `issue_date` date DEFAULT NULL,
-  `expiry_date` date NOT NULL,
-  `renew_date` date DEFAULT NULL,
-  `status` enum('valid','expired','suspended','cancelled') NOT NULL DEFAULT 'valid',
-  `notes` varchar(500) DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `number` (`number`),
-  KEY `transport_license_id` (`transport_license_id`),
-  CONSTRAINT `operation_cards_ibfk_1` FOREIGN KEY (`transport_license_id`) REFERENCES `transport_licenses` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `rating_cutoffs` (
-  `month` char(7) NOT NULL,
-  `segment` char(1) NOT NULL,
-  `min_final` decimal(7,4) DEFAULT NULL,
-  `min_otd` decimal(7,4) DEFAULT NULL,
-  `min_fr` decimal(7,4) DEFAULT NULL,
-  `city_riders` int DEFAULT NULL,
-  PRIMARY KEY (`month`,`segment`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `renewals` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `doc_kind` varchar(30) NOT NULL,
-  `doc_id` int NOT NULL,
-  `new_doc_id` int DEFAULT NULL,
-  `owner_type` enum('rider','vehicle','organization') NOT NULL,
-  `owner_label` varchar(255) DEFAULT NULL,
-  `previous_number` varchar(100) DEFAULT NULL,
-  `new_number` varchar(100) DEFAULT NULL,
-  `previous_expiry` date DEFAULT NULL,
-  `new_expiry` date NOT NULL,
-  `operation` enum('renewal','replacement','reissue','correction') NOT NULL DEFAULT 'renewal',
-  `renewal_date` date NOT NULL,
-  `cost` decimal(12,2) DEFAULT NULL,
-  `reference` varchar(100) DEFAULT NULL,
-  `notes` varchar(500) DEFAULT NULL,
-  `recorded_by` int DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `doc_kind` (`doc_kind`,`doc_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `restores` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `backup_id` int DEFAULT NULL,
-  `file_name` varchar(255) DEFAULT NULL,
-  `status` enum('running','completed','failed') NOT NULL DEFAULT 'running',
-  `user_id` int DEFAULT NULL,
-  `details` varchar(1000) DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `rider_absences` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `rider_id` bigint NOT NULL,
-  `external_id` varchar(60) DEFAULT NULL,
-  `start_at` datetime NOT NULL,
-  `end_at` datetime NOT NULL,
-  `days` decimal(7,3) NOT NULL,
-  `reason` varchar(40) DEFAULT NULL,
-  `paid` tinyint(1) DEFAULT NULL,
-  `status` varchar(40) DEFAULT NULL,
-  `contract` varchar(150) DEFAULT NULL,
-  `company_comment` varchar(500) DEFAULT NULL,
-  `internal_note` varchar(500) DEFAULT NULL,
-  `source` enum('import','sync') NOT NULL DEFAULT 'import',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` datetime DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `external_id` (`external_id`),
-  KEY `rider_id` (`rider_id`,`start_at`),
-  CONSTRAINT `rider_absences_ibfk_1` FOREIGN KEY (`rider_id`) REFERENCES `riders` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `rider_accounts` (
-  `rider_id` bigint NOT NULL,
-  `verified_email` varchar(150) DEFAULT NULL,
-  `email_verified_at` datetime DEFAULT NULL,
-  `locale` varchar(10) DEFAULT NULL,
-  `last_login_at` datetime DEFAULT NULL,
-  PRIMARY KEY (`rider_id`),
-  UNIQUE KEY `verified_email` (`verified_email`),
-  CONSTRAINT `rider_accounts_ibfk_1` FOREIGN KEY (`rider_id`) REFERENCES `riders` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `rider_change_requests` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `rider_id` bigint NOT NULL,
-  `type` enum('contact','photo','document') NOT NULL,
-  `doc_type` enum('id','license','health','driver_card','ajeer','other') DEFAULT NULL,
-  `payload` json NOT NULL,
-  `snapshot` json DEFAULT NULL,
-  `rider_note` varchar(1000) DEFAULT NULL,
-  `status` enum('pending','approved','rejected','cancelled') NOT NULL DEFAULT 'pending',
-  `review_note` varchar(500) DEFAULT NULL,
-  `reviewed_by` int DEFAULT NULL,
-  `reviewed_at` datetime DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `rider_id` (`rider_id`,`status`),
-  CONSTRAINT `rider_change_requests_ibfk_1` FOREIGN KEY (`rider_id`) REFERENCES `riders` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `rider_codes` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `rider_id` bigint NOT NULL,
-  `purpose` enum('verify_email','reset_password') NOT NULL,
-  `email` varchar(150) NOT NULL,
-  `code_hash` char(64) NOT NULL,
-  `attempts` int NOT NULL DEFAULT '0',
-  `expires_at` datetime NOT NULL,
-  `used_at` datetime DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `rider_id` (`rider_id`,`purpose`,`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `rider_documents` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `rider_id` bigint NOT NULL,
-  `doc_type` enum('id','license','health','driver_card','ajeer') NOT NULL,
-  `doc_number` varchar(50) DEFAULT NULL,
-  `id_kind` enum('national_id','iqama','passport') DEFAULT NULL,
-  `version_number` varchar(10) DEFAULT NULL,
-  `place_of_issue` varchar(100) DEFAULT NULL,
-  `license_type` varchar(100) DEFAULT NULL,
-  `license_type_en` varchar(100) DEFAULT NULL,
-  `cert_type` varchar(100) DEFAULT NULL,
-  `issuing_authority` varchar(150) DEFAULT NULL,
-  `issue_date_hijri` varchar(10) DEFAULT NULL,
-  `expiry_date_hijri` varchar(10) DEFAULT NULL,
-  `transport_license_id` int DEFAULT NULL,
-  `card_category` enum('yearly','half_yearly','quarterly','temporary') DEFAULT NULL,
-  `beneficiary_company_id` int DEFAULT NULL,
-  `contract_summary` varchar(255) DEFAULT NULL,
-  `work_locations` varchar(255) DEFAULT NULL,
-  `issue_date` date DEFAULT NULL,
-  `expiry_date` date DEFAULT NULL,
-  `status` enum('valid','expired','suspended','cancelled') NOT NULL DEFAULT 'valid',
-  `is_current` tinyint(1) NOT NULL DEFAULT '1',
-  `notes` varchar(500) DEFAULT NULL,
-  `created_by` int DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_doc_number` (`doc_type`,`doc_number`),
-  KEY `rider_id` (`rider_id`,`doc_type`,`is_current`),
-  KEY `transport_license_id` (`transport_license_id`),
-  KEY `beneficiary_company_id` (`beneficiary_company_id`),
-  CONSTRAINT `rider_documents_ibfk_1` FOREIGN KEY (`rider_id`) REFERENCES `riders` (`id`),
-  CONSTRAINT `rider_documents_ibfk_2` FOREIGN KEY (`transport_license_id`) REFERENCES `transport_licenses` (`id`),
-  CONSTRAINT `rider_documents_ibfk_3` FOREIGN KEY (`beneficiary_company_id`) REFERENCES `companies` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `rider_issue_messages` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `issue_id` int NOT NULL,
-  `author` enum('rider','staff') NOT NULL,
-  `user_id` int DEFAULT NULL,
-  `body` text,
-  `internal` tinyint(1) NOT NULL DEFAULT '0',
-  `created_at` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  PRIMARY KEY (`id`),
-  KEY `issue_id` (`issue_id`,`id`),
-  CONSTRAINT `rider_issue_messages_ibfk_1` FOREIGN KEY (`issue_id`) REFERENCES `rider_issues` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `rider_issues` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `rider_id` bigint NOT NULL,
-  `subject` varchar(200) NOT NULL,
-  `category` enum('account','performance','attendance','payment','vehicle','app','other') NOT NULL DEFAULT 'other',
-  `priority` enum('low','normal','high','urgent') NOT NULL DEFAULT 'normal',
-  `status` enum('open','in_progress','resolved','closed') NOT NULL DEFAULT 'open',
-  `opened_by` enum('rider','staff') NOT NULL DEFAULT 'rider',
-  `assignee_id` int DEFAULT NULL,
-  `staff_read_at` datetime(3) DEFAULT NULL,
-  `rider_read_at` datetime(3) DEFAULT NULL,
-  `last_activity_at` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  `resolved_at` datetime DEFAULT NULL,
-  `closed_at` datetime DEFAULT NULL,
-  `created_by` int DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `rider_id` (`rider_id`),
-  KEY `status` (`status`,`last_activity_at`),
-  CONSTRAINT `rider_issues_ibfk_1` FOREIGN KEY (`rider_id`) REFERENCES `riders` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `rider_login_attempts` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `typed` varchar(30) DEFAULT NULL,
-  `rider_id` bigint DEFAULT NULL,
-  `success` tinyint(1) NOT NULL DEFAULT '0',
-  `reason` varchar(40) DEFAULT NULL,
-  `ip` varchar(64) DEFAULT NULL,
-  `user_agent` varchar(255) DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `ip` (`ip`,`created_at`),
-  KEY `rider_id` (`rider_id`,`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `rider_sessions` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `token_hash` char(64) NOT NULL,
-  `rider_id` bigint NOT NULL,
-  `ip` varchar(64) DEFAULT NULL,
-  `user_agent` varchar(255) DEFAULT NULL,
-  `status` enum('active','signed_out','expired','revoked') NOT NULL DEFAULT 'active',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `last_activity_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `expires_at` datetime NOT NULL,
-  `ended_at` datetime DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `token_hash` (`token_hash`),
-  KEY `rider_id` (`rider_id`,`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `riders` (
-  `id` bigint NOT NULL,
-  `full_name` varchar(150) NOT NULL,
-  `name_en` varchar(150) DEFAULT NULL,
-  `alias` varchar(150) DEFAULT NULL,
-  `national_id` varchar(30) DEFAULT NULL,
-  `status` enum('active','inactive','suspended','terminated') NOT NULL DEFAULT 'active',
-  `company_id` int DEFAULT NULL,
-  `contract_id` int DEFAULT NULL,
-  `city_id` int DEFAULT NULL,
-  `hire_date` date DEFAULT NULL,
-  `occupation` varchar(150) DEFAULT NULL,
-  `phone` varchar(30) DEFAULT NULL,
-  `account_holder_phone` varchar(30) DEFAULT NULL,
-  `email` varchar(150) DEFAULT NULL,
-  `language` enum('ar','en','bn') DEFAULT NULL,
-  `nationality` varchar(100) DEFAULT NULL,
-  `birth_date` date DEFAULT NULL,
-  `birth_place` varchar(150) DEFAULT NULL,
-  `blood_type` enum('A+','A-','B+','B-','AB+','AB-','O+','O-') DEFAULT NULL,
-  `notes` varchar(500) DEFAULT NULL,
-  `portal_enabled` tinyint(1) NOT NULL DEFAULT '1',
-  `portal_password_hash` varchar(255) DEFAULT NULL,
-  `portal_password_set_at` datetime DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` datetime DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `national_id` (`national_id`),
-  KEY `company_id` (`company_id`),
-  KEY `contract_id` (`contract_id`),
-  KEY `city_id` (`city_id`),
-  CONSTRAINT `riders_ibfk_1` FOREIGN KEY (`company_id`) REFERENCES `companies` (`id`),
-  CONSTRAINT `riders_ibfk_2` FOREIGN KEY (`contract_id`) REFERENCES `contracts` (`id`),
-  CONSTRAINT `riders_ibfk_3` FOREIGN KEY (`city_id`) REFERENCES `cities` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `role_permissions` (
-  `role_id` int NOT NULL,
-  `perm` varchar(80) NOT NULL,
-  PRIMARY KEY (`role_id`,`perm`),
-  CONSTRAINT `role_permissions_ibfk_1` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `roles` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `name` varchar(60) NOT NULL,
-  `description` varchar(255) DEFAULT NULL,
-  `is_active` tinyint(1) NOT NULL DEFAULT '1',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `secrets` (
-  `name` varchar(100) NOT NULL,
-  `value` text,
-  `description` varchar(255) DEFAULT NULL,
-  `encrypted` tinyint(1) NOT NULL DEFAULT '1',
-  `updated_at` datetime DEFAULT NULL,
-  PRIMARY KEY (`name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `sessions` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `token_hash` char(64) NOT NULL,
-  `user_id` int DEFAULT NULL,
-  `ip` varchar(64) DEFAULT NULL,
-  `user_agent` varchar(255) DEFAULT NULL,
-  `status` enum('active','expired','revoked','signed_out') NOT NULL DEFAULT 'active',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `last_activity_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `expires_at` datetime NOT NULL,
-  `ended_at` datetime DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `token_hash` (`token_hash`),
-  KEY `user_id` (`user_id`,`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `settings` (
-  `key` varchar(100) NOT NULL,
-  `value` text,
-  `type` enum('int','decimal','bool','date','json','text') NOT NULL DEFAULT 'text',
-  `category` varchar(40) NOT NULL DEFAULT 'general',
-  `description` varchar(255) DEFAULT NULL,
-  `editable` tinyint(1) NOT NULL DEFAULT '1',
-  `updated_at` datetime DEFAULT NULL,
-  PRIMARY KEY (`key`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `sync_runs` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `source` varchar(40) NOT NULL,
-  `report_day` date DEFAULT NULL,
-  `status` enum('running','succeeded','failed','skipped','needs_sign_in') NOT NULL DEFAULT 'running',
-  `trigger_type` enum('manual','scheduled','catch_up','extension') NOT NULL DEFAULT 'manual',
-  `started_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `finished_at` datetime DEFAULT NULL,
-  `rows_read` int DEFAULT NULL,
-  `added` int DEFAULT NULL,
-  `replaced` int DEFAULT NULL,
-  `user_id` int DEFAULT NULL,
-  `message` varchar(1000) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `source` (`source`,`report_day`),
-  KEY `started_at` (`started_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `sync_sources` (
-  `code` varchar(40) NOT NULL,
-  `enabled` tinyint(1) NOT NULL DEFAULT '1',
-  `sync_from` date DEFAULT NULL,
-  `create_riders` tinyint(1) NOT NULL DEFAULT '0',
-  `report_url` varchar(500) DEFAULT NULL,
-  PRIMARY KEY (`code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `translation_overrides` (
-  `lang` varchar(10) NOT NULL,
-  `tkey` varchar(120) NOT NULL,
-  `value` text NOT NULL,
-  `updated_by` int DEFAULT NULL,
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`lang`,`tkey`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `transport_licenses` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `number` varchar(50) NOT NULL,
-  `city_id` int NOT NULL,
-  `issue_date` date DEFAULT NULL,
-  `expiry_date` date NOT NULL,
-  `activity_ar` varchar(255) DEFAULT NULL,
-  `activity_en` varchar(255) DEFAULT NULL,
-  `status` enum('valid','expired','suspended') NOT NULL DEFAULT 'valid',
-  `notes` varchar(500) DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `number` (`number`),
-  KEY `city_id` (`city_id`),
-  CONSTRAINT `transport_licenses_ibfk_1` FOREIGN KEY (`city_id`) REFERENCES `cities` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `users` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `username` varchar(50) NOT NULL,
-  `full_name` varchar(150) NOT NULL,
-  `email` varchar(150) NOT NULL,
-  `password_hash` varchar(255) NOT NULL,
-  `role_id` int NOT NULL,
-  `status` enum('active','disabled','locked') NOT NULL DEFAULT 'active',
-  `locked_until` datetime DEFAULT NULL,
-  `locale` varchar(10) DEFAULT NULL,
-  `last_login_at` datetime DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` datetime DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `username` (`username`),
-  UNIQUE KEY `email` (`email`),
-  KEY `role_id` (`role_id`),
-  CONSTRAINT `users_ibfk_1` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `vehicle_assignments` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `rider_id` bigint NOT NULL,
-  `vehicle_id` int NOT NULL,
-  `start_date` date NOT NULL,
-  `end_date` date DEFAULT NULL,
-  `is_current` tinyint(1) NOT NULL DEFAULT '1',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `vehicle_id` (`vehicle_id`,`is_current`),
-  KEY `rider_id` (`rider_id`,`is_current`),
-  CONSTRAINT `vehicle_assignments_ibfk_1` FOREIGN KEY (`rider_id`) REFERENCES `riders` (`id`),
-  CONSTRAINT `vehicle_assignments_ibfk_2` FOREIGN KEY (`vehicle_id`) REFERENCES `vehicles` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `vehicle_insurance` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `vehicle_id` int NOT NULL,
-  `policy_id` int NOT NULL,
-  `sub_policy` varchar(50) DEFAULT NULL,
-  `start_date` date DEFAULT NULL,
-  `expiry_date` date NOT NULL,
-  `status` enum('valid','expired','cancelled') NOT NULL DEFAULT 'valid',
-  `is_current` tinyint(1) NOT NULL DEFAULT '1',
-  `notes` varchar(500) DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `vehicle_id` (`vehicle_id`,`policy_id`),
-  KEY `policy_id` (`policy_id`),
-  CONSTRAINT `vehicle_insurance_ibfk_1` FOREIGN KEY (`vehicle_id`) REFERENCES `vehicles` (`id`),
-  CONSTRAINT `vehicle_insurance_ibfk_2` FOREIGN KEY (`policy_id`) REFERENCES `insurance_policies` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `vehicle_registrations` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `vehicle_id` int NOT NULL,
-  `serial` varchar(30) NOT NULL,
-  `owner` varchar(150) NOT NULL,
-  `owner_id_no` varchar(20) DEFAULT NULL,
-  `user_rider_id` bigint DEFAULT NULL,
-  `user_name` varchar(150) DEFAULT NULL,
-  `user_id_no` varchar(20) DEFAULT NULL,
-  `issue_date` date DEFAULT NULL,
-  `expiry_date` date DEFAULT NULL,
-  `status` enum('valid','expired','cancelled') NOT NULL DEFAULT 'valid',
-  `is_current` tinyint(1) NOT NULL DEFAULT '1',
-  `notes` varchar(500) DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `serial` (`serial`),
-  KEY `vehicle_id` (`vehicle_id`),
-  KEY `user_rider_id` (`user_rider_id`),
-  CONSTRAINT `vehicle_registrations_ibfk_1` FOREIGN KEY (`vehicle_id`) REFERENCES `vehicles` (`id`),
-  CONSTRAINT `vehicle_registrations_ibfk_2` FOREIGN KEY (`user_rider_id`) REFERENCES `riders` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `vehicles` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `plate` varchar(30) NOT NULL,
-  `plate_key` varchar(30) NOT NULL,
-  `plate_en` varchar(30) DEFAULT NULL,
-  `vehicle_type` varchar(50) NOT NULL,
-  `registration_type` varchar(60) DEFAULT NULL,
-  `maker` varchar(60) DEFAULT NULL,
-  `model` varchar(60) DEFAULT NULL,
-  `color` varchar(40) DEFAULT NULL,
-  `year` smallint DEFAULT NULL,
-  `chassis` varchar(30) DEFAULT NULL,
-  `weight` int DEFAULT NULL,
-  `capacity` int DEFAULT NULL,
-  `ownership` enum('owned','rented') NOT NULL DEFAULT 'owned',
-  `status` enum('active','maintenance','retired') NOT NULL DEFAULT 'active',
-  `odometer` int NOT NULL DEFAULT '0',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `plate` (`plate`),
-  UNIQUE KEY `plate_en` (`plate_en`),
-  KEY `plate_key` (`plate_key`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `wallet_entries` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `rider_id` bigint NOT NULL,
-  `entry_date` date NOT NULL,
-  `description` varchar(500) NOT NULL DEFAULT '',
-  `amount` decimal(12,2) NOT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_entry` (`rider_id`,`entry_date`,`description`(200),`amount`),
-  KEY `entry_date` (`entry_date`),
-  CONSTRAINT `wallet_entries_ibfk_1` FOREIGN KEY (`rider_id`) REFERENCES `riders` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-CREATE TABLE IF NOT EXISTS `wallet_snapshots` (
-  `rider_id` bigint NOT NULL,
-  `snapshot_date` date NOT NULL,
-  `balance` decimal(12,2) NOT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`rider_id`,`snapshot_date`),
-  CONSTRAINT `wallet_snapshots_ibfk_1` FOREIGN KEY (`rider_id`) REFERENCES `riders` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS settings (
+  `key` VARCHAR(100) NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
+  value TEXT NULL,
+  type ENUM('int','decimal','bool','date','json','text') NOT NULL DEFAULT 'text',
+  category VARCHAR(40) NOT NULL DEFAULT 'general',
+  description VARCHAR(255) NULL,
+  editable TINYINT(1) NOT NULL DEFAULT 1,
+  updated_at DATETIME NULL,
+  PRIMARY KEY (tenant_id, `key`)
+);
+
+CREATE TABLE IF NOT EXISTS roles (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  name VARCHAR(60) NOT NULL,
+  description VARCHAR(255) NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_name (tenant_id, `name`)
+);
+
+CREATE TABLE IF NOT EXISTS role_permissions (
+  role_id INT NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
+  perm VARCHAR(80) NOT NULL,
+  PRIMARY KEY (role_id, perm),
+  FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
+  INDEX ix_tenant (tenant_id)
+);
+
+CREATE TABLE IF NOT EXISTS users (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  username VARCHAR(50) NOT NULL UNIQUE,
+  full_name VARCHAR(150) NOT NULL,
+  email VARCHAR(150) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  role_id INT NOT NULL,
+  status ENUM('active','disabled','locked') NOT NULL DEFAULT 'active',
+  locked_until DATETIME NULL,
+  locale VARCHAR(10) NULL,
+  last_login_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  FOREIGN KEY (role_id) REFERENCES roles(id),
+  INDEX ix_tenant (tenant_id)
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  token_hash CHAR(64) NOT NULL UNIQUE,
+  user_id INT NULL,
+  ip VARCHAR(64) NULL,
+  user_agent VARCHAR(255) NULL,
+  status ENUM('active','expired','revoked','signed_out') NOT NULL DEFAULT 'active',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_activity_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NOT NULL,
+  ended_at DATETIME NULL,
+  INDEX (user_id, status),
+  INDEX ix_tenant (tenant_id)
+);
+
+CREATE TABLE IF NOT EXISTS login_challenges (
+  id CHAR(32) PRIMARY KEY,
+  code CHAR(6) NOT NULL,
+  ip VARCHAR(64) NULL,
+  attempts INT NOT NULL DEFAULT 0,
+  expires_at DATETIME NOT NULL,
+  used_at DATETIME NULL
+);
+
+CREATE TABLE IF NOT EXISTS login_attempts (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  username_typed VARCHAR(150) NULL,
+  user_id INT NULL,
+  success TINYINT(1) NOT NULL,
+  reason VARCHAR(40) NULL,
+  ip VARCHAR(64) NULL,
+  user_agent VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX (ip, created_at),
+  INDEX (user_id, created_at),
+  INDEX ix_tenant (tenant_id)
+);
+
+CREATE TABLE IF NOT EXISTS blocked_ips (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  ip VARCHAR(64) NOT NULL UNIQUE,
+  reason VARCHAR(500) NOT NULL,
+  failed_attempts INT NOT NULL DEFAULT 0,
+  status ENUM('blocked','lifted') NOT NULL DEFAULT 'blocked',
+  expires_at DATETIME NULL,
+  blocked_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  action VARCHAR(80) NOT NULL,
+  entity_type VARCHAR(60) NULL,
+  entity_id VARCHAR(60) NULL,
+  actor_type ENUM('user','system','api','guest','job','rider') NOT NULL DEFAULT 'user',
+  actor_id INT NULL,
+  actor_name VARCHAR(150) NULL,
+  status ENUM('success','failed','error','pending','denied') NOT NULL DEFAULT 'success',
+  severity ENUM('info','warning','error','critical') NOT NULL DEFAULT 'info',
+  ip VARCHAR(64) NULL,
+  route VARCHAR(255) NULL,
+  request_id VARCHAR(40) NULL,
+  user_agent VARCHAR(255) NULL,
+  before_json JSON NULL,
+  after_json JSON NULL,
+  details VARCHAR(1000) NULL,
+  INDEX (created_at),
+  INDEX (entity_type, entity_id),
+  INDEX ix_tenant (tenant_id)
+);
+
+CREATE TABLE IF NOT EXISTS cities (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name_ar VARCHAR(100) NOT NULL UNIQUE,
+  name_en VARCHAR(100) NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS companies (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  name VARCHAR(100) NOT NULL,
+  email VARCHAR(150) NULL,
+  operator_id VARCHAR(50) NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_name (tenant_id, `name`)
+);
+
+CREATE TABLE IF NOT EXISTS contracts (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  company_id INT NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  description VARCHAR(500) NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY (tenant_id, company_id, name),
+  FOREIGN KEY (company_id) REFERENCES companies(id)
+);
+
+-- The rider id is the number the delivery company knows the rider by. It is typed by hand and never changes.
+CREATE TABLE IF NOT EXISTS riders (
+  id BIGINT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  full_name VARCHAR(150) NOT NULL,
+  name_en VARCHAR(150) NULL,
+  alias VARCHAR(150) NULL,
+  national_id VARCHAR(30) NULL,
+  status ENUM('active','inactive','suspended','terminated') NOT NULL DEFAULT 'active',
+  company_id INT NULL,
+  contract_id INT NULL,
+  city_id INT NULL,
+  hire_date DATE NULL,
+  occupation VARCHAR(150) NULL,
+  phone VARCHAR(30) NULL,
+  account_holder_phone VARCHAR(30) NULL,
+  email VARCHAR(150) NULL,
+  language ENUM('ar','en','bn') NULL,
+  nationality VARCHAR(100) NULL,
+  birth_date DATE NULL,
+  birth_place VARCHAR(150) NULL,
+  blood_type ENUM('A+','A-','B+','B-','AB+','AB-','O+','O-') NULL,
+  notes VARCHAR(500) NULL,
+  portal_enabled TINYINT(1) NOT NULL DEFAULT 1,
+  portal_password_hash VARCHAR(255) NULL,
+  portal_password_set_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY uq_national_id (tenant_id, `national_id`),
+  FOREIGN KEY (company_id) REFERENCES companies(id),
+  FOREIGN KEY (contract_id) REFERENCES contracts(id),
+  FOREIGN KEY (city_id) REFERENCES cities(id)
+);
+
+CREATE TABLE IF NOT EXISTS transport_licenses (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  number VARCHAR(50) NOT NULL,
+  city_id INT NOT NULL,
+  issue_date DATE NULL,
+  expiry_date DATE NOT NULL,
+  activity_ar VARCHAR(255) NULL,
+  activity_en VARCHAR(255) NULL,
+  status ENUM('valid','expired','suspended') NOT NULL DEFAULT 'valid',
+  notes VARCHAR(500) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_number (tenant_id, `number`),
+  FOREIGN KEY (city_id) REFERENCES cities(id)
+);
+
+-- One table for the five rider documents. Each rider has one current version per type;
+-- older versions stay as "superseded". Numbers are unique per type across all versions.
+CREATE TABLE IF NOT EXISTS rider_documents (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  rider_id BIGINT NOT NULL,
+  doc_type ENUM('id','license','health','driver_card','ajeer') NOT NULL,
+  doc_number VARCHAR(50) NULL,
+  id_kind ENUM('national_id','iqama','passport') NULL,
+  version_number VARCHAR(10) NULL,
+  place_of_issue VARCHAR(100) NULL,
+  license_type VARCHAR(100) NULL,
+  license_type_en VARCHAR(100) NULL,
+  cert_type VARCHAR(100) NULL,
+  issuing_authority VARCHAR(150) NULL,
+  issue_date_hijri VARCHAR(10) NULL,
+  expiry_date_hijri VARCHAR(10) NULL,
+  transport_license_id INT NULL,
+  card_category ENUM('yearly','half_yearly','quarterly','temporary') NULL,
+  beneficiary_company_id INT NULL,
+  contract_summary VARCHAR(255) NULL,
+  work_locations VARCHAR(255) NULL,
+  issue_date DATE NULL,
+  expiry_date DATE NULL,
+  status ENUM('valid','expired','suspended','cancelled') NOT NULL DEFAULT 'valid',
+  is_current TINYINT(1) NOT NULL DEFAULT 1,
+  notes VARCHAR(500) NULL,
+  created_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_doc_number (tenant_id, doc_type, doc_number),
+  INDEX (rider_id, doc_type, is_current),
+  FOREIGN KEY (rider_id) REFERENCES riders(id),
+  FOREIGN KEY (transport_license_id) REFERENCES transport_licenses(id),
+  FOREIGN KEY (beneficiary_company_id) REFERENCES companies(id)
+);
+
+CREATE TABLE IF NOT EXISTS applicants (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  full_name VARCHAR(150) NOT NULL,
+  name_en VARCHAR(150) NULL,
+  phone VARCHAR(20) NOT NULL,
+  national_id VARCHAR(30) NULL,
+  nationality VARCHAR(100) NULL,
+  birth_date DATE NULL,
+  city_id INT NULL,
+  status ENUM('new','review','approved','rejected','withdrawn','hired') NOT NULL DEFAULT 'new',
+  heard_from VARCHAR(100) NULL,
+  featured TINYINT(1) NOT NULL DEFAULT 0,
+  featured_reason VARCHAR(255) NULL,
+  featured_by INT NULL,
+  featured_at DATETIME NULL,
+  notes VARCHAR(500) NULL,
+  has_vehicle TINYINT(1) NOT NULL DEFAULT 0,
+  vehicle_type VARCHAR(50) NULL,
+  vehicle_plate VARCHAR(30) NULL,
+  vehicle_maker VARCHAR(60) NULL,
+  vehicle_model VARCHAR(60) NULL,
+  vehicle_year SMALLINT NULL,
+  rider_id BIGINT NULL,
+  reviewed_by INT NULL,
+  reviewed_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_phone (tenant_id, `phone`),
+  UNIQUE KEY uq_national_id (tenant_id, `national_id`),
+  FOREIGN KEY (city_id) REFERENCES cities(id)
+);
+
+CREATE TABLE IF NOT EXISTS vehicles (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  plate VARCHAR(30) NOT NULL,
+  plate_key VARCHAR(30) NOT NULL,
+  plate_en VARCHAR(30) NULL,
+  vehicle_type VARCHAR(50) NOT NULL,
+  registration_type VARCHAR(60) NULL,
+  maker VARCHAR(60) NULL,
+  model VARCHAR(60) NULL,
+  color VARCHAR(40) NULL,
+  year SMALLINT NULL,
+  chassis VARCHAR(30) NULL,
+  weight INT NULL,
+  capacity INT NULL,
+  ownership ENUM('owned','rented') NOT NULL DEFAULT 'owned',
+  status ENUM('active','maintenance','retired') NOT NULL DEFAULT 'active',
+  odometer INT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_plate (tenant_id, `plate`),
+  UNIQUE KEY uq_plate_en (tenant_id, `plate_en`),
+  INDEX (plate_key)
+);
+
+CREATE TABLE IF NOT EXISTS operation_cards (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  number VARCHAR(50) NOT NULL,
+  transport_license_id INT NOT NULL,
+  issue_date DATE NULL,
+  expiry_date DATE NOT NULL,
+  renew_date DATE NULL,
+  status ENUM('valid','expired','suspended','cancelled') NOT NULL DEFAULT 'valid',
+  notes VARCHAR(500) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_number (tenant_id, `number`),
+  FOREIGN KEY (transport_license_id) REFERENCES transport_licenses(id)
+);
+
+-- A card covers several vehicles; each vehicle has exactly one current card.
+CREATE TABLE IF NOT EXISTS operation_card_vehicles (
+  card_id INT NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
+  vehicle_id INT NOT NULL,
+  is_current TINYINT(1) NOT NULL DEFAULT 1,
+  PRIMARY KEY (card_id, vehicle_id),
+  FOREIGN KEY (card_id) REFERENCES operation_cards(id) ON DELETE CASCADE,
+  FOREIGN KEY (vehicle_id) REFERENCES vehicles(id),
+  INDEX ix_tenant (tenant_id)
+);
+
+CREATE TABLE IF NOT EXISTS vehicle_registrations (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  vehicle_id INT NOT NULL,
+  serial VARCHAR(30) NOT NULL,
+  owner VARCHAR(150) NOT NULL,
+  owner_id_no VARCHAR(20) NULL,
+  user_rider_id BIGINT NULL,
+  user_name VARCHAR(150) NULL,
+  user_id_no VARCHAR(20) NULL,
+  issue_date DATE NULL,
+  expiry_date DATE NULL,
+  status ENUM('valid','expired','cancelled') NOT NULL DEFAULT 'valid',
+  is_current TINYINT(1) NOT NULL DEFAULT 1,
+  notes VARCHAR(500) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_serial (tenant_id, `serial`),
+  FOREIGN KEY (vehicle_id) REFERENCES vehicles(id),
+  FOREIGN KEY (user_rider_id) REFERENCES riders(id)
+);
+
+CREATE TABLE IF NOT EXISTS insurance_companies (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  name_ar VARCHAR(150) NOT NULL,
+  name_en VARCHAR(150) NULL,
+  phone VARCHAR(30) NULL,
+  website VARCHAR(255) NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_name_ar (tenant_id, `name_ar`)
+);
+
+CREATE TABLE IF NOT EXISTS insurance_policies (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  number VARCHAR(50) NOT NULL,
+  company_id INT NOT NULL,
+  type ENUM('third_party','comprehensive') NOT NULL DEFAULT 'third_party',
+  issue_date DATE NULL,
+  start_date DATE NULL,
+  expiry_date DATE NOT NULL,
+  status ENUM('valid','expired','cancelled') NOT NULL DEFAULT 'valid',
+  notes VARCHAR(500) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_number (tenant_id, `number`),
+  FOREIGN KEY (company_id) REFERENCES insurance_companies(id)
+);
+
+CREATE TABLE IF NOT EXISTS vehicle_insurance (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  vehicle_id INT NOT NULL,
+  policy_id INT NOT NULL,
+  sub_policy VARCHAR(50) NULL,
+  start_date DATE NULL,
+  expiry_date DATE NOT NULL,
+  status ENUM('valid','expired','cancelled') NOT NULL DEFAULT 'valid',
+  is_current TINYINT(1) NOT NULL DEFAULT 1,
+  notes VARCHAR(500) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY (tenant_id, vehicle_id, policy_id),
+  FOREIGN KEY (vehicle_id) REFERENCES vehicles(id),
+  FOREIGN KEY (policy_id) REFERENCES insurance_policies(id)
+);
+
+CREATE TABLE IF NOT EXISTS vehicle_assignments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  rider_id BIGINT NOT NULL,
+  vehicle_id INT NOT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NULL,
+  is_current TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX (vehicle_id, is_current),
+  INDEX (rider_id, is_current),
+  FOREIGN KEY (rider_id) REFERENCES riders(id),
+  FOREIGN KEY (vehicle_id) REFERENCES vehicles(id),
+  INDEX ix_tenant (tenant_id)
+);
+
+CREATE TABLE IF NOT EXISTS fuel_cards (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  number VARCHAR(50) NOT NULL,
+  provider VARCHAR(100) NULL,
+  status ENUM('active','blocked','expired') NOT NULL DEFAULT 'active',
+  issue_date DATE NULL,
+  balance DECIMAL(12,2) NOT NULL DEFAULT 0,
+  monthly_limit DECIMAL(12,2) NULL,
+  rider_id BIGINT NULL,
+  vehicle_id INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_number (tenant_id, `number`),
+  FOREIGN KEY (rider_id) REFERENCES riders(id),
+  FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
+);
+
+CREATE TABLE IF NOT EXISTS oil_schedules (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  vehicle_id INT NOT NULL,
+  interval_days INT NOT NULL,
+  warn_days INT NOT NULL DEFAULT 7,
+  last_change DATE NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_vehicle_id (tenant_id, `vehicle_id`),
+  FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
+);
+
+CREATE TABLE IF NOT EXISTS oil_changes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  vehicle_id INT NOT NULL,
+  change_date DATE NOT NULL,
+  odometer INT NULL,
+  performed_by VARCHAR(150) NULL,
+  cost DECIMAL(12,2) NULL,
+  notes VARCHAR(300) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY (tenant_id, vehicle_id, change_date),
+  FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
+);
+
+-- Renewal log (chapter 5). Rows are history and are never edited.
+CREATE TABLE IF NOT EXISTS renewals (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  doc_kind VARCHAR(30) NOT NULL,
+  doc_id INT NOT NULL,
+  new_doc_id INT NULL,
+  owner_type ENUM('rider','vehicle','organization') NOT NULL,
+  owner_label VARCHAR(255) NULL,
+  previous_number VARCHAR(100) NULL,
+  new_number VARCHAR(100) NULL,
+  previous_expiry DATE NULL,
+  new_expiry DATE NOT NULL,
+  operation ENUM('renewal','replacement','reissue','correction') NOT NULL DEFAULT 'renewal',
+  renewal_date DATE NOT NULL,
+  cost DECIMAL(12,2) NULL,
+  reference VARCHAR(100) NULL,
+  notes VARCHAR(500) NULL,
+  recorded_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX (doc_kind, doc_id),
+  INDEX ix_tenant (tenant_id)
+);
+
+CREATE TABLE IF NOT EXISTS attachments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  entity_type VARCHAR(40) NOT NULL,
+  entity_id VARCHAR(40) NOT NULL,
+  attachment_type VARCHAR(40) NULL,
+  file_name VARCHAR(255) NOT NULL,
+  stored_name VARCHAR(255) NOT NULL,
+  mime VARCHAR(100) NOT NULL,
+  size INT NOT NULL,
+  note VARCHAR(255) NULL,
+  is_current TINYINT(1) NOT NULL DEFAULT 1,
+  uploaded_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX (entity_type, entity_id),
+  INDEX ix_tenant (tenant_id)
+);
+
+-- "Private keys" tab: integration secrets, encrypted at rest with the server key.
+CREATE TABLE IF NOT EXISTS secrets (
+  name VARCHAR(100) NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
+  value TEXT NULL,
+  description VARCHAR(255) NULL,
+  encrypted TINYINT(1) NOT NULL DEFAULT 1,
+  updated_at DATETIME NULL,
+  PRIMARY KEY (tenant_id, name)
+);
+
+-- ======================================================================== phase 2
+-- Notifications (chapter 9). Title and body are translation keys, shown in the reader's language.
+CREATE TABLE IF NOT EXISTS notifications (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  user_id INT NULL,
+  rider_id BIGINT NULL,
+  category ENUM('document_expiry','oil_change','advance_status','installment_due','backup','security','performance','system','general') NOT NULL DEFAULT 'general',
+  severity ENUM('info','warning','critical') NOT NULL DEFAULT 'info',
+  title VARCHAR(120) NOT NULL,
+  body VARCHAR(120) NULL,
+  params JSON NULL,
+  entity_type VARCHAR(40) NULL,
+  entity_id VARCHAR(40) NULL,
+  link VARCHAR(255) NULL,
+  dedupe VARCHAR(190) NULL,
+  read_at DATETIME NULL,
+  emailed_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_dedupe (tenant_id, `dedupe`),
+  INDEX (user_id, read_at),
+  INDEX (rider_id, read_at),
+  INDEX (created_at)
+);
+CREATE TABLE IF NOT EXISTS notification_prefs (
+  user_id INT NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
+  category VARCHAR(40) NOT NULL,
+  in_app TINYINT(1) NOT NULL DEFAULT 1,
+  email TINYINT(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, category),
+  INDEX ix_tenant (tenant_id)
+);
+
+-- 3.1 leave requests and their letters. The letter number runs within the year of the leave's start.
+CREATE TABLE IF NOT EXISTS leaves (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  letter_no VARCHAR(20) NOT NULL,
+  seq_year SMALLINT NOT NULL,
+  seq INT NOT NULL,
+  rider_id BIGINT NOT NULL,
+  leave_type ENUM('emergency','annual','sick','unpaid','other') NOT NULL DEFAULT 'emergency',
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  reason VARCHAR(500) NOT NULL,
+  reason_paragraph VARCHAR(1000) NULL,
+  internal_note TEXT NULL,
+  status ENUM('pending','approved','rejected','cancelled') NOT NULL DEFAULT 'pending',
+  answer_note VARCHAR(500) NULL,
+  answered_by INT NULL,
+  answered_at DATETIME NULL,
+  source ENUM('office','rider') NOT NULL DEFAULT 'office',
+  stamped TINYINT(1) NOT NULL DEFAULT 0,
+  created_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY uq_letter_no (tenant_id, `letter_no`),
+  UNIQUE KEY (tenant_id, seq_year, seq),
+  INDEX (rider_id, start_date),
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);
+
+-- 3.2 absences as the delivery company recorded them. Only internal_note belongs to the office.
+CREATE TABLE IF NOT EXISTS rider_absences (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  rider_id BIGINT NOT NULL,
+  external_id VARCHAR(60) NULL,
+  start_at DATETIME NOT NULL,
+  end_at DATETIME NOT NULL,
+  days DECIMAL(7,3) NOT NULL,
+  reason VARCHAR(40) NULL,
+  paid TINYINT(1) NULL,
+  status VARCHAR(40) NULL,
+  contract VARCHAR(150) NULL,
+  company_comment VARCHAR(500) NULL,
+  internal_note VARCHAR(500) NULL,
+  source ENUM('import','sync') NOT NULL DEFAULT 'import',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY uq_external_id (tenant_id, `external_id`),
+  INDEX (rider_id, start_at),
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);
+
+-- 3.3 advances and their monthly instalments.
+CREATE TABLE IF NOT EXISTS advances (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  number VARCHAR(20) NOT NULL,
+  seq_year SMALLINT NOT NULL,
+  seq INT NOT NULL,
+  rider_id BIGINT NOT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  installments INT NOT NULL DEFAULT 1,
+  request_date DATE NOT NULL,
+  first_due DATE NULL,
+  deduct_from ENUM('salary','commission','wallet','other') NOT NULL DEFAULT 'salary',
+  reason VARCHAR(500) NULL,
+  notes VARCHAR(500) NULL,
+  status ENUM('pending','approved','rejected','disbursed','repaying','settled','cancelled') NOT NULL DEFAULT 'pending',
+  decided_by INT NULL,
+  decided_at DATETIME NULL,
+  decision_note VARCHAR(500) NULL,
+  payout_method ENUM('cash','bank','wallet','other') NULL,
+  disbursed_on DATE NULL,
+  disbursed_by INT NULL,
+  created_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_number (tenant_id, `number`),
+  UNIQUE KEY (tenant_id, seq_year, seq),
+  INDEX (rider_id, status),
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);
+CREATE TABLE IF NOT EXISTS advance_installments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  advance_id INT NOT NULL,
+  n INT NOT NULL,
+  due_date DATE NOT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  paid DECIMAL(12,2) NOT NULL DEFAULT 0,
+  status ENUM('due','partial','paid','waived') NOT NULL DEFAULT 'due',
+  paid_on DATE NULL,
+  waive_reason VARCHAR(300) NULL,
+  updated_by INT NULL,
+  updated_at DATETIME NULL,
+  UNIQUE KEY (tenant_id, advance_id, n),
+  INDEX (status, due_date),
+  FOREIGN KEY (advance_id) REFERENCES advances(id) ON DELETE CASCADE
+);
+
+-- 3.4 data change requests from the rider portal. payload: the requested values; snapshot: the values when submitted.
+CREATE TABLE IF NOT EXISTS rider_change_requests (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  rider_id BIGINT NOT NULL,
+  type ENUM('contact','photo','document') NOT NULL,
+  doc_type ENUM('id','license','health','driver_card','ajeer','other') NULL,
+  payload JSON NOT NULL,
+  snapshot JSON NULL,
+  rider_note VARCHAR(1000) NULL,
+  status ENUM('pending','approved','rejected','cancelled') NOT NULL DEFAULT 'pending',
+  review_note VARCHAR(500) NULL,
+  reviewed_by INT NULL,
+  reviewed_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX (rider_id, status),
+  FOREIGN KEY (rider_id) REFERENCES riders(id),
+  INDEX ix_tenant (tenant_id)
+);
+
+-- 3.5 conversations with riders. Unread = messages after the other side's read mark.
+CREATE TABLE IF NOT EXISTS rider_issues (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  rider_id BIGINT NOT NULL,
+  subject VARCHAR(200) NOT NULL,
+  category ENUM('account','performance','attendance','payment','vehicle','app','other') NOT NULL DEFAULT 'other',
+  priority ENUM('low','normal','high','urgent') NOT NULL DEFAULT 'normal',
+  status ENUM('open','in_progress','resolved','closed') NOT NULL DEFAULT 'open',
+  opened_by ENUM('rider','staff') NOT NULL DEFAULT 'rider',
+  assignee_id INT NULL,
+  staff_read_at DATETIME(3) NULL,
+  rider_read_at DATETIME(3) NULL,
+  last_activity_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  resolved_at DATETIME NULL,
+  closed_at DATETIME NULL,
+  created_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX (rider_id),
+  INDEX (status, last_activity_at),
+  FOREIGN KEY (rider_id) REFERENCES riders(id),
+  INDEX ix_tenant (tenant_id)
+);
+CREATE TABLE IF NOT EXISTS rider_issue_messages (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  issue_id INT NOT NULL,
+  author ENUM('rider','staff') NOT NULL,
+  user_id INT NULL,
+  body TEXT NULL,
+  internal TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  INDEX (issue_id, id),
+  FOREIGN KEY (issue_id) REFERENCES rider_issues(id) ON DELETE CASCADE,
+  INDEX ix_tenant (tenant_id)
+);
+
+-- ======================================================================== chapter 8: finance
+-- All figures are the delivery company's; the office changes only a fine's status, note and amount.
+CREATE TABLE IF NOT EXISTS fines (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  rider_id BIGINT NOT NULL,
+  fine_date DATE NOT NULL,
+  invoice_no VARCHAR(60) NOT NULL DEFAULT '',
+  category VARCHAR(255) NOT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  company VARCHAR(150) NULL,
+  currency VARCHAR(3) NOT NULL DEFAULT 'SAR',
+  status ENUM('open','disputed','waived','deducted') NOT NULL DEFAULT 'open',
+  internal_note VARCHAR(500) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY uq_fine (tenant_id, rider_id, fine_date, invoice_no, category(150), amount),
+  INDEX (fine_date),
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);
+CREATE TABLE IF NOT EXISTS wallet_snapshots (
+  rider_id BIGINT NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
+  snapshot_date DATE NOT NULL,
+  balance DECIMAL(12,2) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (rider_id, snapshot_date),
+  FOREIGN KEY (rider_id) REFERENCES riders(id),
+  INDEX ix_tenant (tenant_id)
+);
+CREATE TABLE IF NOT EXISTS wallet_entries (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  rider_id BIGINT NOT NULL,
+  entry_date DATE NOT NULL,
+  description VARCHAR(500) NOT NULL DEFAULT '',
+  amount DECIMAL(12,2) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_entry (tenant_id, rider_id, entry_date, description(200), amount),
+  INDEX (entry_date),
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);
+CREATE TABLE IF NOT EXISTS billing (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  rider_id BIGINT NOT NULL,
+  month CHAR(7) NOT NULL,
+  contract VARCHAR(150) NULL,
+  completed_orders INT NULL,
+  basic_payment DECIMAL(12,2) NULL, distance_payment DECIMAL(12,2) NULL, ftr_bonus DECIMAL(12,2) NULL,
+  rider_payment_basic DECIMAL(12,2) NULL, rider_payment_scoring DECIMAL(12,2) NULL,
+  fine_acceptance DECIMAL(12,2) NULL, fine_contact DECIMAL(12,2) NULL, fine_declined DECIMAL(12,2) NULL, fine_late DECIMAL(12,2) NULL,
+  fine_no_show DECIMAL(12,2) NULL, fine_no_show_special DECIMAL(12,2) NULL, fine_daily_acceptance DECIMAL(12,2) NULL, fine_missed_days DECIMAL(12,2) NULL,
+  ded_stacking DECIMAL(12,2) NULL, ded_car DECIMAL(12,2) NULL, ded_google DECIMAL(12,2) NULL, total_deductions DECIMAL(12,2) NULL,
+  rider_balance DECIMAL(12,2) NULL, pending_balance DECIMAL(12,2) NULL, amount_excl_vat DECIMAL(12,2) NULL, vat DECIMAL(12,2) NULL,
+  amount_incl_vat DECIMAL(12,2) NULL, net_ftr DECIMAL(12,2) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY (tenant_id, rider_id, month),
+  INDEX (month),
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);
+
+-- ======================================================================== chapter 6: performance and sync
+-- 6.1 one row per rider per day, as the delivery company reports it. Empty means "not received", not zero.
+CREATE TABLE IF NOT EXISTS daily_performance (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  rider_id BIGINT NOT NULL,
+  work_date DATE NOT NULL,
+  contract_id INT NULL,
+  batch VARCHAR(50) NULL, tga_status VARCHAR(50) NULL, error_codes VARCHAR(50) NULL,
+  shifts INT NULL, working_days INT NULL,
+  planned_hours DECIMAL(7,2) NULL, actual_hours DECIMAL(7,2) NULL, break_hours DECIMAL(7,2) NULL, lost_hours DECIMAL(7,2) NULL,
+  attendance_rate DECIMAL(7,4) NULL, acceptance_rate DECIMAL(7,4) NULL, contact_rate DECIMAL(7,4) NULL,
+  no_shows INT NULL, no_show_rate DECIMAL(7,4) NULL,
+  notified INT NULL, accepted INT NULL, completed INT NULL, stacked INT NULL, declined INT NULL, cancelled INT NULL,
+  deductions INT NULL, not_accepted INT NULL, manual_undispatched INT NULL, chat_response_rate DECIMAL(7,4) NULL,
+  source ENUM('manual','import','sync') NOT NULL DEFAULT 'manual',
+  created_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY (tenant_id, rider_id, work_date),
+  INDEX (work_date),
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);
+
+-- 6.3 start-of-shift photos: the automatic check and the staff review are kept apart.
+CREATE TABLE IF NOT EXISTS branding_photos (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  rider_id BIGINT NOT NULL,
+  captured_at DATETIME NOT NULL,
+  photo_url VARCHAR(1000) NOT NULL,
+  contract_name VARCHAR(150) NULL,
+  check_result ENUM('pending','fine','blurred','no_face','unreadable','failed') NOT NULL DEFAULT 'pending',
+  override_result ENUM('fine','blurred','no_face','unreadable') NULL,
+  override_by INT NULL,
+  card_review ENUM('none','visible','not_visible','unclear') NOT NULL DEFAULT 'none',
+  card_note VARCHAR(300) NULL,
+  card_by INT NULL, card_at DATETIME NULL,
+  source_review ENUM('none','direct','screen','unclear') NOT NULL DEFAULT 'none',
+  source_by INT NULL, source_at DATETIME NULL,
+  suspect_card TINYINT(1) NOT NULL DEFAULT 0,
+  suspect_screen TINYINT(1) NOT NULL DEFAULT 0,
+  measurements JSON NULL,
+  checked_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY (tenant_id, rider_id, captured_at),
+  INDEX (captured_at),
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);
+
+-- 6.4 the company's monthly rating, and the segment floors it draws city-wide.
+CREATE TABLE IF NOT EXISTS monthly_ratings (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  rider_id BIGINT NOT NULL,
+  month CHAR(7) NOT NULL,
+  segment CHAR(1) NULL,
+  final_score DECIMAL(7,4) NULL, on_time DECIMAL(7,4) NULL, fail_rate_score DECIMAL(7,4) NULL,
+  gross_orders INT NULL, completed INT NULL, completed_in_time INT NULL, failed_by_rider INT NULL,
+  verification_requests INT NULL, verification_success INT NULL, verification_rate DECIMAL(7,4) NULL,
+  city VARCHAR(100) NULL, contract VARCHAR(150) NULL,
+  source ENUM('sync','file','manual') NOT NULL DEFAULT 'file',
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY (tenant_id, rider_id, month),
+  INDEX (month),
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);
+CREATE TABLE IF NOT EXISTS rating_cutoffs (
+  month CHAR(7) NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
+  segment CHAR(1) NOT NULL,
+  min_final DECIMAL(7,4) NULL, min_otd DECIMAL(7,4) NULL, min_fr DECIMAL(7,4) NULL,
+  city_riders INT NULL,
+  PRIMARY KEY (tenant_id, month, segment)
+);
+
+-- 6.5 sync: the sources, their runs, and (3.6) the live board read from the platform.
+CREATE TABLE IF NOT EXISTS sync_sources (
+  code VARCHAR(40) NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
+  enabled TINYINT(1) NOT NULL DEFAULT 1,
+  sync_from DATE NULL,
+  create_riders TINYINT(1) NOT NULL DEFAULT 0,
+  report_url VARCHAR(500) NULL,
+  PRIMARY KEY (tenant_id, code)
+);
+CREATE TABLE IF NOT EXISTS sync_runs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  source VARCHAR(40) NOT NULL,
+  report_day DATE NULL,
+  status ENUM('running','succeeded','failed','skipped','needs_sign_in') NOT NULL DEFAULT 'running',
+  trigger_type ENUM('manual','scheduled','catch_up','extension') NOT NULL DEFAULT 'manual',
+  started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  finished_at DATETIME NULL,
+  rows_read INT NULL, added INT NULL, replaced INT NULL,
+  user_id INT NULL,
+  message VARCHAR(1000) NULL,
+  INDEX (source, report_day),
+  INDEX (started_at),
+  INDEX ix_tenant (tenant_id)
+);
+CREATE TABLE IF NOT EXISTS live_board (
+  rider_id BIGINT NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
+  name VARCHAR(150) NULL,
+  status VARCHAR(40) NULL,
+  seen_at DATETIME NOT NULL,
+  lat DECIMAL(9,6) NULL, lng DECIMAL(9,6) NULL, located_at DATETIME NULL,
+  shift_start VARCHAR(10) NULL, shift_end VARCHAR(10) NULL,
+  worked_min INT NULL, late_min INT NULL, breaks INT NULL, break_min INT NULL,
+  completed INT NULL, cancelled INT NULL, active_orders INT NULL, wallet DECIMAL(12,2) NULL,
+  work_day DATE NULL,
+  PRIMARY KEY (tenant_id, rider_id)
+);
+CREATE TABLE IF NOT EXISTS live_points (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  rider_id BIGINT NOT NULL,
+  at DATETIME NOT NULL,
+  work_day DATE NOT NULL,
+  lat DECIMAL(9,6) NOT NULL, lng DECIMAL(9,6) NOT NULL,
+  accuracy INT NULL,
+  status VARCHAR(40) NULL,
+  has_order TINYINT(1) NOT NULL DEFAULT 0,
+  INDEX (rider_id, work_day, at),
+  INDEX (at),
+  INDEX ix_tenant (tenant_id)
+);
+CREATE TABLE IF NOT EXISTS live_days (
+  rider_id BIGINT NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
+  work_day DATE NOT NULL,
+  shifts INT NULL, worked_min INT NULL, late_min INT NULL, breaks INT NULL, break_min INT NULL,
+  completed INT NULL, cancelled INT NULL, wallet DECIMAL(12,2) NULL,
+  PRIMARY KEY (rider_id, work_day),
+  INDEX ix_tenant (tenant_id)
+);
+
+-- ======================================================================== chapter 11: email, errors, jobs, backups, languages
+CREATE TABLE IF NOT EXISTS email_templates (
+  tkey VARCHAR(80) NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
+  name VARCHAR(150) NOT NULL,
+  subject VARCHAR(255) NOT NULL,
+  body_html TEXT NOT NULL,
+  placeholders VARCHAR(500) NULL,
+  grp ENUM('documents','advances','security','portal','system') NOT NULL DEFAULT 'system',
+  is_system TINYINT(1) NOT NULL DEFAULT 0,
+  is_required TINYINT(1) NOT NULL DEFAULT 0,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  updated_at DATETIME NULL,
+  PRIMARY KEY (tenant_id, tkey)
+);
+CREATE TABLE IF NOT EXISTS email_log (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  template_key VARCHAR(80) NULL,
+  to_email VARCHAR(255) NOT NULL,
+  to_name VARCHAR(150) NULL,
+  cc VARCHAR(500) NULL,
+  subject VARCHAR(255) NOT NULL,
+  body MEDIUMTEXT NULL,
+  account ENUM('system','riders') NOT NULL DEFAULT 'system',
+  status ENUM('queued','sent','failed') NOT NULL DEFAULT 'queued',
+  error_code VARCHAR(60) NULL,
+  error_message VARCHAR(1000) NULL,
+  entity_type VARCHAR(40) NULL,
+  entity_id VARCHAR(40) NULL,
+  retries INT NOT NULL DEFAULT 0,
+  provider_id VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  sent_at DATETIME NULL,
+  last_attempt_at DATETIME NULL,
+  INDEX (created_at),
+  INDEX (status),
+  INDEX ix_tenant (tenant_id)
+);
+CREATE TABLE IF NOT EXISTS error_log (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  level ENUM('info','warning','error','critical') NOT NULL DEFAULT 'error',
+  code VARCHAR(80) NULL,
+  module VARCHAR(80) NULL,
+  message VARCHAR(1000) NOT NULL,
+  route VARCHAR(255) NULL,
+  method VARCHAR(10) NULL,
+  user_id INT NULL,
+  request_id VARCHAR(40) NULL,
+  stack TEXT NULL,
+  INDEX (created_at),
+  INDEX ix_tenant (tenant_id)
+);
+CREATE TABLE IF NOT EXISTS cron_runs (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  job VARCHAR(40) NOT NULL,
+  started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  finished_at DATETIME NULL,
+  outcome ENUM('running','completed','failed') NOT NULL DEFAULT 'running',
+  records INT NOT NULL DEFAULT 0,
+  notifications INT NOT NULL DEFAULT 0,
+  emails INT NOT NULL DEFAULT 0,
+  error VARCHAR(1000) NULL,
+  details JSON NULL,
+  manual TINYINT(1) NOT NULL DEFAULT 0,
+  INDEX (job, started_at),
+  INDEX ix_tenant (tenant_id)
+);
+CREATE TABLE IF NOT EXISTS backups (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  file_name VARCHAR(255) NOT NULL UNIQUE,
+  status ENUM('running','completed','failed') NOT NULL DEFAULT 'running',
+  type ENUM('full','db','files') NOT NULL DEFAULT 'full',
+  kind ENUM('manual','auto','safety','upload','registered') NOT NULL DEFAULT 'manual',
+  note VARCHAR(500) NULL,
+  tables_n INT NULL, rows_n INT NULL, files_n INT NULL, missing_files INT NULL,
+  size BIGINT NULL,
+  encrypted TINYINT(1) NOT NULL DEFAULT 1,
+  key_fp VARCHAR(20) NULL,
+  checksum CHAR(64) NULL,
+  error VARCHAR(1000) NULL,
+  created_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS restores (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  backup_id INT NULL,
+  file_name VARCHAR(255) NULL,
+  status ENUM('running','completed','failed') NOT NULL DEFAULT 'running',
+  user_id INT NULL,
+  details VARCHAR(1000) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS languages (
+  code VARCHAR(10) PRIMARY KEY,
+  name_native VARCHAR(60) NOT NULL,
+  name_en VARCHAR(60) NOT NULL,
+  dir ENUM('rtl','ltr') NOT NULL DEFAULT 'ltr',
+  font VARCHAR(100) NULL,
+  flag VARCHAR(16) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS translation_overrides (
+  lang VARCHAR(10) NOT NULL,
+  tkey VARCHAR(120) NOT NULL,
+  value TEXT NOT NULL,
+  updated_by INT NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (lang, tkey)
+);
+
+-- ======================================================================== chapter 12: the rider portal
+-- Rider sign-in is kept apart from staff sign-in: its own sessions, attempts and emailed codes.
+-- verified_email is the address used for sign-in recovery only; the file's email stays riders.email.
+CREATE TABLE IF NOT EXISTS rider_accounts (
+  rider_id BIGINT NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
+  verified_email VARCHAR(150) NULL,
+  email_verified_at DATETIME NULL,
+  locale VARCHAR(10) NULL,
+  last_login_at DATETIME NULL,
+  PRIMARY KEY (tenant_id, rider_id),
+  UNIQUE KEY uq_verified_email (tenant_id, `verified_email`),
+  FOREIGN KEY (rider_id) REFERENCES riders(id)
+);
+CREATE TABLE IF NOT EXISTS rider_sessions (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  token_hash CHAR(64) NOT NULL UNIQUE,
+  rider_id BIGINT NOT NULL,
+  ip VARCHAR(64) NULL,
+  user_agent VARCHAR(255) NULL,
+  status ENUM('active','signed_out','expired','revoked') NOT NULL DEFAULT 'active',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_activity_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NOT NULL,
+  ended_at DATETIME NULL,
+  INDEX (rider_id, status),
+  INDEX ix_tenant (tenant_id)
+);
+CREATE TABLE IF NOT EXISTS rider_login_attempts (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  typed VARCHAR(30) NULL,
+  rider_id BIGINT NULL,
+  success TINYINT(1) NOT NULL DEFAULT 0,
+  reason VARCHAR(40) NULL,
+  ip VARCHAR(64) NULL,
+  user_agent VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX (ip, created_at),
+  INDEX (rider_id, created_at),
+  INDEX ix_tenant (tenant_id)
+);
+CREATE TABLE IF NOT EXISTS rider_codes (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  rider_id BIGINT NOT NULL,
+  purpose ENUM('verify_email','reset_password') NOT NULL,
+  email VARCHAR(150) NOT NULL,
+  code_hash CHAR(64) NOT NULL,
+  attempts INT NOT NULL DEFAULT 0,
+  expires_at DATETIME NOT NULL,
+  used_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX (rider_id, purpose, created_at),
+  INDEX ix_tenant (tenant_id)
+);
+
+-- ======================================================================== SaaS: subscribed companies, plans, payments
+-- Platform tables (no tenant_id): read and changed only by the platform owner and by sign-up.
+CREATE TABLE IF NOT EXISTS plans (
+  `key` VARCHAR(30) PRIMARY KEY,
+  name_ar VARCHAR(80) NOT NULL,
+  name_en VARCHAR(80) NOT NULL,
+  price_monthly DECIMAL(10,2) NOT NULL DEFAULT 0,
+  price_annual DECIMAL(10,2) NOT NULL DEFAULT 0,
+  max_riders INT NULL,
+  max_users INT NULL,
+  max_vehicles INT NULL,
+  features JSON NULL,
+  is_public TINYINT(1) NOT NULL DEFAULT 1,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  sort INT NOT NULL DEFAULT 0,
+  updated_at DATETIME NULL
+);
+CREATE TABLE IF NOT EXISTS tenants (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  slug VARCHAR(40) NOT NULL UNIQUE,
+  name VARCHAR(150) NOT NULL,
+  name_en VARCHAR(150) NULL,
+  phone VARCHAR(30) NULL,
+  email VARCHAR(150) NULL,
+  plan_key VARCHAR(30) NOT NULL,
+  status ENUM('trial','active','expired','suspended') NOT NULL DEFAULT 'trial',
+  billing_cycle ENUM('monthly','annual') NOT NULL DEFAULT 'monthly',
+  trial_ends_at DATETIME NULL,
+  period_ends_at DATETIME NULL,
+  extra_riders INT NOT NULL DEFAULT 0,
+  extra_users INT NOT NULL DEFAULT 0,
+  extra_vehicles INT NOT NULL DEFAULT 0,
+  owner_note VARCHAR(1000) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  INDEX (status)
+);
+-- A company's upgrade or renewal request (bank transfer with proof), approved by the platform owner.
+CREATE TABLE IF NOT EXISTS subscription_payments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  plan_key VARCHAR(30) NOT NULL,
+  billing_cycle ENUM('monthly','annual') NOT NULL,
+  amount DECIMAL(10,2) NOT NULL,
+  method ENUM('bank_transfer','manual') NOT NULL DEFAULT 'bank_transfer',
+  reference VARCHAR(100) NULL,
+  note VARCHAR(500) NULL,
+  status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+  requested_by INT NULL,
+  reviewed_by INT NULL,
+  reviewed_at DATETIME NULL,
+  review_note VARCHAR(500) NULL,
+  period_start DATETIME NULL,
+  period_end DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX ix_tenant (tenant_id, status)
+);
 
 SET FOREIGN_KEY_CHECKS = 1;

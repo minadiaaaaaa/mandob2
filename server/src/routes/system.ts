@@ -7,6 +7,7 @@ import { DATA_DIR, exec, one, q, setSetting, settingInt, tx } from '../db.js';
 import { HttpError, clean, eq, fail, fieldError, list, listAll, sendExport, today, where, type Query, type Spec } from '../http.js';
 import { can, has, requireUser } from '../auth.js';
 import { audit } from '../audit.js';
+import { expiryDays, publicRules, type ExpiryKind } from '../domain/rules.js';
 
 export const systemRouter = Router();
 
@@ -188,30 +189,33 @@ systemRouter.get('/logs/login/export', can('login_log.export'), async (req, res)
   ] });
 });
 
+// ---------- the business rules the screens show (statuses, alert periods), from domain/rules.ts ----------
+systemRouter.get('/meta/rules', requireUser, async (_req, res) => res.json(await publicRules()));
+
 // ---------- sidebar badges: expired / expiring soon per document type ----------
 // The badge uses the alert period set for each type in the settings, not a screen's own window.
 systemRouter.get('/meta/badges', requireUser, async (req, res) => {
   const day = await today();
   const out: Record<string, { expired: number; soon: number }> = {};
-  const count = async (key: string, perm: string, sql: string, alertKey: string, fallback = 30) => {
+  const count = async (key: string, perm: string, sql: string, kind: ExpiryKind) => {
     if (!has(req, perm)) return;
-    const days = await settingInt(alertKey, fallback);
+    const days = await expiryDays(kind);
     const [r] = await q<any>(sql.replace(/\{d\}/g, `'${day}'`), [days]);
     out[key] = { expired: Number(r.expired) || 0, soon: Number(r.soon) || 0 };
   };
   const docSql = (type: string) => `SELECT COALESCE(SUM(expiry_date < {d}),0) expired, COALESCE(SUM(DATEDIFF(expiry_date, {d}) BETWEEN 0 AND ?),0) soon
     FROM rider_documents WHERE is_current = 1 AND doc_type = '${type}'`;
-  await count('id', 'id_documents.view', docSql('id'), 'id_document.expiry_alert_days', 60);
-  await count('license', 'driving_licenses.view', docSql('license'), 'driving_license.expiry_alert_days');
-  await count('health', 'health_certs.view', docSql('health'), 'health_cert.expiry_alert_days');
-  await count('driver_card', 'driver_cards.view', docSql('driver_card'), 'driver_card.expiry_alert_days');
-  await count('ajeer', 'ajeer_permits.view', docSql('ajeer'), 'ajeer_permit.expiry_alert_days', 60);
+  await count('id', 'id_documents.view', docSql('id'), 'id');
+  await count('license', 'driving_licenses.view', docSql('license'), 'license');
+  await count('health', 'health_certs.view', docSql('health'), 'health');
+  await count('driver_card', 'driver_cards.view', docSql('driver_card'), 'driver_card');
+  await count('ajeer', 'ajeer_permits.view', docSql('ajeer'), 'ajeer');
   const simple = (table: string, extra = '') => `SELECT COALESCE(SUM(expiry_date < {d}),0) expired, COALESCE(SUM(DATEDIFF(expiry_date, {d}) BETWEEN 0 AND ?),0) soon FROM ${table} WHERE 1 ${extra}`;
-  await count('operation_cards', 'operation_cards.view', simple('operation_cards', "AND status <> 'cancelled'"), 'operation_card.expiry_alert_days');
-  await count('vehicle_registrations', 'vehicle_registrations.view', simple('vehicle_registrations', 'AND is_current = 1 AND expiry_date IS NOT NULL'), 'vehicle_registration.expiry_alert_days');
-  await count('insurance_policies', 'insurance_policies.view', simple('insurance_policies', "AND status <> 'cancelled'"), 'insurance_policy.expiry_alert_days', 45);
-  await count('vehicle_insurance', 'vehicle_insurance.view', simple('vehicle_insurance', 'AND is_current = 1'), 'vehicle_insurance.expiry_alert_days');
-  await count('transport_licenses', 'transport_licenses.view', simple('transport_licenses'), 'transport_license.expiry_alert_days', 60);
+  await count('operation_cards', 'operation_cards.view', simple('operation_cards', "AND status <> 'cancelled'"), 'operation_card');
+  await count('vehicle_registrations', 'vehicle_registrations.view', simple('vehicle_registrations', 'AND is_current = 1 AND expiry_date IS NOT NULL'), 'vehicle_registration');
+  await count('insurance_policies', 'insurance_policies.view', simple('insurance_policies', "AND status <> 'cancelled'"), 'insurance_policy');
+  await count('vehicle_insurance', 'vehicle_insurance.view', simple('vehicle_insurance', 'AND is_current = 1'), 'vehicle_insurance');
+  await count('transport_licenses', 'transport_licenses.view', simple('transport_licenses'), 'transport_license');
   if (has(req, 'oil_changes.view')) {
     const [r] = await q<any>(`SELECT COALESCE(SUM(DATEDIFF(DATE_ADD(last_change, INTERVAL interval_days DAY), ?) < 0),0) expired,
       COALESCE(SUM(DATEDIFF(DATE_ADD(last_change, INTERVAL interval_days DAY), ?) BETWEEN 0 AND warn_days),0) soon FROM oil_schedules`, [day, day]);

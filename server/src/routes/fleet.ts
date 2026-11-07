@@ -1,10 +1,13 @@
 import { Router, type Request } from 'express';
 import { exec, one, q, tx } from '../db.js';
-import { HttpError, clean, eq, fail, fieldError, inList, list, listAll, plateKey, sendExport, today, where, type Query, type Spec } from '../http.js';
+import { HttpError, clean, eq, fail, fieldError, inList, list, listAll, plateKey, sendExport, today, where, type Query, type Spec, mustExist } from '../http.js';
 import { can, has } from '../auth.js';
 import { audit } from '../audit.js';
+import { markPaused } from './saas.js';
 import { claimScan } from '../scans.js';
 import { cellDate, cellNum, cellStr, importRoutes, type ImportDef } from '../importer.js';
+import { comesBack, ensureQuota, withQuota } from '../domain/quotas.js';
+import { VEHICLE_STATUSES } from '../domain/rules.js';
 
 export const fleetRouter = Router();
 const expiryDays = (col: string, day: string) => `DATEDIFF(${col}, '${day}')`;
@@ -29,7 +32,7 @@ const VEHICLE_RULES = {
   plate: { req: true, max: 30 }, plate_en: { max: 30 }, vehicle_type: { req: true, max: 50 }, registration_type: { max: 60 }, maker: { max: 60 },
   model: { max: 60 }, color: { max: 40 }, year: { type: 'int' as const, min: 1900, max: new Date().getFullYear() + 1 }, chassis: { max: 30 },
   weight: { type: 'int' as const, min: 0, max: 99999 }, capacity: { type: 'int' as const, min: 0, max: 999 },
-  ownership: { enum: ['owned', 'rented'] }, status: { enum: ['active', 'maintenance', 'retired'] }, odometer: { type: 'int' as const, min: 0 },
+  ownership: { enum: ['owned', 'rented'] }, status: { enum: [...VEHICLE_STATUSES] }, odometer: { type: 'int' as const, min: 0 },
 };
 
 function vehicleSpec(day: string): Spec {
@@ -93,7 +96,8 @@ fleetRouter.get('/vehicles', can('vehicles.view'), async (req, res) => {
     COALESCE(SUM(EXISTS (SELECT 1 FROM vehicle_assignments a WHERE a.vehicle_id = v.id AND a.is_current = 1)),0) with_rider,
     COALESCE(SUM(${cd} BETWEEN 0 AND 30),0) cards_soon, COALESCE(SUM(${cd} < 0),0) cards_expired ${spec.from}${w.sql}`, w.params);
   const facets = await q(`SELECT DISTINCT vehicle_type t, maker m, registration_type rt FROM vehicles`);
-  res.json({ ...(await list(spec, query)), stats: { ...stats, unassigned: stats.total - stats.with_rider },
+  const data = await list(spec, query);
+  res.json({ ...data, rows: await markPaused('vehicles', data.rows as { id: unknown }[]), stats: { ...stats, unassigned: stats.total - stats.with_rider },
     facets: { types: [...new Set(facets.map((f: any) => f.t).filter(Boolean))], makers: [...new Set(facets.map((f: any) => f.m).filter(Boolean))], registration_types: [...new Set(facets.map((f: any) => f.rt).filter(Boolean))] } });
 });
 
@@ -157,6 +161,7 @@ fleetRouter.patch('/vehicles/:id', can('vehicles.update'), async (req, res) => {
   const v = normalizeVehicle(clean(req.body, VEHICLE_RULES, true));
   await vehicleUnique(v, id);
   await tx(async () => {
+    if (comesBack('vehicles', before.status, v.status)) await ensureQuota('vehicles', 1);
     if (Object.keys(v).length) await exec('UPDATE vehicles SET ? WHERE id = ?', [v, id]);
     if (req.body.current_card_id) { if (!has(req, 'operation_cards.update')) fail(403, 'forbidden', { perm: 'operation_cards.update' }); await linkCard(Number(req.body.current_card_id), id); }
     if (req.body.current_registration_id) { if (!has(req, 'vehicle_registrations.update')) fail(403, 'forbidden', { perm: 'vehicle_registrations.update' }); await linkRegistration(Number(req.body.current_registration_id), id); }
@@ -166,12 +171,15 @@ fleetRouter.patch('/vehicles/:id', can('vehicles.update'), async (req, res) => {
 });
 
 fleetRouter.post('/vehicles/:id/maintenance', can('vehicles.deactivate'), async (req, res) => {
+  await mustExist('vehicles', req.params.id);
   await exec("UPDATE vehicles SET status = 'maintenance' WHERE id = ?", [req.params.id]);
   await audit(req, { action: 'vehicle.maintenance', entity_type: 'vehicle', entity_id: req.params.id });
   res.json({ ok: true });
 });
 fleetRouter.post('/vehicles/:id/service', can('vehicles.activate'), async (req, res) => {
-  await exec("UPDATE vehicles SET status = 'active' WHERE id = ?", [req.params.id]);
+  const cur = await one<{ status: string }>('SELECT status FROM vehicles WHERE id = ?', [req.params.id]);
+  if (!cur) fail(404, 'not_found');
+  await withQuota('vehicles', comesBack('vehicles', cur!.status, 'active') ? 1 : 0, () => exec("UPDATE vehicles SET status = 'active' WHERE id = ?", [req.params.id]));
   await audit(req, { action: 'vehicle.return_to_service', entity_type: 'vehicle', entity_id: req.params.id });
   res.json({ ok: true });
 });
@@ -194,7 +202,7 @@ async function deleteVehicles(req: Request, ids: number[]) {
   await exec('DELETE FROM vehicles WHERE id IN (?)', [ids]);
   for (const id of ids) await audit(req, { action: 'vehicle.delete', entity_type: 'vehicle', entity_id: id, severity: 'critical' });
 }
-fleetRouter.delete('/vehicles/:id', can('vehicles.delete'), async (req, res) => { await deleteVehicles(req, [Number(req.params.id)]); res.json({ ok: true }); });
+fleetRouter.delete('/vehicles/:id', can('vehicles.delete'), async (req, res) => { await mustExist('vehicles', req.params.id); await deleteVehicles(req, [Number(req.params.id)]); res.json({ ok: true }); });
 fleetRouter.post('/vehicles/bulk-delete', can('vehicles.delete'), async (req, res) => { await deleteVehicles(req, (req.body.ids ?? []).map(Number)); res.json({ ok: true }); });
 
 const vehicleImport: ImportDef = {
@@ -228,7 +236,7 @@ const vehicleImport: ImportDef = {
     const values = Object.fromEntries(Object.entries(it.data).filter(([, v]) => v !== null && v !== undefined));
     if (ex) {
       if (ctx.mode === 'skip') return 'skipped';
-      await exec('UPDATE vehicles SET ? WHERE id = ?', [values, ex.id]);
+      await withQuota('vehicles', comesBack('vehicles', ex.status, values.status) ? 1 : 0, () => exec('UPDATE vehicles SET ? WHERE id = ?', [values, ex.id]));
       return 'replaced';
     }
     await exec('INSERT INTO vehicles SET ?', [values]);
@@ -309,6 +317,7 @@ fleetRouter.patch('/transport-licenses/:id', can('transport_licenses.update'), a
   res.json({ ok: true });
 });
 fleetRouter.delete('/transport-licenses/:id', can('transport_licenses.delete'), async (req, res) => {
+  await mustExist('transport_licenses', req.params.id);
   const [{ n }] = await q<any>('SELECT (SELECT COUNT(*) FROM rider_documents WHERE transport_license_id = ?) + (SELECT COUNT(*) FROM operation_cards WHERE transport_license_id = ?) n', [req.params.id, req.params.id]);
   if (n) fail(409, 'licence_has_cards');
   await exec('DELETE FROM transport_licenses WHERE id = ?', [req.params.id]);
@@ -432,7 +441,7 @@ async function deleteCard(req: Request, id: number) {
   await exec('DELETE FROM operation_cards WHERE id = ?', [id]);
   await audit(req, { action: 'operation_card.delete', entity_type: 'operation_card', entity_id: id, severity: 'critical' });
 }
-fleetRouter.delete('/operation-cards/:id', can('operation_cards.delete'), async (req, res) => { await deleteCard(req, Number(req.params.id)); res.json({ ok: true }); });
+fleetRouter.delete('/operation-cards/:id', can('operation_cards.delete'), async (req, res) => { await mustExist('operation_cards', req.params.id); await deleteCard(req, Number(req.params.id)); res.json({ ok: true }); });
 // Bulk delete runs card by card and reports how many succeeded.
 fleetRouter.post('/operation-cards/bulk-delete', can('operation_cards.delete'), async (req, res) => {
   let deleted = 0;
@@ -618,6 +627,7 @@ fleetRouter.post('/vehicle-registrations/:id/renew', can('vehicle_registrations.
   res.json({ id: out });
 });
 fleetRouter.delete('/vehicle-registrations/:id', can('vehicle_registrations.delete'), async (req, res) => {
+  await mustExist('vehicle_registrations', req.params.id);
   const [{ n }] = await q<any>(`SELECT (SELECT COUNT(*) FROM attachments WHERE entity_type = 'vehicle_registration' AND entity_id = ?) +
     (SELECT COUNT(*) FROM renewals WHERE doc_kind = 'vehicle_registration' AND (doc_id = ? OR new_doc_id = ?)) n`, [req.params.id, req.params.id, req.params.id]);
   if (n) fail(409, 'registration_has_history');

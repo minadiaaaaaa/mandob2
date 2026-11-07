@@ -2,32 +2,39 @@
 -- Every statement is idempotent so the step can be re-run.
 
 CREATE TABLE IF NOT EXISTS settings (
-  `key` VARCHAR(100) PRIMARY KEY,
+  `key` VARCHAR(100) NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
   value TEXT NULL,
   type ENUM('int','decimal','bool','date','json','text') NOT NULL DEFAULT 'text',
   category VARCHAR(40) NOT NULL DEFAULT 'general',
   description VARCHAR(255) NULL,
   editable TINYINT(1) NOT NULL DEFAULT 1,
-  updated_at DATETIME NULL
+  updated_at DATETIME NULL,
+  PRIMARY KEY (tenant_id, `key`)
 );
 
 CREATE TABLE IF NOT EXISTS roles (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(60) NOT NULL UNIQUE,
+  tenant_id INT NOT NULL DEFAULT 0,
+  name VARCHAR(60) NOT NULL,
   description VARCHAR(255) NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_name (tenant_id, `name`)
 );
 
 CREATE TABLE IF NOT EXISTS role_permissions (
   role_id INT NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
   perm VARCHAR(80) NOT NULL,
   PRIMARY KEY (role_id, perm),
-  FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+  FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
+  INDEX ix_tenant (tenant_id)
 );
 
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   username VARCHAR(50) NOT NULL UNIQUE,
   full_name VARCHAR(150) NOT NULL,
   email VARCHAR(150) NOT NULL UNIQUE,
@@ -39,11 +46,13 @@ CREATE TABLE IF NOT EXISTS users (
   last_login_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NULL,
-  FOREIGN KEY (role_id) REFERENCES roles(id)
+  FOREIGN KEY (role_id) REFERENCES roles(id),
+  INDEX ix_tenant (tenant_id)
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   token_hash CHAR(64) NOT NULL UNIQUE,
   user_id INT NULL,
   ip VARCHAR(64) NULL,
@@ -53,7 +62,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   last_activity_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   expires_at DATETIME NOT NULL,
   ended_at DATETIME NULL,
-  INDEX (user_id, status)
+  INDEX (user_id, status),
+  INDEX ix_tenant (tenant_id)
 );
 
 CREATE TABLE IF NOT EXISTS login_challenges (
@@ -67,6 +77,7 @@ CREATE TABLE IF NOT EXISTS login_challenges (
 
 CREATE TABLE IF NOT EXISTS login_attempts (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   username_typed VARCHAR(150) NULL,
   user_id INT NULL,
   success TINYINT(1) NOT NULL,
@@ -75,7 +86,8 @@ CREATE TABLE IF NOT EXISTS login_attempts (
   user_agent VARCHAR(255) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX (ip, created_at),
-  INDEX (user_id, created_at)
+  INDEX (user_id, created_at),
+  INDEX ix_tenant (tenant_id)
 );
 
 CREATE TABLE IF NOT EXISTS blocked_ips (
@@ -91,6 +103,7 @@ CREATE TABLE IF NOT EXISTS blocked_ips (
 
 CREATE TABLE IF NOT EXISTS audit_log (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   action VARCHAR(80) NOT NULL,
   entity_type VARCHAR(60) NULL,
@@ -107,7 +120,9 @@ CREATE TABLE IF NOT EXISTS audit_log (
   before_json JSON NULL,
   after_json JSON NULL,
   details VARCHAR(1000) NULL,
-  INDEX (created_at), INDEX (entity_type, entity_id)
+  INDEX (created_at),
+  INDEX (entity_type, entity_id),
+  INDEX ix_tenant (tenant_id)
 );
 
 CREATE TABLE IF NOT EXISTS cities (
@@ -119,31 +134,35 @@ CREATE TABLE IF NOT EXISTS cities (
 
 CREATE TABLE IF NOT EXISTS companies (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(100) NOT NULL UNIQUE,
+  tenant_id INT NOT NULL DEFAULT 0,
+  name VARCHAR(100) NOT NULL,
   email VARCHAR(150) NULL,
   operator_id VARCHAR(50) NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_name (tenant_id, `name`)
 );
 
 CREATE TABLE IF NOT EXISTS contracts (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   company_id INT NOT NULL,
   name VARCHAR(255) NOT NULL,
   description VARCHAR(500) NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY (company_id, name),
+  UNIQUE KEY (tenant_id, company_id, name),
   FOREIGN KEY (company_id) REFERENCES companies(id)
 );
 
 -- The rider id is the number the delivery company knows the rider by. It is typed by hand and never changes.
 CREATE TABLE IF NOT EXISTS riders (
   id BIGINT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   full_name VARCHAR(150) NOT NULL,
   name_en VARCHAR(150) NULL,
   alias VARCHAR(150) NULL,
-  national_id VARCHAR(30) NULL UNIQUE,
+  national_id VARCHAR(30) NULL,
   status ENUM('active','inactive','suspended','terminated') NOT NULL DEFAULT 'active',
   company_id INT NULL,
   contract_id INT NULL,
@@ -164,6 +183,7 @@ CREATE TABLE IF NOT EXISTS riders (
   portal_password_set_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NULL,
+  UNIQUE KEY uq_national_id (tenant_id, `national_id`),
   FOREIGN KEY (company_id) REFERENCES companies(id),
   FOREIGN KEY (contract_id) REFERENCES contracts(id),
   FOREIGN KEY (city_id) REFERENCES cities(id)
@@ -171,7 +191,8 @@ CREATE TABLE IF NOT EXISTS riders (
 
 CREATE TABLE IF NOT EXISTS transport_licenses (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  number VARCHAR(50) NOT NULL UNIQUE,
+  tenant_id INT NOT NULL DEFAULT 0,
+  number VARCHAR(50) NOT NULL,
   city_id INT NOT NULL,
   issue_date DATE NULL,
   expiry_date DATE NOT NULL,
@@ -180,6 +201,7 @@ CREATE TABLE IF NOT EXISTS transport_licenses (
   status ENUM('valid','expired','suspended') NOT NULL DEFAULT 'valid',
   notes VARCHAR(500) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_number (tenant_id, `number`),
   FOREIGN KEY (city_id) REFERENCES cities(id)
 );
 
@@ -187,6 +209,7 @@ CREATE TABLE IF NOT EXISTS transport_licenses (
 -- older versions stay as "superseded". Numbers are unique per type across all versions.
 CREATE TABLE IF NOT EXISTS rider_documents (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   rider_id BIGINT NOT NULL,
   doc_type ENUM('id','license','health','driver_card','ajeer') NOT NULL,
   doc_number VARCHAR(50) NULL,
@@ -211,7 +234,7 @@ CREATE TABLE IF NOT EXISTS rider_documents (
   notes VARCHAR(500) NULL,
   created_by INT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_doc_number (doc_type, doc_number),
+  UNIQUE KEY uq_doc_number (tenant_id, doc_type, doc_number),
   INDEX (rider_id, doc_type, is_current),
   FOREIGN KEY (rider_id) REFERENCES riders(id),
   FOREIGN KEY (transport_license_id) REFERENCES transport_licenses(id),
@@ -220,10 +243,11 @@ CREATE TABLE IF NOT EXISTS rider_documents (
 
 CREATE TABLE IF NOT EXISTS applicants (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   full_name VARCHAR(150) NOT NULL,
   name_en VARCHAR(150) NULL,
-  phone VARCHAR(20) NOT NULL UNIQUE,
-  national_id VARCHAR(30) NULL UNIQUE,
+  phone VARCHAR(20) NOT NULL,
+  national_id VARCHAR(30) NULL,
   nationality VARCHAR(100) NULL,
   birth_date DATE NULL,
   city_id INT NULL,
@@ -244,14 +268,17 @@ CREATE TABLE IF NOT EXISTS applicants (
   reviewed_by INT NULL,
   reviewed_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_phone (tenant_id, `phone`),
+  UNIQUE KEY uq_national_id (tenant_id, `national_id`),
   FOREIGN KEY (city_id) REFERENCES cities(id)
 );
 
 CREATE TABLE IF NOT EXISTS vehicles (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  plate VARCHAR(30) NOT NULL UNIQUE,
+  tenant_id INT NOT NULL DEFAULT 0,
+  plate VARCHAR(30) NOT NULL,
   plate_key VARCHAR(30) NOT NULL,
-  plate_en VARCHAR(30) NULL UNIQUE,
+  plate_en VARCHAR(30) NULL,
   vehicle_type VARCHAR(50) NOT NULL,
   registration_type VARCHAR(60) NULL,
   maker VARCHAR(60) NULL,
@@ -265,12 +292,15 @@ CREATE TABLE IF NOT EXISTS vehicles (
   status ENUM('active','maintenance','retired') NOT NULL DEFAULT 'active',
   odometer INT NOT NULL DEFAULT 0,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_plate (tenant_id, `plate`),
+  UNIQUE KEY uq_plate_en (tenant_id, `plate_en`),
   INDEX (plate_key)
 );
 
 CREATE TABLE IF NOT EXISTS operation_cards (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  number VARCHAR(50) NOT NULL UNIQUE,
+  tenant_id INT NOT NULL DEFAULT 0,
+  number VARCHAR(50) NOT NULL,
   transport_license_id INT NOT NULL,
   issue_date DATE NULL,
   expiry_date DATE NOT NULL,
@@ -278,23 +308,27 @@ CREATE TABLE IF NOT EXISTS operation_cards (
   status ENUM('valid','expired','suspended','cancelled') NOT NULL DEFAULT 'valid',
   notes VARCHAR(500) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_number (tenant_id, `number`),
   FOREIGN KEY (transport_license_id) REFERENCES transport_licenses(id)
 );
 
 -- A card covers several vehicles; each vehicle has exactly one current card.
 CREATE TABLE IF NOT EXISTS operation_card_vehicles (
   card_id INT NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
   vehicle_id INT NOT NULL,
   is_current TINYINT(1) NOT NULL DEFAULT 1,
   PRIMARY KEY (card_id, vehicle_id),
   FOREIGN KEY (card_id) REFERENCES operation_cards(id) ON DELETE CASCADE,
-  FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
+  FOREIGN KEY (vehicle_id) REFERENCES vehicles(id),
+  INDEX ix_tenant (tenant_id)
 );
 
 CREATE TABLE IF NOT EXISTS vehicle_registrations (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   vehicle_id INT NOT NULL,
-  serial VARCHAR(30) NOT NULL UNIQUE,
+  serial VARCHAR(30) NOT NULL,
   owner VARCHAR(150) NOT NULL,
   owner_id_no VARCHAR(20) NULL,
   user_rider_id BIGINT NULL,
@@ -306,23 +340,27 @@ CREATE TABLE IF NOT EXISTS vehicle_registrations (
   is_current TINYINT(1) NOT NULL DEFAULT 1,
   notes VARCHAR(500) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_serial (tenant_id, `serial`),
   FOREIGN KEY (vehicle_id) REFERENCES vehicles(id),
   FOREIGN KEY (user_rider_id) REFERENCES riders(id)
 );
 
 CREATE TABLE IF NOT EXISTS insurance_companies (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  name_ar VARCHAR(150) NOT NULL UNIQUE,
+  tenant_id INT NOT NULL DEFAULT 0,
+  name_ar VARCHAR(150) NOT NULL,
   name_en VARCHAR(150) NULL,
   phone VARCHAR(30) NULL,
   website VARCHAR(255) NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_name_ar (tenant_id, `name_ar`)
 );
 
 CREATE TABLE IF NOT EXISTS insurance_policies (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  number VARCHAR(50) NOT NULL UNIQUE,
+  tenant_id INT NOT NULL DEFAULT 0,
+  number VARCHAR(50) NOT NULL,
   company_id INT NOT NULL,
   type ENUM('third_party','comprehensive') NOT NULL DEFAULT 'third_party',
   issue_date DATE NULL,
@@ -331,11 +369,13 @@ CREATE TABLE IF NOT EXISTS insurance_policies (
   status ENUM('valid','expired','cancelled') NOT NULL DEFAULT 'valid',
   notes VARCHAR(500) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_number (tenant_id, `number`),
   FOREIGN KEY (company_id) REFERENCES insurance_companies(id)
 );
 
 CREATE TABLE IF NOT EXISTS vehicle_insurance (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   vehicle_id INT NOT NULL,
   policy_id INT NOT NULL,
   sub_policy VARCHAR(50) NULL,
@@ -345,27 +385,31 @@ CREATE TABLE IF NOT EXISTS vehicle_insurance (
   is_current TINYINT(1) NOT NULL DEFAULT 1,
   notes VARCHAR(500) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY (vehicle_id, policy_id),
+  UNIQUE KEY (tenant_id, vehicle_id, policy_id),
   FOREIGN KEY (vehicle_id) REFERENCES vehicles(id),
   FOREIGN KEY (policy_id) REFERENCES insurance_policies(id)
 );
 
 CREATE TABLE IF NOT EXISTS vehicle_assignments (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   rider_id BIGINT NOT NULL,
   vehicle_id INT NOT NULL,
   start_date DATE NOT NULL,
   end_date DATE NULL,
   is_current TINYINT(1) NOT NULL DEFAULT 1,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  INDEX (vehicle_id, is_current), INDEX (rider_id, is_current),
+  INDEX (vehicle_id, is_current),
+  INDEX (rider_id, is_current),
   FOREIGN KEY (rider_id) REFERENCES riders(id),
-  FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
+  FOREIGN KEY (vehicle_id) REFERENCES vehicles(id),
+  INDEX ix_tenant (tenant_id)
 );
 
 CREATE TABLE IF NOT EXISTS fuel_cards (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  number VARCHAR(50) NOT NULL UNIQUE,
+  tenant_id INT NOT NULL DEFAULT 0,
+  number VARCHAR(50) NOT NULL,
   provider VARCHAR(100) NULL,
   status ENUM('active','blocked','expired') NOT NULL DEFAULT 'active',
   issue_date DATE NULL,
@@ -374,22 +418,26 @@ CREATE TABLE IF NOT EXISTS fuel_cards (
   rider_id BIGINT NULL,
   vehicle_id INT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_number (tenant_id, `number`),
   FOREIGN KEY (rider_id) REFERENCES riders(id),
   FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
 );
 
 CREATE TABLE IF NOT EXISTS oil_schedules (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  vehicle_id INT NOT NULL UNIQUE,
+  tenant_id INT NOT NULL DEFAULT 0,
+  vehicle_id INT NOT NULL,
   interval_days INT NOT NULL,
   warn_days INT NOT NULL DEFAULT 7,
   last_change DATE NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_vehicle_id (tenant_id, `vehicle_id`),
   FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
 );
 
 CREATE TABLE IF NOT EXISTS oil_changes (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   vehicle_id INT NOT NULL,
   change_date DATE NOT NULL,
   odometer INT NULL,
@@ -397,13 +445,14 @@ CREATE TABLE IF NOT EXISTS oil_changes (
   cost DECIMAL(12,2) NULL,
   notes VARCHAR(300) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY (vehicle_id, change_date),
+  UNIQUE KEY (tenant_id, vehicle_id, change_date),
   FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
 );
 
 -- Renewal log (chapter 5). Rows are history and are never edited.
 CREATE TABLE IF NOT EXISTS renewals (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   doc_kind VARCHAR(30) NOT NULL,
   doc_id INT NOT NULL,
   new_doc_id INT NULL,
@@ -420,11 +469,13 @@ CREATE TABLE IF NOT EXISTS renewals (
   notes VARCHAR(500) NULL,
   recorded_by INT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  INDEX (doc_kind, doc_id)
+  INDEX (doc_kind, doc_id),
+  INDEX ix_tenant (tenant_id)
 );
 
 CREATE TABLE IF NOT EXISTS attachments (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   entity_type VARCHAR(40) NOT NULL,
   entity_id VARCHAR(40) NOT NULL,
   attachment_type VARCHAR(40) NULL,
@@ -436,22 +487,26 @@ CREATE TABLE IF NOT EXISTS attachments (
   is_current TINYINT(1) NOT NULL DEFAULT 1,
   uploaded_by INT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  INDEX (entity_type, entity_id)
+  INDEX (entity_type, entity_id),
+  INDEX ix_tenant (tenant_id)
 );
 
 -- "Private keys" tab: integration secrets, encrypted at rest with the server key.
 CREATE TABLE IF NOT EXISTS secrets (
-  name VARCHAR(100) PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
   value TEXT NULL,
   description VARCHAR(255) NULL,
   encrypted TINYINT(1) NOT NULL DEFAULT 1,
-  updated_at DATETIME NULL
+  updated_at DATETIME NULL,
+  PRIMARY KEY (tenant_id, name)
 );
 
 -- ======================================================================== phase 2
 -- Notifications (chapter 9). Title and body are translation keys, shown in the reader's language.
 CREATE TABLE IF NOT EXISTS notifications (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   user_id INT NULL,
   rider_id BIGINT NULL,
   category ENUM('document_expiry','oil_change','advance_status','installment_due','backup','security','performance','system','general') NOT NULL DEFAULT 'general',
@@ -462,24 +517,30 @@ CREATE TABLE IF NOT EXISTS notifications (
   entity_type VARCHAR(40) NULL,
   entity_id VARCHAR(40) NULL,
   link VARCHAR(255) NULL,
-  dedupe VARCHAR(190) NULL UNIQUE,
+  dedupe VARCHAR(190) NULL,
   read_at DATETIME NULL,
   emailed_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  INDEX (user_id, read_at), INDEX (rider_id, read_at), INDEX (created_at)
+  UNIQUE KEY uq_dedupe (tenant_id, `dedupe`),
+  INDEX (user_id, read_at),
+  INDEX (rider_id, read_at),
+  INDEX (created_at)
 );
 CREATE TABLE IF NOT EXISTS notification_prefs (
   user_id INT NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
   category VARCHAR(40) NOT NULL,
   in_app TINYINT(1) NOT NULL DEFAULT 1,
   email TINYINT(1) NOT NULL DEFAULT 0,
-  PRIMARY KEY (user_id, category)
+  PRIMARY KEY (user_id, category),
+  INDEX ix_tenant (tenant_id)
 );
 
 -- 3.1 leave requests and their letters. The letter number runs within the year of the leave's start.
 CREATE TABLE IF NOT EXISTS leaves (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  letter_no VARCHAR(20) NOT NULL UNIQUE,
+  tenant_id INT NOT NULL DEFAULT 0,
+  letter_no VARCHAR(20) NOT NULL,
   seq_year SMALLINT NOT NULL,
   seq INT NOT NULL,
   rider_id BIGINT NOT NULL,
@@ -498,7 +559,8 @@ CREATE TABLE IF NOT EXISTS leaves (
   created_by INT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NULL,
-  UNIQUE KEY (seq_year, seq),
+  UNIQUE KEY uq_letter_no (tenant_id, `letter_no`),
+  UNIQUE KEY (tenant_id, seq_year, seq),
   INDEX (rider_id, start_date),
   FOREIGN KEY (rider_id) REFERENCES riders(id)
 );
@@ -506,8 +568,9 @@ CREATE TABLE IF NOT EXISTS leaves (
 -- 3.2 absences as the delivery company recorded them. Only internal_note belongs to the office.
 CREATE TABLE IF NOT EXISTS rider_absences (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   rider_id BIGINT NOT NULL,
-  external_id VARCHAR(60) NULL UNIQUE,
+  external_id VARCHAR(60) NULL,
   start_at DATETIME NOT NULL,
   end_at DATETIME NOT NULL,
   days DECIMAL(7,3) NOT NULL,
@@ -520,6 +583,7 @@ CREATE TABLE IF NOT EXISTS rider_absences (
   source ENUM('import','sync') NOT NULL DEFAULT 'import',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NULL,
+  UNIQUE KEY uq_external_id (tenant_id, `external_id`),
   INDEX (rider_id, start_at),
   FOREIGN KEY (rider_id) REFERENCES riders(id)
 );
@@ -527,7 +591,8 @@ CREATE TABLE IF NOT EXISTS rider_absences (
 -- 3.3 advances and their monthly instalments.
 CREATE TABLE IF NOT EXISTS advances (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  number VARCHAR(20) NOT NULL UNIQUE,
+  tenant_id INT NOT NULL DEFAULT 0,
+  number VARCHAR(20) NOT NULL,
   seq_year SMALLINT NOT NULL,
   seq INT NOT NULL,
   rider_id BIGINT NOT NULL,
@@ -547,12 +612,14 @@ CREATE TABLE IF NOT EXISTS advances (
   disbursed_by INT NULL,
   created_by INT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY (seq_year, seq),
+  UNIQUE KEY uq_number (tenant_id, `number`),
+  UNIQUE KEY (tenant_id, seq_year, seq),
   INDEX (rider_id, status),
   FOREIGN KEY (rider_id) REFERENCES riders(id)
 );
 CREATE TABLE IF NOT EXISTS advance_installments (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   advance_id INT NOT NULL,
   n INT NOT NULL,
   due_date DATE NOT NULL,
@@ -563,7 +630,7 @@ CREATE TABLE IF NOT EXISTS advance_installments (
   waive_reason VARCHAR(300) NULL,
   updated_by INT NULL,
   updated_at DATETIME NULL,
-  UNIQUE KEY (advance_id, n),
+  UNIQUE KEY (tenant_id, advance_id, n),
   INDEX (status, due_date),
   FOREIGN KEY (advance_id) REFERENCES advances(id) ON DELETE CASCADE
 );
@@ -571,6 +638,7 @@ CREATE TABLE IF NOT EXISTS advance_installments (
 -- 3.4 data change requests from the rider portal. payload: the requested values; snapshot: the values when submitted.
 CREATE TABLE IF NOT EXISTS rider_change_requests (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   rider_id BIGINT NOT NULL,
   type ENUM('contact','photo','document') NOT NULL,
   doc_type ENUM('id','license','health','driver_card','ajeer','other') NULL,
@@ -583,12 +651,14 @@ CREATE TABLE IF NOT EXISTS rider_change_requests (
   reviewed_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX (rider_id, status),
-  FOREIGN KEY (rider_id) REFERENCES riders(id)
+  FOREIGN KEY (rider_id) REFERENCES riders(id),
+  INDEX ix_tenant (tenant_id)
 );
 
 -- 3.5 conversations with riders. Unread = messages after the other side's read mark.
 CREATE TABLE IF NOT EXISTS rider_issues (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   rider_id BIGINT NOT NULL,
   subject VARCHAR(200) NOT NULL,
   category ENUM('account','performance','attendance','payment','vehicle','app','other') NOT NULL DEFAULT 'other',
@@ -603,11 +673,14 @@ CREATE TABLE IF NOT EXISTS rider_issues (
   closed_at DATETIME NULL,
   created_by INT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  INDEX (rider_id), INDEX (status, last_activity_at),
-  FOREIGN KEY (rider_id) REFERENCES riders(id)
+  INDEX (rider_id),
+  INDEX (status, last_activity_at),
+  FOREIGN KEY (rider_id) REFERENCES riders(id),
+  INDEX ix_tenant (tenant_id)
 );
 CREATE TABLE IF NOT EXISTS rider_issue_messages (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   issue_id INT NOT NULL,
   author ENUM('rider','staff') NOT NULL,
   user_id INT NULL,
@@ -615,13 +688,15 @@ CREATE TABLE IF NOT EXISTS rider_issue_messages (
   internal TINYINT(1) NOT NULL DEFAULT 0,
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   INDEX (issue_id, id),
-  FOREIGN KEY (issue_id) REFERENCES rider_issues(id) ON DELETE CASCADE
+  FOREIGN KEY (issue_id) REFERENCES rider_issues(id) ON DELETE CASCADE,
+  INDEX ix_tenant (tenant_id)
 );
 
 -- ======================================================================== chapter 8: finance
 -- All figures are the delivery company's; the office changes only a fine's status, note and amount.
 CREATE TABLE IF NOT EXISTS fines (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   rider_id BIGINT NOT NULL,
   fine_date DATE NOT NULL,
   invoice_no VARCHAR(60) NOT NULL DEFAULT '',
@@ -633,31 +708,35 @@ CREATE TABLE IF NOT EXISTS fines (
   internal_note VARCHAR(500) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NULL,
-  UNIQUE KEY uq_fine (rider_id, fine_date, invoice_no, category(150), amount),
+  UNIQUE KEY uq_fine (tenant_id, rider_id, fine_date, invoice_no, category(150), amount),
   INDEX (fine_date),
   FOREIGN KEY (rider_id) REFERENCES riders(id)
 );
 CREATE TABLE IF NOT EXISTS wallet_snapshots (
   rider_id BIGINT NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
   snapshot_date DATE NOT NULL,
   balance DECIMAL(12,2) NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (rider_id, snapshot_date),
-  FOREIGN KEY (rider_id) REFERENCES riders(id)
+  FOREIGN KEY (rider_id) REFERENCES riders(id),
+  INDEX ix_tenant (tenant_id)
 );
 CREATE TABLE IF NOT EXISTS wallet_entries (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   rider_id BIGINT NOT NULL,
   entry_date DATE NOT NULL,
   description VARCHAR(500) NOT NULL DEFAULT '',
   amount DECIMAL(12,2) NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_entry (rider_id, entry_date, description(200), amount),
+  UNIQUE KEY uq_entry (tenant_id, rider_id, entry_date, description(200), amount),
   INDEX (entry_date),
   FOREIGN KEY (rider_id) REFERENCES riders(id)
 );
 CREATE TABLE IF NOT EXISTS billing (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   rider_id BIGINT NOT NULL,
   month CHAR(7) NOT NULL,
   contract VARCHAR(150) NULL,
@@ -670,7 +749,7 @@ CREATE TABLE IF NOT EXISTS billing (
   rider_balance DECIMAL(12,2) NULL, pending_balance DECIMAL(12,2) NULL, amount_excl_vat DECIMAL(12,2) NULL, vat DECIMAL(12,2) NULL,
   amount_incl_vat DECIMAL(12,2) NULL, net_ftr DECIMAL(12,2) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY (rider_id, month),
+  UNIQUE KEY (tenant_id, rider_id, month),
   INDEX (month),
   FOREIGN KEY (rider_id) REFERENCES riders(id)
 );
@@ -679,6 +758,7 @@ CREATE TABLE IF NOT EXISTS billing (
 -- 6.1 one row per rider per day, as the delivery company reports it. Empty means "not received", not zero.
 CREATE TABLE IF NOT EXISTS daily_performance (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   rider_id BIGINT NOT NULL,
   work_date DATE NOT NULL,
   contract_id INT NULL,
@@ -693,7 +773,7 @@ CREATE TABLE IF NOT EXISTS daily_performance (
   created_by INT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NULL,
-  UNIQUE KEY (rider_id, work_date),
+  UNIQUE KEY (tenant_id, rider_id, work_date),
   INDEX (work_date),
   FOREIGN KEY (rider_id) REFERENCES riders(id)
 );
@@ -701,6 +781,7 @@ CREATE TABLE IF NOT EXISTS daily_performance (
 -- 6.3 start-of-shift photos: the automatic check and the staff review are kept apart.
 CREATE TABLE IF NOT EXISTS branding_photos (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   rider_id BIGINT NOT NULL,
   captured_at DATETIME NOT NULL,
   photo_url VARCHAR(1000) NOT NULL,
@@ -718,7 +799,7 @@ CREATE TABLE IF NOT EXISTS branding_photos (
   measurements JSON NULL,
   checked_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY (rider_id, captured_at),
+  UNIQUE KEY (tenant_id, rider_id, captured_at),
   INDEX (captured_at),
   FOREIGN KEY (rider_id) REFERENCES riders(id)
 );
@@ -726,6 +807,7 @@ CREATE TABLE IF NOT EXISTS branding_photos (
 -- 6.4 the company's monthly rating, and the segment floors it draws city-wide.
 CREATE TABLE IF NOT EXISTS monthly_ratings (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   rider_id BIGINT NOT NULL,
   month CHAR(7) NOT NULL,
   segment CHAR(1) NULL,
@@ -735,28 +817,32 @@ CREATE TABLE IF NOT EXISTS monthly_ratings (
   city VARCHAR(100) NULL, contract VARCHAR(150) NULL,
   source ENUM('sync','file','manual') NOT NULL DEFAULT 'file',
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY (rider_id, month),
+  UNIQUE KEY (tenant_id, rider_id, month),
   INDEX (month),
   FOREIGN KEY (rider_id) REFERENCES riders(id)
 );
 CREATE TABLE IF NOT EXISTS rating_cutoffs (
   month CHAR(7) NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
   segment CHAR(1) NOT NULL,
   min_final DECIMAL(7,4) NULL, min_otd DECIMAL(7,4) NULL, min_fr DECIMAL(7,4) NULL,
   city_riders INT NULL,
-  PRIMARY KEY (month, segment)
+  PRIMARY KEY (tenant_id, month, segment)
 );
 
 -- 6.5 sync: the sources, their runs, and (3.6) the live board read from the platform.
 CREATE TABLE IF NOT EXISTS sync_sources (
-  code VARCHAR(40) PRIMARY KEY,
+  code VARCHAR(40) NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
   enabled TINYINT(1) NOT NULL DEFAULT 1,
   sync_from DATE NULL,
   create_riders TINYINT(1) NOT NULL DEFAULT 0,
-  report_url VARCHAR(500) NULL
+  report_url VARCHAR(500) NULL,
+  PRIMARY KEY (tenant_id, code)
 );
 CREATE TABLE IF NOT EXISTS sync_runs (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   source VARCHAR(40) NOT NULL,
   report_day DATE NULL,
   status ENUM('running','succeeded','failed','skipped','needs_sign_in') NOT NULL DEFAULT 'running',
@@ -766,10 +852,13 @@ CREATE TABLE IF NOT EXISTS sync_runs (
   rows_read INT NULL, added INT NULL, replaced INT NULL,
   user_id INT NULL,
   message VARCHAR(1000) NULL,
-  INDEX (source, report_day), INDEX (started_at)
+  INDEX (source, report_day),
+  INDEX (started_at),
+  INDEX ix_tenant (tenant_id)
 );
 CREATE TABLE IF NOT EXISTS live_board (
-  rider_id BIGINT PRIMARY KEY,
+  rider_id BIGINT NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
   name VARCHAR(150) NULL,
   status VARCHAR(40) NULL,
   seen_at DATETIME NOT NULL,
@@ -777,10 +866,12 @@ CREATE TABLE IF NOT EXISTS live_board (
   shift_start VARCHAR(10) NULL, shift_end VARCHAR(10) NULL,
   worked_min INT NULL, late_min INT NULL, breaks INT NULL, break_min INT NULL,
   completed INT NULL, cancelled INT NULL, active_orders INT NULL, wallet DECIMAL(12,2) NULL,
-  work_day DATE NULL
+  work_day DATE NULL,
+  PRIMARY KEY (tenant_id, rider_id)
 );
 CREATE TABLE IF NOT EXISTS live_points (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   rider_id BIGINT NOT NULL,
   at DATETIME NOT NULL,
   work_day DATE NOT NULL,
@@ -788,19 +879,24 @@ CREATE TABLE IF NOT EXISTS live_points (
   accuracy INT NULL,
   status VARCHAR(40) NULL,
   has_order TINYINT(1) NOT NULL DEFAULT 0,
-  INDEX (rider_id, work_day, at), INDEX (at)
+  INDEX (rider_id, work_day, at),
+  INDEX (at),
+  INDEX ix_tenant (tenant_id)
 );
 CREATE TABLE IF NOT EXISTS live_days (
   rider_id BIGINT NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
   work_day DATE NOT NULL,
   shifts INT NULL, worked_min INT NULL, late_min INT NULL, breaks INT NULL, break_min INT NULL,
   completed INT NULL, cancelled INT NULL, wallet DECIMAL(12,2) NULL,
-  PRIMARY KEY (rider_id, work_day)
+  PRIMARY KEY (rider_id, work_day),
+  INDEX ix_tenant (tenant_id)
 );
 
 -- ======================================================================== chapter 11: email, errors, jobs, backups, languages
 CREATE TABLE IF NOT EXISTS email_templates (
-  tkey VARCHAR(80) PRIMARY KEY,
+  tkey VARCHAR(80) NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
   name VARCHAR(150) NOT NULL,
   subject VARCHAR(255) NOT NULL,
   body_html TEXT NOT NULL,
@@ -809,10 +905,12 @@ CREATE TABLE IF NOT EXISTS email_templates (
   is_system TINYINT(1) NOT NULL DEFAULT 0,
   is_required TINYINT(1) NOT NULL DEFAULT 0,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
-  updated_at DATETIME NULL
+  updated_at DATETIME NULL,
+  PRIMARY KEY (tenant_id, tkey)
 );
 CREATE TABLE IF NOT EXISTS email_log (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   template_key VARCHAR(80) NULL,
   to_email VARCHAR(255) NOT NULL,
   to_name VARCHAR(150) NULL,
@@ -830,10 +928,13 @@ CREATE TABLE IF NOT EXISTS email_log (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   sent_at DATETIME NULL,
   last_attempt_at DATETIME NULL,
-  INDEX (created_at), INDEX (status)
+  INDEX (created_at),
+  INDEX (status),
+  INDEX ix_tenant (tenant_id)
 );
 CREATE TABLE IF NOT EXISTS error_log (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   level ENUM('info','warning','error','critical') NOT NULL DEFAULT 'error',
   code VARCHAR(80) NULL,
@@ -844,10 +945,12 @@ CREATE TABLE IF NOT EXISTS error_log (
   user_id INT NULL,
   request_id VARCHAR(40) NULL,
   stack TEXT NULL,
-  INDEX (created_at)
+  INDEX (created_at),
+  INDEX ix_tenant (tenant_id)
 );
 CREATE TABLE IF NOT EXISTS cron_runs (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   job VARCHAR(40) NOT NULL,
   started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   finished_at DATETIME NULL,
@@ -858,7 +961,8 @@ CREATE TABLE IF NOT EXISTS cron_runs (
   error VARCHAR(1000) NULL,
   details JSON NULL,
   manual TINYINT(1) NOT NULL DEFAULT 0,
-  INDEX (job, started_at)
+  INDEX (job, started_at),
+  INDEX ix_tenant (tenant_id)
 );
 CREATE TABLE IF NOT EXISTS backups (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -907,15 +1011,19 @@ CREATE TABLE IF NOT EXISTS translation_overrides (
 -- Rider sign-in is kept apart from staff sign-in: its own sessions, attempts and emailed codes.
 -- verified_email is the address used for sign-in recovery only; the file's email stays riders.email.
 CREATE TABLE IF NOT EXISTS rider_accounts (
-  rider_id BIGINT PRIMARY KEY,
-  verified_email VARCHAR(150) NULL UNIQUE,
+  rider_id BIGINT NOT NULL,
+  tenant_id INT NOT NULL DEFAULT 0,
+  verified_email VARCHAR(150) NULL,
   email_verified_at DATETIME NULL,
   locale VARCHAR(10) NULL,
   last_login_at DATETIME NULL,
+  PRIMARY KEY (tenant_id, rider_id),
+  UNIQUE KEY uq_verified_email (tenant_id, `verified_email`),
   FOREIGN KEY (rider_id) REFERENCES riders(id)
 );
 CREATE TABLE IF NOT EXISTS rider_sessions (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   token_hash CHAR(64) NOT NULL UNIQUE,
   rider_id BIGINT NOT NULL,
   ip VARCHAR(64) NULL,
@@ -925,10 +1033,12 @@ CREATE TABLE IF NOT EXISTS rider_sessions (
   last_activity_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   expires_at DATETIME NOT NULL,
   ended_at DATETIME NULL,
-  INDEX (rider_id, status)
+  INDEX (rider_id, status),
+  INDEX ix_tenant (tenant_id)
 );
 CREATE TABLE IF NOT EXISTS rider_login_attempts (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   typed VARCHAR(30) NULL,
   rider_id BIGINT NULL,
   success TINYINT(1) NOT NULL DEFAULT 0,
@@ -936,10 +1046,13 @@ CREATE TABLE IF NOT EXISTS rider_login_attempts (
   ip VARCHAR(64) NULL,
   user_agent VARCHAR(255) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  INDEX (ip, created_at), INDEX (rider_id, created_at)
+  INDEX (ip, created_at),
+  INDEX (rider_id, created_at),
+  INDEX ix_tenant (tenant_id)
 );
 CREATE TABLE IF NOT EXISTS rider_codes (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
   rider_id BIGINT NOT NULL,
   purpose ENUM('verify_email','reset_password') NOT NULL,
   email VARCHAR(150) NOT NULL,
@@ -948,5 +1061,64 @@ CREATE TABLE IF NOT EXISTS rider_codes (
   expires_at DATETIME NOT NULL,
   used_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  INDEX (rider_id, purpose, created_at)
+  INDEX (rider_id, purpose, created_at),
+  INDEX ix_tenant (tenant_id)
+);
+
+-- ======================================================================== SaaS: subscribed companies, plans, payments
+-- Platform tables (no tenant_id): read and changed only by the platform owner and by sign-up.
+CREATE TABLE IF NOT EXISTS plans (
+  `key` VARCHAR(30) PRIMARY KEY,
+  name_ar VARCHAR(80) NOT NULL,
+  name_en VARCHAR(80) NOT NULL,
+  price_monthly DECIMAL(10,2) NOT NULL DEFAULT 0,
+  price_annual DECIMAL(10,2) NOT NULL DEFAULT 0,
+  max_riders INT NULL,
+  max_users INT NULL,
+  max_vehicles INT NULL,
+  features JSON NULL,
+  is_public TINYINT(1) NOT NULL DEFAULT 1,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  sort INT NOT NULL DEFAULT 0,
+  updated_at DATETIME NULL
+);
+CREATE TABLE IF NOT EXISTS tenants (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  slug VARCHAR(40) NOT NULL UNIQUE,
+  name VARCHAR(150) NOT NULL,
+  name_en VARCHAR(150) NULL,
+  phone VARCHAR(30) NULL,
+  email VARCHAR(150) NULL,
+  plan_key VARCHAR(30) NOT NULL,
+  status ENUM('trial','active','expired','suspended') NOT NULL DEFAULT 'trial',
+  billing_cycle ENUM('monthly','annual') NOT NULL DEFAULT 'monthly',
+  trial_ends_at DATETIME NULL,
+  period_ends_at DATETIME NULL,
+  extra_riders INT NOT NULL DEFAULT 0,
+  extra_users INT NOT NULL DEFAULT 0,
+  extra_vehicles INT NOT NULL DEFAULT 0,
+  owner_note VARCHAR(1000) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  INDEX (status)
+);
+-- A company's upgrade or renewal request (bank transfer with proof), approved by the platform owner.
+CREATE TABLE IF NOT EXISTS subscription_payments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 0,
+  plan_key VARCHAR(30) NOT NULL,
+  billing_cycle ENUM('monthly','annual') NOT NULL,
+  amount DECIMAL(10,2) NOT NULL,
+  method ENUM('bank_transfer','manual') NOT NULL DEFAULT 'bank_transfer',
+  reference VARCHAR(100) NULL,
+  note VARCHAR(500) NULL,
+  status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+  requested_by INT NULL,
+  reviewed_by INT NULL,
+  reviewed_at DATETIME NULL,
+  review_note VARCHAR(500) NULL,
+  period_start DATETIME NULL,
+  period_end DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX ix_tenant (tenant_id, status)
 );

@@ -6,7 +6,7 @@ import { useAuth } from '../../auth';
 import { fmtDateTime, fmtNum, useI18n } from '../../i18n';
 import { Alert, Badge, Button, Card, Checkbox, cx, Details, IconButton, Loading, PageHeader, SidePanel, StatCard, StatGrid, useAction, useUi, type Tone } from '../../ui/kit';
 import { DataTable, FilterBar, FilterDate, FilterSelect, useList, type Column } from '../../ui/table';
-import { ExportButton, useCityName, useOptions } from '../../ui/common';
+import { ExportButton, useCityName, useOptions, useRules } from '../../ui/common';
 import { useNoteText } from '../../ui/notes';
 
 // ======================================================================== 9.2 reports
@@ -36,6 +36,7 @@ export function ReportsIndex() {
 export function ReportView() {
   const { name = '' } = useParams();
   const { t } = useI18n();
+  const rules = useRules(); // statuses come from the server (GET /meta/rules)
   const { can } = useAuth();
   const city = useCityName();
   const [params, setParams] = useSearchParams();
@@ -63,7 +64,7 @@ export function ReportView() {
   const COLS: Record<string, [string, (r: any) => React.ReactNode][]> = {
     vehicles: [[t('vehicles.plate'), (r) => <span className="font-medium">{r.plate}</span>], [t('vehicles.maker'), (r) => r.maker], [t('vehicles.model'), (r) => r.model], [t('vehicles.color'), (r) => r.color],
       [t('vehicles.year'), (r) => <span className="num">{r.year ?? '—'}</span>], [t('vehicles.registration_type'), (r) => r.registration_type], [t('vehicles.ownership'), (r) => t(`vehicle.own.${r.ownership}`)],
-      [t('vehicle.status'), (r) => t(`vehicle.status.${r.status}`)], [t('vehicles.card'), (r) => <span className="num">{r.card ?? '—'}</span>],
+      [t('vehicles.status'), (r) => t(`vehicle.status.${r.status}`)], [t('vehicles.card'), (r) => <span className="num">{r.card ?? '—'}</span>],
       [t('vehicles.card_expiry'), (r) => <span className={cx('num', r.card_days < 0 && 'text-red-600')}>{r.card_expiry ?? '—'}</span>],
       [t('rep.v.insurance_expiry'), (r) => <span className={cx('num', r.ins_days < 0 && 'text-red-600')}>{r.insurance_expiry ?? '—'}</span>]],
     riders: [[t('rep.r.rider'), (r) => <div><Link className="font-medium hover:text-brand" to={`/admin/riders/${r.id}`}>{r.full_name}</Link><div className="text-xs text-zinc-500 num">#{r.id}</div></div>],
@@ -92,7 +93,7 @@ export function ReportView() {
       <Card title={t('rep.search')} className="mb-4">
         <div className="flex flex-wrap items-center gap-2">
           <input type="search" className="input w-72" placeholder={t('rep.type_enter')} value={term} onChange={(e) => setTerm(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') set('search', term || null); }} />
-          {name === 'vehicles' && <>{sel('status', t('vehicle.status'), ['active', 'maintenance', 'retired'].map((v) => ({ value: v, label: t(`vehicle.status.${v}`) })))}
+          {name === 'vehicles' && <>{sel('status', t('vehicles.status'), (rules?.statuses.vehicle ?? []).map((v) => ({ value: v, label: t(`vehicle.status.${v}`) })))}
             {sel('ownership', t('vehicles.ownership'), ['owned', 'rented'].map((v) => ({ value: v, label: t(`vehicle.own.${v}`) })))}
             {sel('maker', t('vehicles.maker'), (d?.facets?.makers ?? []).map((m: string) => ({ value: m, label: m })))}</>}
           {name === 'riders' && <>{sel('status', t('riders.status'), ['active', 'inactive', 'suspended'].map((v) => ({ value: v, label: t(`rider.status.${v}`) })))}

@@ -5,10 +5,10 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import { crc32 } from 'node:zlib';
-import { DATA_DIR, STORAGE_DIR, DB_SCHEMA, exec, one, q, tx, setSetting, setting, settingInt } from '../db.js';
+import { DATA_DIR, STORAGE_DIR, asPlatform, currentTenant, exec, one, q, tx, setSetting, setting, settingInt, withTenant } from '../db.js';
 import { identifier } from '../sql.js';
-import { clean, eq, fail, list, listAll, sendExport, type Query, type Spec } from '../http.js';
-import { can } from '../auth.js';
+import { clean, eq, fail, list, listAll, sendExport, type Query, type Spec, mustExist } from '../http.js';
+import { can, platformOnly } from '../auth.js';
 import { audit } from '../audit.js';
 import { appKey } from './system.js';
 import { generateNotifications } from './dashboard.js';
@@ -38,6 +38,7 @@ maintenanceRouter.get('/logs/errors/export', can('logs.export'), async (req, res
     { key: 'message', label: 'err_log.message' }, { key: 'route', label: 'err_log.route' }, { key: 'user_name', label: 'err_log.user' }] });
 });
 maintenanceRouter.delete('/logs/errors/:id', can('logs.delete'), async (req, res) => {
+  await mustExist('error_log', req.params.id);
   await exec('DELETE FROM error_log WHERE id = ?', [req.params.id]);
   await audit(req, { action: 'error_log.delete', entity_id: req.params.id as string, severity: 'warning' });
   res.json({ ok: true });
@@ -88,7 +89,8 @@ export const JOBS: Job[] = [
   { name: 'branding_learn', key: 'branding.learn_cron', def: '0 4 * * *', run: async () => ({ records: 0, details: { model: 'unavailable' } }) },
   { name: 'branding_sync', key: 'sync.branding_cron', def: '0 10 * * *', enabled: async () => (await setting('sync.auto')) !== '0', run: () => scheduledSync(['branding_photos']) },
   { name: 'data_sync', key: 'sync.cron', def: '0 15 * * *', enabled: async () => (await setting('sync.auto')) !== '0', run: () => scheduledSync(['daily_performance', 'monthly_ratings', 'fines', 'wallet', 'absences']) },
-  { name: 'auto_backup', key: 'backup.cron', def: '0 3 * * *', enabled: async () => (await setting('backup.auto_enabled')) !== '0', run: autoBackup },
+  // one backup of the whole platform, made from the platform's own schedule
+  { name: 'auto_backup', key: 'backup.cron', def: '0 3 * * *', enabled: async () => currentTenant() === 0 && (await setting('backup.auto_enabled')) !== '0', run: () => asPlatform(autoBackup) },
   { name: 'log_cleanup', key: 'logs.cleanup_cron', def: '30 3 * * *', run: cleanup },
 ];
 // With no browser on the server, a scheduled sync can only record that it needs a sign-in.
@@ -116,10 +118,13 @@ async function cleanup(): Promise<Out> {
   return { records: r.reduce((s, x) => s + x.affectedRows, 0) };
 }
 
+// jobs run for each company separately, inside that company
 const runningJobs = new Set<string>();
+const jobKey = (name: string) => `${currentTenant() ?? 0}:${name}`;
 export async function runJob(job: Job, manual: boolean) {
-  if (runningJobs.has(job.name)) fail(409, 'job_running');
-  runningJobs.add(job.name);
+  if (runningJobs.has(jobKey(job.name))) fail(409, 'job_running');
+  const key = jobKey(job.name);
+  runningJobs.add(key);
   const id = (await exec('INSERT INTO cron_runs (job, manual) VALUES (?, ?)', [job.name, manual ? 1 : 0])).insertId;
   const started = Date.now();
   let out: Out = {}; let error: string | null = null;
@@ -127,7 +132,7 @@ export async function runJob(job: Job, manual: boolean) {
     // a job switched off in its own settings wakes up and ends without doing any work
     out = job.enabled && !(await job.enabled()) ? { details: { skipped: 'disabled' } } : await job.run();
   } catch (e: any) { error = String(e?.message ?? e).slice(0, 1000); await logError(e); }
-  finally { runningJobs.delete(job.name); }
+  finally { runningJobs.delete(key); }
   const [{ emails }] = await q<any>('SELECT COUNT(*) emails FROM email_log WHERE created_at >= FROM_UNIXTIME(?)', [Math.floor(started / 1000)]);
   await exec('UPDATE cron_runs SET finished_at = UTC_TIMESTAMP(), outcome = ?, records = ?, notifications = ?, emails = ?, error = ?, details = ? WHERE id = ?',
     [error ? 'failed' : 'completed', out.records ?? 0, out.notifications ?? 0, Number(emails), error, JSON.stringify(out.details ?? {}), id]);
@@ -145,14 +150,20 @@ export function startScheduler() {
   setInterval(async () => {
     try {
       // a run that stays "running" for more than an hour is dead
-      await exec("UPDATE cron_runs SET outcome = 'failed', finished_at = UTC_TIMESTAMP(), error = 'stale' WHERE outcome = 'running' AND started_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 60 MINUTE)");
-      const now = await localNow();
-      const tick = `${now.day}-${now.hour}-${now.minute}`;
-      if (tick === lastTick) return;
-      lastTick = tick;
-      for (const job of JOBS) {
-        const expr = (await setting(job.key)) || job.def;
-        if (cronValid(expr) && cronMatches(expr, now) && !runningJobs.has(job.name)) runJob(job, false).catch(() => {});
+      await asPlatform(() => exec("UPDATE cron_runs SET outcome = 'failed', finished_at = UTC_TIMESTAMP(), error = 'stale' WHERE outcome = 'running' AND started_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 60 MINUTE)"));
+      const minute = new Date().toISOString().slice(0, 16);
+      if (minute === lastTick) return;
+      lastTick = minute;
+      // every company that can still use the system, each in its own time zone and with its own schedule
+      const tenants = await asPlatform(() => q<{ id: number }>("SELECT id FROM tenants WHERE status IN ('trial', 'active')"));
+      for (const t of [0, ...tenants.map((x) => x.id)]) {
+        await withTenant(t, async () => {
+          const now = await localNow();
+          for (const job of JOBS) {
+            const expr = (await setting(job.key)) || job.def;
+            if (cronValid(expr) && cronMatches(expr, now) && !runningJobs.has(jobKey(job.name))) runJob(job, false).catch(() => {});
+          }
+        });
       }
     } catch { /* not installed yet */ }
   }, 20000).unref();
@@ -163,7 +174,7 @@ maintenanceRouter.get('/cron-jobs', can('cron_jobs.view'), async (_req, res) => 
   for (const j of JOBS) {
     const expr = (await setting(j.key)) || j.def;
     const last = await one<any>('SELECT * FROM cron_runs WHERE job = ? ORDER BY id DESC LIMIT 1', [j.name]);
-    out.push({ name: j.name, key: j.key, expr, enabled: j.enabled ? await j.enabled() : true, next: await nextRun(expr), running: runningJobs.has(j.name), last: last ?? null });
+    out.push({ name: j.name, key: j.key, expr, enabled: j.enabled ? await j.enabled() : true, next: await nextRun(expr), running: runningJobs.has(jobKey(j.name)), last: last ?? null });
   }
   res.json(out);
 });
@@ -242,7 +253,7 @@ function walk(dir: string, out: string[] = []) {
   return out;
 }
 async function tableNames() {
-  return (await q<any>('SELECT table_name t FROM information_schema.tables WHERE table_schema = ? AND table_type = ?', [DB_SCHEMA, 'BASE TABLE'])).map((r) => r.t).filter((t) => !SKIP.has(t));
+  return (await q<any>('SELECT TABLE_NAME t FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = ?', ['BASE TABLE'])).map((r) => r.t).filter((t) => !SKIP.has(t));
 }
 
 export async function createBackup(type: 'full' | 'db' | 'files', kind: 'manual' | 'auto' | 'safety', note: string | null, userId: number | null) {
@@ -282,6 +293,7 @@ async function autoBackup(): Promise<Out> {
   return { records: 1, details: { backup: id, pruned: old.length } };
 }
 
+maintenanceRouter.use('/backups', platformOnly);
 maintenanceRouter.get('/backups', can('backups.view'), async (_req, res) => {
   const rows = await q<any>(`SELECT b.*, u.full_name created_by_name, (SELECT CONCAT(r.status, '|', r.created_at) FROM restores r WHERE r.backup_id = b.id ORDER BY r.id DESC LIMIT 1) last_restore
     FROM backups b LEFT JOIN users u ON u.id = b.created_by ORDER BY b.id DESC`);
@@ -394,7 +406,7 @@ maintenanceRouter.post('/backups/:id/restore', can('backups.restore'), async (re
       datasets.set(t, JSON.parse(data.toString()));
     }
     // Restore parents before children and delete in the opposite order, atomically.
-    const deps = await q<{child:string;parent:string}>(`SELECT c.relname child, p.relname parent FROM pg_constraint f JOIN pg_class c ON c.oid=f.conrelid JOIN pg_class p ON p.oid=f.confrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE f.contype='f' AND n.nspname=?`, [DB_SCHEMA]);
+    const deps = await q<{child:string;parent:string}>('SELECT TABLE_NAME child, REFERENCED_TABLE_NAME parent FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = DATABASE() AND REFERENCED_TABLE_NAME IS NOT NULL');
     const ordered: string[] = [], visiting = new Set<string>();
     const visit = (t: string) => {
       if (ordered.includes(t)) return;
@@ -405,6 +417,9 @@ maintenanceRouter.post('/backups/:id/restore', can('backups.restore'), async (re
     };
     for (const t of datasets.keys()) visit(t);
     await tx(async () => {
+      // the parent-first order is kept; key checks are paused only on this connection for self-references
+      await exec('SET FOREIGN_KEY_CHECKS = 0');
+      try {
       for (const t of [...ordered].reverse()) await exec(`DELETE FROM ${identifier(t)}`);
       for (const t of ordered) {
         const rows = datasets.get(t)!;
@@ -412,10 +427,10 @@ maintenanceRouter.post('/backups/:id/restore', can('backups.restore'), async (re
           const chunk = rows.slice(i, i + 500), cols = Object.keys(chunk[0]);
           await exec(`INSERT INTO ${identifier(t)} (${cols.map(identifier).join(',')}) VALUES ?`, [chunk.map(r => cols.map(c => r[c]))]);
         }
-        const identities = await q<{column_name:string}>('SELECT column_name FROM information_schema.columns WHERE table_schema=? AND table_name=? AND is_identity=?',[DB_SCHEMA,t,'YES']);
-        for (const col of identities) await q(`SELECT setval(pg_get_serial_sequence(?, ?), GREATEST(COALESCE(MAX(${identifier(col.column_name)}), 0), 1), COUNT(*) > 0) FROM ${identifier(t)}`,[`${DB_SCHEMA}.${t}`,col.column_name]);
+        // MySQL moves AUTO_INCREMENT past the restored ids by itself
         tables++;
       }
+      } finally { await exec('SET FOREIGN_KEY_CHECKS = 1'); }
     });
     const archived = new Set<string>();
     for (const [name, data] of entries!) {

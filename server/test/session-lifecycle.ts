@@ -1,9 +1,14 @@
 import { reportFile } from "./support/reports.mjs";
 import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
-import { exec, q, DB_SCHEMA, closeDb } from "../src/db.js";
+import { exec, q, closeDb, dbConfig, enterTenantForScript } from "../src/db.js";
 import { hashPassword, sha256 } from "../src/auth.js";
-assert.match(DB_SCHEMA, /^mandoob_test_[a-z0-9_]+$/);
+// disposable test databases only; the platform's own company (0) holds the fixtures
+const DB_SCHEMA = dbConfig()?.database ?? "";
+assert.match(DB_SCHEMA, /^mandoob_test[a-z0-9_]*$/);
+enterTenantForScript(0);
+// earlier test scripts sign riders in wrongly from this same address; start with a clean 15-minute window
+await exec("DELETE FROM rider_login_attempts WHERE ip IN ('127.0.0.1', '::1', '::ffff:127.0.0.1')");
 const origin = "http://127.0.0.1:4100";
 const results: any[] = [];
 function client() {

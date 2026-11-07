@@ -1,6 +1,6 @@
 import { Router, type Request } from 'express';
 import { exec, one, q } from '../db.js';
-import { clean, eq, fail, list, listAll, sendExport, where, type Query, type Spec } from '../http.js';
+import { clean, eq, fail, list, listAll, sendExport, where, type Query, type Spec, mustExist } from '../http.js';
 import { can } from '../auth.js';
 import { audit } from '../audit.js';
 import { cellStr, importRoutes, type ImportDef } from '../importer.js';
@@ -94,12 +94,13 @@ brandingRouter.post('/branding/mark-fine', can('performance.update'), async (req
 });
 // Re-check clears the measurements and keeps the staff review.
 brandingRouter.post('/branding/:id/recheck', can('performance.update'), async (req, res) => {
+  await mustExist('branding_photos', req.params.id);
   await exec("UPDATE branding_photos SET check_result = 'pending', measurements = NULL, checked_at = NULL, suspect_card = 0, suspect_screen = 0 WHERE id = ?", [req.params.id]);
   res.json({ ok: true });
 });
 brandingRouter.post('/branding/retry-failed', can('performance.update'), async (req, res) => {
   const w = where(spec, req.query as Query);
-  const r = await exec(`UPDATE branding_photos b SET check_result = 'pending' FROM riders r LEFT JOIN contracts k ON k.id = r.contract_id ${w.sql ? `${w.sql} AND` : ' WHERE'} r.id = b.rider_id AND b.check_result = 'failed'`, w.params);
+  const r = await exec(`UPDATE branding_photos b JOIN riders r ON r.id = b.rider_id LEFT JOIN contracts k ON k.id = r.contract_id SET b.check_result = 'pending'${w.sql ? `${w.sql} AND` : ' WHERE'} b.check_result = 'failed'`, w.params);
   res.json({ queued: r.affectedRows });
 });
 brandingRouter.post('/branding/run-queue', can('performance.update'), async (_req, res) => res.json({ available: false }));
@@ -110,7 +111,7 @@ async function removePhotos(req: Request, ids: number[]) {
   await audit(req, { action: 'branding.delete', severity: 'warning', details: `${r.affectedRows} photos` });
   return r.affectedRows;
 }
-brandingRouter.delete('/branding/:id', can('performance.delete'), async (req, res) => res.json({ deleted: await removePhotos(req, [Number(req.params.id)]) }));
+brandingRouter.delete('/branding/:id', can('performance.delete'), async (req, res) => { await mustExist('branding_photos', req.params.id); res.json({ deleted: await removePhotos(req, [Number(req.params.id)]) }); });
 brandingRouter.post('/branding/bulk-delete', can('performance.delete'), async (req, res) => res.json({ deleted: await removePhotos(req, (req.body.ids ?? []).map(Number)) }));
 
 // ---------- import: every row carries its own capture time; rider + time identify a photo ----------

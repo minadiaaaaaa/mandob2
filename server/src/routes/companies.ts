@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { exec, one, q } from '../db.js';
-import { clean, eq, fail, fieldError, list, listAll, sendExport, type Spec } from '../http.js';
+import { clean, eq, fail, fieldError, list, listAll, sendExport, type Spec, mustExist } from '../http.js';
 import { can, requireUser } from '../auth.js';
 import { audit } from '../audit.js';
+import { withQuota } from '../domain/quotas.js';
 
 export const companiesRouter = Router();
 
@@ -68,16 +69,21 @@ companiesRouter.patch('/companies/:id', can('companies.update'), async (req, res
   res.json({ ok: true });
 });
 companiesRouter.post('/companies/:id/disable', can('companies.deactivate'), async (req, res) => {
+  await mustExist('companies', req.params.id);
   await exec('UPDATE companies SET is_active = 0 WHERE id = ?', [req.params.id]);
   await audit(req, { action: 'company.disable', entity_type: 'company', entity_id: req.params.id, severity: 'warning' });
   res.json({ ok: true });
 });
 companiesRouter.post('/companies/:id/enable', can('companies.activate'), async (req, res) => {
-  await exec('UPDATE companies SET is_active = 1 WHERE id = ?', [req.params.id]);
+  await mustExist('companies', req.params.id);
+  // switched back on, the platform takes one of the plan's places again
+  const c = await one<{ is_active: number }>('SELECT is_active FROM companies WHERE id = ?', [req.params.id]);
+  await withQuota('platforms', c?.is_active ? 0 : 1, () => exec('UPDATE companies SET is_active = 1 WHERE id = ?', [req.params.id]));
   await audit(req, { action: 'company.enable', entity_type: 'company', entity_id: req.params.id });
   res.json({ ok: true });
 });
 companiesRouter.delete('/companies/:id', can('companies.delete'), async (req, res) => {
+  await mustExist('companies', req.params.id);
   const c = await one<any>('SELECT (SELECT COUNT(*) FROM contracts WHERE company_id = ?) contracts, (SELECT COUNT(*) FROM riders WHERE company_id = ?) riders', [req.params.id, req.params.id]);
   if (c.contracts || c.riders) fail(409, 'company_in_use');
   await exec('DELETE FROM companies WHERE id = ?', [req.params.id]);
@@ -134,18 +140,20 @@ companiesRouter.patch('/contracts/:id', can('contracts.update'), async (req, res
   res.json({ ok: true });
 });
 companiesRouter.post('/contracts/:id/disable', can('contracts.deactivate'), async (req, res) => {
+  await mustExist('contracts', req.params.id);
   await exec('UPDATE contracts SET is_active = 0 WHERE id = ?', [req.params.id]);
   await audit(req, { action: 'contract.disable', entity_type: 'contract', entity_id: req.params.id, severity: 'warning' });
   res.json({ ok: true });
 });
 companiesRouter.post('/contracts/:id/enable', can('contracts.activate'), async (req, res) => {
-  const k = await one<any>('SELECT c.is_active FROM contracts k JOIN companies c ON c.id = k.company_id WHERE k.id = ?', [req.params.id]);
+  const k = await one<any>('SELECT c.is_active, k.is_active contract_active FROM contracts k JOIN companies c ON c.id = k.company_id WHERE k.id = ?', [req.params.id]);
   if (!k?.is_active) fail(409, 'contract_company_disabled');
-  await exec('UPDATE contracts SET is_active = 1 WHERE id = ?', [req.params.id]);
+  await withQuota('contracts', k.contract_active ? 0 : 1, () => exec('UPDATE contracts SET is_active = 1 WHERE id = ?', [req.params.id]));
   await audit(req, { action: 'contract.enable', entity_type: 'contract', entity_id: req.params.id });
   res.json({ ok: true });
 });
 companiesRouter.delete('/contracts/:id', can('contracts.delete'), async (req, res) => {
+  await mustExist('contracts', req.params.id);
   await exec('DELETE FROM contracts WHERE id = ?', [req.params.id]);
   await audit(req, { action: 'contract.delete', entity_type: 'contract', entity_id: req.params.id, severity: 'critical' });
   res.json({ ok: true });

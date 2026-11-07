@@ -4,6 +4,12 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 const base = process.argv[2] ?? "http://localhost:4100";
+const dateInDays = (days) => {
+  const date = new Date();
+  date.setUTCHours(12, 0, 0, 0);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+};
 assert.match(
   base,
   /^http:\/\/(?:localhost|127\.0\.0\.1):(4100|4200)$/,
@@ -132,7 +138,7 @@ const v2 = ok(
     card: {
       number: "OC-1",
       transport_license_id: tl.id,
-      expiry_date: "2026-10-20",
+      expiry_date: dateInDays(10),
     },
   }),
   "vehicle+card",

@@ -8,13 +8,14 @@ import { Bars, Columns, Donut, Gauge, Line } from '../ui/charts';
 const DOT: Record<string, string> = { critical: 'bg-red-500', error: 'bg-red-500', warning: 'bg-amber-500' };
 const SEG: Record<string, string> = { A: 'green', B: 'green', C: 'blue', D: 'amber', E: 'amber', F: 'red' };
 
+// A quiet figure: label with a small grey icon, the number below; only warnings colour the number.
 function Figure({ icon, value, label, tone }: { icon: ReactNode; value: ReactNode; label: string; tone: 'green' | 'amber' | 'red' | 'grey' | 'blue' }) {
-  const c = { green: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10', amber: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10', red: 'bg-red-50 text-red-600 dark:bg-red-500/10',
-    grey: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800', blue: 'bg-blue-50 text-blue-600 dark:bg-blue-500/10' }[tone];
+  const c = { amber: 'text-amber-700 dark:text-amber-400', red: 'text-red-700 dark:text-red-400', green: '', grey: '', blue: '' }[tone];
+  const warn = Number(value) > 0 && (tone === 'amber' || tone === 'red');
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-zinc-200/80 bg-white p-3.5 shadow-xs dark:border-zinc-800 dark:bg-zinc-900">
-      <span className={cx('flex size-10 shrink-0 items-center justify-center rounded-lg [&_svg]:size-5', c)}>{icon}</span>
-      <div className="min-w-0"><div className="text-xl font-semibold num">{value ?? '—'}</div><div className="truncate text-xs text-zinc-500">{label}</div></div>
+    <div className="rounded-lg border border-zinc-200 bg-white px-3.5 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="flex items-center gap-1.5 text-xs text-zinc-500 [&_svg]:size-3.5 [&_svg]:text-zinc-400"><span className="shrink-0">{icon}</span><span className="truncate">{label}</span></div>
+      <div className={cx('mt-1.5 text-xl font-semibold num', warn && c)}>{value ?? '—'}</div>
     </div>
   );
 }
@@ -43,7 +44,7 @@ export default function Dashboard() {
       {levels.length > 0 && (
         <div className="mb-5 rounded-xl border border-red-200 bg-gradient-to-l from-red-50 to-white p-4 dark:border-red-900 dark:from-red-950/40 dark:to-zinc-900">
           <div className="flex items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-red-600 text-white"><AlertTriangle className="size-5" /></span>
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"><AlertTriangle className="size-5" /></span>
             <div className="min-w-0 flex-1">
               <div className="font-semibold text-red-800 dark:text-red-300">{t('dash.alerts_title')}</div>
               <div className="text-xs text-red-700/80 dark:text-red-300/80">{t('dash.alerts_sub')}</div>

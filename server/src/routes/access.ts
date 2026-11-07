@@ -1,10 +1,13 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { isIP } from 'node:net';
-import { exec, one, q, tx } from '../db.js';
-import { clean, eq, fail, fieldError, list, listAll, sendExport, type Spec } from '../http.js';
-import { can, clientIp, has, hashPassword } from '../auth.js';
+import { asPlatform, exec, one, q, tx } from '../db.js';
+import { clean, eq, fail, fieldError, list, listAll, sendExport, type Spec, mustExist } from '../http.js';
+import { can, clientIp, has, hashPassword, platformOnly } from '../auth.js';
 import { audit } from '../audit.js';
 import { ADMIN_PERMS, ALL_PERMS, MATRIX } from '../perms.js';
+import { SUPER_ADMIN } from '../perms.js';
+import { comesBack, withQuota } from '../domain/quotas.js';
+import { USER_STATUSES } from '../domain/rules.js';
 
 export const accessRouter = Router();
 
@@ -41,12 +44,12 @@ const usersSpec: Spec = {
 };
 const userRules = {
   username: { req: true, max: 50, minLen: 3 }, full_name: { req: true, max: 150 }, email: { req: true, type: 'email' as const, max: 150 },
-  role_id: { req: true, type: 'int' as const }, status: { enum: ['active', 'disabled', 'locked'] },
+  role_id: { req: true, type: 'int' as const }, status: { enum: [...USER_STATUSES] },
 };
 async function checkUnique(v: Record<string, any>, id = 0) {
   if (v.username && !/^[A-Za-z0-9._-]{3,50}$/.test(v.username)) fieldError('username', 'username_format');
-  if (v.username && (await one('SELECT 1 FROM users WHERE username = ? AND id <> ?', [v.username, id]))) fieldError('username', 'username_taken');
-  if (v.email && (await one('SELECT 1 FROM users WHERE email = ? AND id <> ?', [v.email, id]))) fieldError('email', 'email_taken');
+  if (v.username && (await asPlatform(() => one('SELECT 1 FROM users WHERE username = ? AND id <> ?', [v.username, id])))) fieldError('username', 'username_taken');
+  if (v.email && (await asPlatform(() => one('SELECT 1 FROM users WHERE email = ? AND id <> ?', [v.email, id])))) fieldError('email', 'email_taken');
   if (v.role_id && !(await one('SELECT 1 FROM roles WHERE id = ? AND is_active = 1', [v.role_id]))) fieldError('role_id', 'role_inactive');
 }
 
@@ -102,6 +105,7 @@ accessRouter.post('/users/:id/password', can('users.update'), async (req, res) =
   res.json({ ended: r.affectedRows });
 });
 accessRouter.post('/users/:id/disable', can('users.deactivate'), async (req, res) => {
+  await mustExist('users', req.params.id);
   const id = Number(req.params.id);
   if (id === req.user!.id) fail(409, 'cannot_disable_self');
   if (await isLastManager(id)) fail(409, 'last_manager');
@@ -111,11 +115,16 @@ accessRouter.post('/users/:id/disable', can('users.deactivate'), async (req, res
   res.json({ ended: r.affectedRows });
 });
 accessRouter.post('/users/:id/activate', can('users.activate'), async (req, res) => {
-  await exec("UPDATE users SET status = 'active', locked_until = NULL, updated_at = UTC_TIMESTAMP() WHERE id = ?", [req.params.id]);
+  const u = await one<{ status: string }>('SELECT status FROM users WHERE id = ?', [req.params.id]);
+  if (!u) fail(404, 'not_found');
+  // a disabled account takes a staff place again
+  await withQuota('users', comesBack('users', u!.status, 'active') ? 1 : 0, () =>
+    exec("UPDATE users SET status = 'active', locked_until = NULL, updated_at = UTC_TIMESTAMP() WHERE id = ?", [req.params.id]));
   await audit(req, { action: 'user.activate', entity_type: 'user', entity_id: req.params.id });
   res.json({ ok: true });
 });
 accessRouter.delete('/users/:id', can('users.delete'), async (req, res) => {
+  await mustExist('users', req.params.id);
   const id = Number(req.params.id);
   if (id === req.user!.id) fail(409, 'cannot_delete_self');
   if (await isLastManager(id)) fail(409, 'last_manager');
@@ -151,9 +160,14 @@ accessRouter.get('/roles/:id', can('roles.view'), async (req, res) => {
   res.json({ ...r, perms, total: ALL_PERMS.length, protected: await protectedPerms(r.id) });
 });
 const roleRules = { name: { req: true, max: 60, minLen: 2 }, description: { max: 255 } };
+// "Super Admin" is the platform owner's role alone; no company may name one of its roles that way.
+const reservedRoleName = (req: Request, name: string) => {
+  if (req.user!.tenant_id !== 0 && name.trim().toLowerCase().replace(/[\s_-]+/g, ' ') === SUPER_ADMIN.toLowerCase()) fieldError('name', 'role_name_reserved');
+};
 accessRouter.post('/roles', can('roles.create'), async (req, res) => {
   const v = clean(req.body, roleRules);
   if (await one('SELECT 1 FROM roles WHERE name = ?', [v.name])) fieldError('name', 'role_name_taken');
+  reservedRoleName(req, v.name);
   const r = await exec('INSERT INTO roles SET ?', [v]);
   await audit(req, { action: 'role.create', entity_type: 'role', entity_id: r.insertId, after: v });
   res.json({ id: r.insertId });
@@ -161,6 +175,7 @@ accessRouter.post('/roles', can('roles.create'), async (req, res) => {
 accessRouter.patch('/roles/:id', can('roles.update'), async (req, res) => {
   const v = clean(req.body, roleRules, true);
   if (v.name && (await one('SELECT 1 FROM roles WHERE name = ? AND id <> ?', [v.name, req.params.id]))) fieldError('name', 'role_name_taken');
+  if (v.name) reservedRoleName(req, v.name);
   const before = await one('SELECT name, description FROM roles WHERE id = ?', [req.params.id]);
   await exec('UPDATE roles SET ? WHERE id = ?', [v, req.params.id]);
   await audit(req, { action: 'role.update', entity_type: 'role', entity_id: req.params.id, before, after: v });
@@ -168,6 +183,7 @@ accessRouter.patch('/roles/:id', can('roles.update'), async (req, res) => {
 });
 // Saving the matrix replaces the whole set; protected administrative permissions cannot be removed.
 accessRouter.put('/roles/:id/permissions', can('permissions.update'), async (req, res) => {
+  await mustExist('roles', req.params.id);
   const id = Number(req.params.id);
   const wanted = new Set<string>((req.body.perms ?? []).filter((p: string) => ALL_PERMS.includes(p)));
   const current = new Set((await q<{ perm: string }>('SELECT perm FROM role_permissions WHERE role_id = ?', [id])).map((p) => p.perm));
@@ -182,6 +198,7 @@ accessRouter.put('/roles/:id/permissions', can('permissions.update'), async (req
   res.json({ added: added.length, removed: removed.length });
 });
 accessRouter.post('/roles/:id/disable', can('roles.deactivate'), async (req, res) => {
+  await mustExist('roles', req.params.id);
   const [{ n }] = await q<{ n: number }>("SELECT COUNT(*) n FROM users WHERE role_id = ? AND status = 'active'", [req.params.id]);
   if (n) fail(409, 'role_has_active_users', { n });
   if ((await protectedPerms(Number(req.params.id))).length) fail(409, 'last_manager');
@@ -190,11 +207,13 @@ accessRouter.post('/roles/:id/disable', can('roles.deactivate'), async (req, res
   res.json({ ok: true });
 });
 accessRouter.post('/roles/:id/activate', can('roles.activate'), async (req, res) => {
+  await mustExist('roles', req.params.id);
   await exec('UPDATE roles SET is_active = 1 WHERE id = ?', [req.params.id]);
   await audit(req, { action: 'role.activate', entity_type: 'role', entity_id: req.params.id });
   res.json({ ok: true });
 });
 accessRouter.delete('/roles/:id', can('roles.delete'), async (req, res) => {
+  await mustExist('roles', req.params.id);
   const [{ n }] = await q<{ n: number }>('SELECT COUNT(*) n FROM users WHERE role_id = ?', [req.params.id]);
   if (n) fail(409, 'role_has_users', { n });
   await exec('DELETE FROM roles WHERE id = ?', [req.params.id]);
@@ -243,6 +262,7 @@ const ipSpec: Spec = {
   },
   sorts: { created: 'b.created_at' }, defaultSort: '-created',
 };
+accessRouter.use('/blocked-ips', platformOnly);
 accessRouter.get('/blocked-ips', can('blocked_ips.view'), async (req, res) => res.json(await list(ipSpec, req.query as any)));
 accessRouter.post('/blocked-ips', can('blocked_ips.create'), async (req, res) => {
   const v = clean(req.body, { ip: { req: true, max: 64 }, reason: { req: true, max: 500 }, expires_at: { type: 'date' } });
@@ -255,11 +275,13 @@ accessRouter.post('/blocked-ips', can('blocked_ips.create'), async (req, res) =>
   res.json({ ok: true });
 });
 accessRouter.post('/blocked-ips/:id/lift', can('blocked_ips.update'), async (req, res) => {
+  await mustExist('blocked_ips', req.params.id);
   await exec("UPDATE blocked_ips SET status = 'lifted' WHERE id = ?", [req.params.id]);
   await audit(req, { action: 'ip.lift', entity_type: 'blocked_ip', entity_id: req.params.id, severity: 'warning' });
   res.json({ ok: true });
 });
 accessRouter.delete('/blocked-ips/:id', can('blocked_ips.delete'), async (req, res) => {
+  await mustExist('blocked_ips', req.params.id);
   await exec('DELETE FROM blocked_ips WHERE id = ?', [req.params.id]);
   await audit(req, { action: 'ip.delete', entity_type: 'blocked_ip', entity_id: req.params.id, severity: 'warning' });
   res.json({ ok: true });

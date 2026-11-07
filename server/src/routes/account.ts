@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { join } from 'node:path';
-import { STORAGE_DIR, exec, one, q, setting } from '../db.js';
+import { STORAGE_DIR, asPlatform, exec, one, q, setting } from '../db.js';
 import { clean, fail, fieldError } from '../http.js';
 import { clientIp, hashPassword, issueChallenge, login, logout, requireUser, verifyPassword } from '../auth.js';
 import { audit } from '../audit.js';
+import { deviceLimit, features, loadTenant, standing } from '../domain/subscription.js';
 
 export const publicRouter = Router();
 
@@ -35,8 +36,10 @@ accountRouter.use(requireUser);
 
 accountRouter.get('/me', async (req, res) => {
   const u = req.user!;
+  const t = u.tenant_id ? await loadTenant(u.tenant_id) : undefined;
   res.json({ id: u.id, username: u.username, full_name: u.full_name, email: u.email, role: u.role_name, locale: u.locale, perms: [...u.perms],
-    org_language: await setting('org.default_language') });
+    org_language: await setting('org.default_language'), platform_owner: u.tenant_id === 0,
+    company: t ? { id: t.id, name: t.name, slug: t.slug, plan_key: t.plan_key, ...standing(t), features: await features(t) } : null });
 });
 
 accountRouter.get('/profile', async (req, res) => {
@@ -48,7 +51,7 @@ accountRouter.patch('/profile', async (req, res) => {
   const v = clean(req.body, { full_name: { req: true, max: 150 }, email: { req: true, type: 'email', max: 150 }, locale: { max: 10 } }, true);
   // a built-in language or one added on the "Languages" screen
   if (v.locale && !['ar', 'en', 'bn', 'ur'].includes(v.locale) && !(await one('SELECT 1 FROM languages WHERE code = ?', [v.locale]))) fieldError('locale', 'invalid');
-  if (v.email && (await one('SELECT 1 FROM users WHERE email = ? AND id <> ?', [v.email, req.user!.id]))) fieldError('email', 'email_taken');
+  if (v.email && (await asPlatform(() => one('SELECT 1 FROM users WHERE email = ? AND id <> ?', [v.email, req.user!.id])))) fieldError('email', 'email_taken');
   const before = await one('SELECT full_name, email, locale FROM users WHERE id = ?', [req.user!.id]);
   if (Object.keys(v).length) await exec('UPDATE users SET ?, updated_at = UTC_TIMESTAMP() WHERE id = ?', [v, req.user!.id]);
   await audit(req, { action: 'profile.update', entity_type: 'user', entity_id: req.user!.id, before, after: v });
@@ -71,6 +74,12 @@ accountRouter.post('/profile/password', async (req, res) => {
 accountRouter.get('/profile/sessions', async (req, res) => {
   const rows = await q(`SELECT id, status, ip, user_agent, created_at, last_activity_at, expires_at FROM sessions WHERE user_id = ? ORDER BY last_activity_at DESC LIMIT 50`, [req.user!.id]);
   res.json(rows.map((r: any) => ({ ...r, current: r.id === req.user!.sessionId })));
+});
+
+// "My devices 2 / 2": the devices signed in now and how many the plan allows per account
+accountRouter.get('/profile/devices', async (req, res) => {
+  const [{ n }] = await q<{ n: number }>("SELECT COUNT(*) n FROM sessions WHERE user_id = ? AND status = 'active' AND expires_at > UTC_TIMESTAMP()", [req.user!.id]);
+  res.json({ active: Number(n), max_devices: await deviceLimit(req.user!.tenant_id) });
 });
 
 accountRouter.delete('/profile/sessions/:id', async (req, res) => {

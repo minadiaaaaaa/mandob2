@@ -4,8 +4,8 @@ import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, exec, one, q, setSetting, setting } from '../db.js';
-import { clean, fail, fieldError } from '../http.js';
-import { can } from '../auth.js';
+import { clean, fail, fieldError, mustExist } from '../http.js';
+import { can, platformOnly } from '../auth.js';
 import { audit } from '../audit.js';
 import { upload } from '../files.js';
 import { readSheet } from '../importer.js';
@@ -38,6 +38,7 @@ publicLanguagesRouter.get('/public/i18n', async (_req, res) => {
   res.json({ languages: (await all()).map(({ code, name_native, dir, font, flag }: any) => ({ code, name: name_native, dir, font, flag })), overrides: overridesBy, version: (await setting('i18n.version')) ?? '0' });
 });
 
+languagesRouter.use('/languages', platformOnly);
 languagesRouter.get('/languages', can('languages.view'), async (_req, res) => {
   const keys = Object.keys(ref());
   const out = [];
@@ -99,6 +100,7 @@ languagesRouter.post('/languages', can('languages.manage'), async (req, res) => 
   res.json({ ok: true });
 });
 languagesRouter.delete('/languages/:code', can('languages.manage'), async (req, res) => {
+  await mustExist('languages', req.params.code, 'code');
   const code = String(req.params.code);
   if (BUILTIN[code]) fail(409, 'language_builtin');
   const backup = await q('SELECT tkey, value FROM translation_overrides WHERE lang = ?', [code]);

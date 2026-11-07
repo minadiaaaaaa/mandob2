@@ -1,13 +1,14 @@
-import { Router, type Request, type Response } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { crc32 } from 'node:zlib';
-import { ROOT, exec, one, q, setSetting, setting, settingInt } from '../db.js';
+import { ROOT, currentTenant, exec, one, q, setSetting, setting, settingInt, withTenant } from '../db.js';
 import { addDays, clean, daysBetween, eq, fail, list, today, type Query, type Spec } from '../http.js';
 import { can } from '../auth.js';
 import { audit } from '../audit.js';
 import { ingestRows, type ImportDef } from '../importer.js';
+import { companyAccess } from '../domain/subscription.js';
 import { performanceImport, ratingImport } from './performance.js';
 import { brandingImport } from './branding.js';
 import { fineImport, walletImport } from './finance.js';
@@ -32,7 +33,10 @@ const SOURCES: Source[] = [
 ];
 const byCode = (c: string) => SOURCES.find((s) => s.code === c);
 
-let running = false;
+// one sync at a time per company
+const runningFor = new Set<number>();
+const isRunning = () => runningFor.has(currentTenant() ?? 0);
+const setRunning = (on: boolean) => { const t = currentTenant() ?? 0; if (on) runningFor.add(t); else runningFor.delete(t); };
 async function sourceState(s: Source, day: string) {
   const row = await one<any>('SELECT * FROM sync_sources WHERE code = ?', [s.code]) ?? { code: s.code, enabled: 1, sync_from: null, create_riders: 0, report_url: null };
   const yesterday = addDays(day, -1);
@@ -56,7 +60,7 @@ syncRouter.get('/sync', can('sync.view'), async (_req, res) => {
   const sources = [];
   for (const s of SOURCES) { const { pending_days: _p, ...st } = await sourceState(s, day); sources.push(st); }
   res.json({
-    sources, session: await sessionState(), running,
+    sources, session: await sessionState(), running: isRunning(),
     schedule: { enabled: (await setting('sync.auto')) !== '0', reports_time: (await setting('sync.reports_time')) || '15:00', photos_time: (await setting('sync.photos_time')) || '10:00',
       max_days: await settingInt('sync.max_days', 7) },
   });
@@ -68,17 +72,17 @@ syncRouter.get('/sync/status', can('sync.view'), async (_req, res) => {
   for (const s of SOURCES) pending += (await sourceState(s, day)).pending;
   const last = await one<any>("SELECT source, status, started_at FROM sync_runs ORDER BY id DESC LIMIT 1");
   const lastDay = (await one<any>("SELECT MAX(report_day) d FROM sync_runs WHERE status = 'succeeded'"))?.d ?? null;
-  res.json({ session: await sessionState(), pending, running, last_run: last ?? null, last_day: lastDay });
+  res.json({ session: await sessionState(), pending, running: isRunning(), last_run: last ?? null, last_day: lastDay });
 });
 
 // "Sync now": every pending day of every active source, oldest first, up to the per-run limit.
 // The first day that needs a sign-in stops the rest.
 syncRouter.post('/sync/run', can('sync.run'), async (req, res) => {
   const v = clean(req.body, { source: {}, day: { type: 'date' } });
-  if (running) fail(409, 'sync_running');
+  if (isRunning()) fail(409, 'sync_running');
   const day = await today();
   if (v.day && v.day >= day) fail(422, 'sync_day_not_past');
-  running = true;
+  setRunning(true);
   const out: any[] = [];
   try {
     for (const s of SOURCES.filter((x) => !v.source || x.code === v.source)) {
@@ -93,7 +97,7 @@ syncRouter.post('/sync/run', can('sync.run'), async (req, res) => {
       }
       if (out.length) break;
     }
-  } finally { running = false; }
+  } finally { setRunning(false); }
   await audit(req, { action: 'sync.run', details: JSON.stringify(out) });
   res.json({ runs: out, nothing: !out.length });
 });
@@ -129,7 +133,8 @@ syncRouter.get('/sync/runs', can('sync.view'), async (req, res) => res.json(awai
 // ---------- the extension's token: one for the whole system, shown once ----------
 const hash = (t: string) => createHash('sha256').update(t).digest('hex');
 syncRouter.post('/sync/token', can('sync.manage_session'), async (req, res) => {
-  const token = randomBytes(24).toString('base64url');
+  // the company number in front lets the ingest address find the company before checking the token
+  const token = `${req.user!.tenant_id}.${randomBytes(24).toString('base64url')}`;
   await setSetting('sync.token_hash', hash(token));
   await audit(req, { action: 'sync.token_issue', severity: 'warning' });
   res.json({ token });
@@ -174,8 +179,15 @@ async function tokenOk(req: Request) {
   const a = Buffer.from(hash(got)); const b = Buffer.from(stored);
   return a.length === b.length && timingSafeEqual(a, b);
 }
+ingestRouter.use('/sync/ingest', (req: Request, _res: Response, next: NextFunction) => {
+  const m = /^Bearer\s+(\d{1,9})\./i.exec(req.headers.authorization ?? '');
+  return m ? withTenant(Number(m[1]), next) : next();
+});
 ingestRouter.post('/sync/ingest', async (req: Request, res: Response) => {
   if (!(await tokenOk(req))) return res.status(401).json({ error: 'token_refused' });
+  // checked after the token, so the address never tells a stranger whether a company is suspended
+  const refused = await companyAccess(currentTenant() ?? 0, 'POST', req.originalUrl);
+  if (refused) return res.status(refused.status).json({ error: refused.error });
   if (req.body?.source === 'live') { const r = await liveIngest(req.body.rows ?? []); return res.json(r); }
   const s = byCode(String(req.body?.source ?? ''));
   if (!s) return res.status(422).json({ error: 'not_a_sync_source' });
@@ -184,8 +196,8 @@ ingestRouter.post('/sync/ingest', async (req: Request, res: Response) => {
   if (!s.wholeTable && day >= (await today())) return res.status(422).json({ error: 'report_shows_today' });
   const rows = Array.isArray(req.body?.rows) ? req.body.rows.slice(0, 50000) : [];
   if (!rows.length) return res.status(422).json({ error: 'no_rows' });
-  if (running) return res.status(409).json({ error: 'sync_running' });
-  running = true;
+  if (isRunning()) return res.status(409).json({ error: 'sync_running' });
+  setRunning(true);
   const runId = (await exec("INSERT INTO sync_runs (source, report_day, status, trigger_type) VALUES (?, ?, 'running', 'extension')", [s.code, s.wholeTable ? addDays(await today(), -1) : day])).insertId;
   try {
     const src = await one<any>('SELECT create_riders FROM sync_sources WHERE code = ?', [s.code]);
@@ -198,5 +210,5 @@ ingestRouter.post('/sync/ingest', async (req: Request, res: Response) => {
     const status = e?.code === 'missing_required_column' ? 'skipped' : 'failed';
     await exec('UPDATE sync_runs SET status = ?, finished_at = UTC_TIMESTAMP(), message = ? WHERE id = ?', [status, String(e?.code ?? e?.message ?? e).slice(0, 1000), runId]);
     res.status(422).json({ error: e?.code ?? 'server_error', params: e?.params });
-  } finally { running = false; }
+  } finally { setRunning(false); }
 });

@@ -2,13 +2,12 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { ROOT, isInstalled, setting } from './db.js';
-import { HttpError, errorHandler } from './http.js';
-import { upgrade } from './seed.js';
+import { ROOT, dbConfig, setting, withTenant } from './db.js';
+import { HttpError, errorHandler, isClientDbError } from './http.js';
+import { bootstrap } from './seed.js';
 import { authenticate } from './auth.js';
 import { attachmentsRouter } from './files.js';
 import { scansRouter } from './scans.js';
-import { setupRouter } from './routes/setup.js';
 import { accountRouter, publicRouter } from './routes/account.js';
 import { accessRouter } from './routes/access.js';
 import { companiesRouter } from './routes/companies.js';
@@ -33,6 +32,7 @@ import { emailRouter } from './routes/email.js';
 import { logError, maintenanceRouter, startScheduler } from './routes/maintenance.js';
 import { languagesRouter, publicLanguagesRouter } from './routes/languages.js';
 import { portalAdminRouter, portalRouter } from './routes/portal.js';
+import { billingRouter, pausedGate, platformRouter, signupRouter, subscriptionGate } from './routes/saas.js';
 
 const app = express();
 app.set('trust proxy', process.env.TRUST_PROXY === '1');
@@ -42,22 +42,36 @@ const smallJson = express.json({ limit: '2mb' });
 app.use((req, res, next) => (req.path === '/api/sync/ingest' ? bigJson : smallJson)(req, res, next));
 app.use((req, _res, next) => { req.rid = randomBytes(8).toString('hex'); next(); });
 
-// Before installation every visit goes to the wizard; afterwards the wizard is closed.
-app.use('/api/setup', setupRouter);
-let installed = false;
-app.use('/api', async (_req: Request, res: Response, next: NextFunction) => {
-  if (!installed && (installed = await isInstalled())) await upgrade();
-  if (!installed) return res.status(503).json({ error: 'setup_required', setup: true });
+// A request starts in the platform's own company (0): public pages and sign-in.
+// Signing in (staff or rider) or the sync token moves the request into its company; see db.ts and tenancy.ts.
+app.use('/api', (_req, _res, next) => withTenant(0, next));
+// No setup screens: the database is prepared when the server starts (see bootstrap() in seed.ts).
+let ready = false;
+app.use('/api', (_req: Request, res: Response, next: NextFunction) => {
+  if (!ready) return res.status(503).json({ error: 'starting' });
   next();
 });
 
+// a signed-in staff member's company also brands the public addresses (name, logo) they load
+app.use('/api', authenticate);
+// Platform maintenance (the owner's switch) closes every company at once: staff screens, the rider portal, the
+// extension's sync and new sign-ups. Signing in, the public pages' reads and the owner's own account stay open.
+const PLATFORM_OPEN = /^\/(auth\/|me$|meta\/)/;
+app.use('/api', async (req: Request, res: Response, next: NextFunction) => {
+  if (req.user?.tenant_id === 0 || PLATFORM_OPEN.test(req.path)) return next();
+  if (!req.user && req.method === 'GET' && !req.path.startsWith('/portal')) return next();
+  if ((await withTenant(0, () => setting('platform.maintenance'))) !== '1') return next();
+  res.status(503).json({ error: 'maintenance', params: { message: await withTenant(0, () => setting('platform.maintenance_message')) } });
+});
 app.use('/api', publicRouter);
+app.use('/api', signupRouter);
 app.use('/api', publicLanguagesRouter);
 // the extension's ingest address carries its own token instead of a session
 app.use('/api', ingestRouter);
 // the rider portal has its own sessions (chapter 12)
 app.use('/api', portalRouter);
-app.use('/api', authenticate);
+app.use('/api', subscriptionGate);
+app.use('/api', pausedGate);
 
 // Maintenance mode blocks every signed-in user except administrators.
 app.use('/api', async (req: Request, res: Response, next: NextFunction) => {
@@ -92,6 +106,8 @@ app.use('/api', emailRouter);
 app.use('/api', maintenanceRouter);
 app.use('/api', languagesRouter);
 app.use('/api', portalAdminRouter);
+app.use('/api', billingRouter);
+app.use('/api', platformRouter);
 app.use('/api/attachments', attachmentsRouter);
 app.use('/api/scans', scansRouter);
 app.use('/api', (_req, res) => res.status(404).json({ error: 'not_found' }));
@@ -105,11 +121,18 @@ if (existsSync(web)) {
 
 // Errors the code did not expect go to "System errors" (11.7) before the generic answer.
 app.use((err: any, req: Request, _res: Response, next: NextFunction) => {
-  if (!(err instanceof HttpError) && !err?.setup && !['entity.parse.failed', 'entity.too.large', 'encoding.unsupported', 'charset.unsupported'].includes(err?.type) && !['23505', '23503', '23502', '23514', '22001', '22P02', 'LIMIT_FILE_SIZE'].includes(err?.code)) logError(err, req, 'error');
+  if (!(err instanceof HttpError) && !err?.setup && !['entity.parse.failed', 'entity.too.large', 'encoding.unsupported', 'charset.unsupported'].includes(err?.type) && !isClientDbError(err?.code) && err?.code !== 'LIMIT_FILE_SIZE') logError(err, req, 'error');
   next(err);
 });
 app.use(errorHandler);
 
 const port = Number(process.env.PORT || 4000);
+if (!dbConfig()) {
+  console.error('No database: set DATABASE_URL (mysql://user:password@host:3306/database) in .env, see .env.example.');
+  process.exit(1);
+}
+// tables, settings and the platform owner's account, created or completed at every start
+await bootstrap();
+ready = true;
 app.listen(port, process.env.HOST || '127.0.0.1', () => console.log(`Mandoob API on http://localhost:${port}`));
 if (process.env.DISABLE_SCHEDULER !== '1') startScheduler();

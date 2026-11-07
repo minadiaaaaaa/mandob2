@@ -1,6 +1,6 @@
 import { Router, type Request } from 'express';
 import { exec, one, q, tx } from '../db.js';
-import { addMonths, clean, eq, fail, fieldError, list, listAll, plateKey, sendExport, today, where, type Query, type Spec } from '../http.js';
+import { addMonths, clean, eq, fail, fieldError, list, listAll, plateKey, sendExport, today, where, type Query, type Spec, mustExist } from '../http.js';
 import { can } from '../auth.js';
 import { audit } from '../audit.js';
 import { claimScan } from '../scans.js';
@@ -69,7 +69,7 @@ async function deleteIc(req: Request, ids: number[]) {
   await exec('DELETE FROM insurance_companies WHERE id IN (?)', [ids]);
   await audit(req, { action: 'insurance_company.delete', entity_type: 'insurance_company', entity_id: ids.join(','), severity: 'critical' });
 }
-fleet2Router.delete('/insurance/companies/:id', can('insurance_companies.delete'), async (req, res) => { await deleteIc(req, [Number(req.params.id)]); res.json({ ok: true }); });
+fleet2Router.delete('/insurance/companies/:id', can('insurance_companies.delete'), async (req, res) => { await mustExist('insurance_companies', req.params.id); await deleteIc(req, [Number(req.params.id)]); res.json({ ok: true }); });
 fleet2Router.post('/insurance/companies/bulk-delete', can('insurance_companies.delete'), async (req, res) => { await deleteIc(req, (req.body.ids ?? []).map(Number).slice(0, 200)); res.json({ ok: true }); });
 fleet2Router.use('/insurance/companies/import', importRoutes({
   name: 'insurance_companies', perm: 'insurance_companies.create', matchOn: 'ic.name_ar',
@@ -173,7 +173,7 @@ async function deletePolicies(req: Request, ids: number[]) {
   await exec('DELETE FROM insurance_policies WHERE id IN (?)', [ids]);
   await audit(req, { action: 'insurance_policy.delete', entity_type: 'insurance_policy', entity_id: ids.join(','), severity: 'critical' });
 }
-fleet2Router.delete('/insurance/policies/:id', can('insurance_policies.delete'), async (req, res) => { await deletePolicies(req, [Number(req.params.id)]); res.json({ ok: true }); });
+fleet2Router.delete('/insurance/policies/:id', can('insurance_policies.delete'), async (req, res) => { await mustExist('insurance_policies', req.params.id); await deletePolicies(req, [Number(req.params.id)]); res.json({ ok: true }); });
 fleet2Router.post('/insurance/policies/bulk-delete', can('insurance_policies.delete'), async (req, res) => { await deletePolicies(req, (req.body.ids ?? []).map(Number).slice(0, 200)); res.json({ ok: true }); });
 const TYPE_IN: Record<string, string> = { 'third party': 'third_party', third_party: 'third_party', 'ضد الغير': 'third_party', comprehensive: 'comprehensive', 'شامل': 'comprehensive' };
 fleet2Router.use('/insurance/policies/import', importRoutes({
@@ -317,7 +317,7 @@ async function deleteCovers(req: Request, ids: number[]) {
   await exec('DELETE FROM vehicle_insurance WHERE id IN (?)', [ids]);
   await audit(req, { action: 'vehicle_insurance.delete', entity_type: 'vehicle_insurance', entity_id: ids.join(','), severity: 'critical' });
 }
-fleet2Router.delete('/insurance/vehicles/:id', can('vehicle_insurance.delete'), async (req, res) => { await deleteCovers(req, [Number(req.params.id)]); res.json({ ok: true }); });
+fleet2Router.delete('/insurance/vehicles/:id', can('vehicle_insurance.delete'), async (req, res) => { await mustExist('vehicle_insurance', req.params.id); await deleteCovers(req, [Number(req.params.id)]); res.json({ ok: true }); });
 fleet2Router.post('/insurance/vehicles/bulk-delete', can('vehicle_insurance.delete'), async (req, res) => { await deleteCovers(req, (req.body.ids ?? []).map(Number).slice(0, 200)); res.json({ ok: true }); });
 fleet2Router.use('/insurance/vehicles/import', importRoutes({
   name: 'vehicle_insurance', perm: 'vehicle_insurance.create', matchOn: 'vi.match',
@@ -402,7 +402,7 @@ async function saveAssignment(req: Request, v: Record<string, any>, id = 0) {
     // The rider's (or this pair's) previous current assignment is closed on the new start date.
     await exec('UPDATE vehicle_assignments SET is_current = 0, end_date = ? WHERE rider_id = ? AND is_current = 1 AND id <> ?', [v.start_date, v.rider_id, id]);
   }
-  const overlap = await one<any>(`SELECT id FROM vehicle_assignments WHERE rider_id = ? AND id <> ? AND start_date < COALESCE(?::date, '9999-12-31') AND COALESCE(end_date, '9999-12-31') > ?`,
+  const overlap = await one<any>(`SELECT id FROM vehicle_assignments WHERE rider_id = ? AND id <> ? AND start_date < COALESCE(CAST(? AS DATE), '9999-12-31') AND COALESCE(end_date, '9999-12-31') > ?`,
     [v.rider_id, id, v.end_date, v.start_date]);
   if (overlap) warnings.push({ code: 'overlapping_dates', id: overlap.id });
   return warnings;
@@ -442,7 +442,7 @@ async function deleteAssignments(req: Request, ids: number[]) {
   await exec('DELETE FROM vehicle_assignments WHERE id IN (?)', [ids]);
   await audit(req, { action: 'assignment.delete', entity_type: 'vehicle_assignment', entity_id: ids.join(','), severity: 'warning' });
 }
-fleet2Router.delete('/vehicle-assignments/:id', can('vehicle_assignments.delete'), async (req, res) => { await deleteAssignments(req, [Number(req.params.id)]); res.json({ ok: true }); });
+fleet2Router.delete('/vehicle-assignments/:id', can('vehicle_assignments.delete'), async (req, res) => { await mustExist('vehicle_assignments', req.params.id); await deleteAssignments(req, [Number(req.params.id)]); res.json({ ok: true }); });
 fleet2Router.post('/vehicle-assignments/bulk-delete', can('vehicle_assignments.delete'), async (req, res) => { await deleteAssignments(req, (req.body.ids ?? []).map(Number).slice(0, 200)); res.json({ ok: true }); });
 fleet2Router.use('/vehicle-assignments/import', importRoutes({
   name: 'vehicle_assignments', perm: 'vehicle_assignments.create', matchOn: 'va.match',
@@ -554,11 +554,13 @@ fleet2Router.patch('/fuel-cards/:id', can('fuel_cards.update'), async (req, res)
   res.json({ ok: true });
 });
 fleet2Router.post('/fuel-cards/:id/block', can('fuel_cards.deactivate'), async (req, res) => {
+  await mustExist('fuel_cards', req.params.id);
   await exec("UPDATE fuel_cards SET status = 'blocked' WHERE id = ?", [req.params.id]);
   await audit(req, { action: 'fuel_card.block', entity_type: 'fuel_card', entity_id: req.params.id, severity: 'warning' });
   res.json({ ok: true });
 });
 fleet2Router.post('/fuel-cards/:id/unblock', can('fuel_cards.activate'), async (req, res) => {
+  await mustExist('fuel_cards', req.params.id);
   await exec("UPDATE fuel_cards SET status = 'active' WHERE id = ?", [req.params.id]);
   await audit(req, { action: 'fuel_card.unblock', entity_type: 'fuel_card', entity_id: req.params.id });
   res.json({ ok: true });
@@ -583,7 +585,7 @@ async function deleteFuelCards(req: Request, ids: number[]) {
   await exec('DELETE FROM fuel_cards WHERE id IN (?)', [ids]);
   await audit(req, { action: 'fuel_card.delete', entity_type: 'fuel_card', entity_id: ids.join(','), severity: 'warning' });
 }
-fleet2Router.delete('/fuel-cards/:id', can('fuel_cards.delete'), async (req, res) => { await deleteFuelCards(req, [Number(req.params.id)]); res.json({ ok: true }); });
+fleet2Router.delete('/fuel-cards/:id', can('fuel_cards.delete'), async (req, res) => { await mustExist('fuel_cards', req.params.id); await deleteFuelCards(req, [Number(req.params.id)]); res.json({ ok: true }); });
 fleet2Router.post('/fuel-cards/bulk-delete', can('fuel_cards.delete'), async (req, res) => { await deleteFuelCards(req, (req.body.ids ?? []).map(Number).slice(0, 200)); res.json({ ok: true }); });
 fleet2Router.use('/fuel-cards/import', importRoutes({
   name: 'fuel_cards', perm: 'fuel_cards.create', matchOn: 'fc.number',
@@ -640,7 +642,7 @@ function oilSpec(day: string, within: number | null): Spec {
 }
 // The schedule follows the latest change in the history; if the history is emptied it stays as it is.
 async function rollForward(vehicleId: number) {
-  const r = await exec(`UPDATE oil_schedules s SET last_change = h.m FROM (SELECT vehicle_id, MAX(change_date) m FROM oil_changes WHERE vehicle_id = ? GROUP BY vehicle_id) h WHERE h.vehicle_id = s.vehicle_id AND s.last_change <> h.m`, [vehicleId]);
+  const r = await exec(`UPDATE oil_schedules s JOIN (SELECT vehicle_id, MAX(change_date) m FROM oil_changes WHERE vehicle_id = ? GROUP BY vehicle_id) h ON h.vehicle_id = s.vehicle_id SET s.last_change = h.m WHERE s.last_change <> h.m`, [vehicleId]);
   return r.affectedRows;
 }
 const OS_RULES = { vehicle_id: { req: true, type: 'int' as const }, interval_days: { req: true, type: 'int' as const, min: 1, max: 3650 }, warn_days: { type: 'int' as const, min: 0, max: 365 }, last_change: { req: true, type: 'date' as const } };
@@ -719,7 +721,7 @@ async function deleteSchedules(req: Request, ids: number[]) {
   await exec('DELETE FROM oil_schedules WHERE id IN (?)', [ids]);
   await audit(req, { action: 'oil_schedule.delete', entity_type: 'oil_schedule', entity_id: ids.join(','), severity: 'warning' });
 }
-fleet2Router.delete('/oil-changes/:id', can('oil_changes.delete'), async (req, res) => { await deleteSchedules(req, [Number(req.params.id)]); res.json({ ok: true }); });
+fleet2Router.delete('/oil-changes/:id', can('oil_changes.delete'), async (req, res) => { await mustExist('oil_schedules', req.params.id); await deleteSchedules(req, [Number(req.params.id)]); res.json({ ok: true }); });
 fleet2Router.post('/oil-changes/bulk-delete', can('oil_changes.delete'), async (req, res) => { await deleteSchedules(req, (req.body.ids ?? []).map(Number).slice(0, 200)); res.json({ ok: true }); });
 
 // The odometer of a change sits between the readings of the changes before and after it.
@@ -780,7 +782,7 @@ async function deleteChanges(req: Request, ids: number[]) {
   });
   await audit(req, { action: 'oil_change.delete', entity_type: 'oil_change', entity_id: ids.join(','), severity: 'warning' });
 }
-fleet2Router.delete('/oil-changes/history/:id', can('oil_changes.delete'), async (req, res) => { await deleteChanges(req, [Number(req.params.id)]); res.json({ ok: true }); });
+fleet2Router.delete('/oil-changes/history/:id', can('oil_changes.delete'), async (req, res) => { await mustExist('oil_changes', req.params.id); await deleteChanges(req, [Number(req.params.id)]); res.json({ ok: true }); });
 fleet2Router.post('/oil-changes/history/bulk-delete', can('oil_changes.delete'), async (req, res) => { await deleteChanges(req, (req.body.ids ?? []).map(Number).slice(0, 200)); res.json({ ok: true }); });
 
 fleet2Router.use('/oil-changes/import', importRoutes({

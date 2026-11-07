@@ -4,7 +4,7 @@ A rebuild of the system described in `Logistics-Services-User-Guide.pdf`: an adm
 operators that run riders on HungerStation and similar apps. It has an admin panel (`/admin`), a rider portal
 (`/rider`) and a public site (`/`). Screens, fields, rules and wording follow the guide.
 
-Stack: Node 24 + Express + PostgreSQL on Supabase (server), React + Vite + Tailwind (web), 4 languages (ar, en, bn, ur) with RTL.
+Stack: Node 24 + Express + MySQL 8 / MariaDB 10.6+ (server), React + Vite + Tailwind (web), 4 languages (ar, en, bn, ur) with RTL.
 
 ## Requirements
 
@@ -12,7 +12,7 @@ Stack: Node 24 + Express + PostgreSQL on Supabase (server), React + Vite + Tailw
 |---|---|---|
 | Node.js | 24 or newer | the server runs TypeScript directly through `tsx` |
 | pnpm | 9 or newer | `npm install -g pnpm` |
-| PostgreSQL | Supabase project | connect through the session pooler with TLS |
+| MySQL or MariaDB | MySQL 8 / MariaDB 10.6 or newer | any host; on Hostinger use hPanel › Databases, and open it with phpMyAdmin |
 | Git | any | to clone the repository |
 
 ## Run it locally (development)
@@ -25,9 +25,11 @@ cd mandoob
 pnpm setup                 # installs server/ and web/ dependencies
 ```
 
-**2. Create a Supabase project**
+**2. Create a MySQL database**
 
-Use Connect → Session pooler for an IPv4-compatible connection. The setup wizard creates the tables in an empty destination; an existing initialized schema is preserved. The PostgreSQL schema and defaults are in `database/supabase/`.
+Create an empty database with `utf8mb4` (for example `mandoob`) and a user with full rights on it. Locally that can be XAMPP/Laragon/MySQL; on
+Hostinger use *hPanel › Databases › MySQL Databases*. The server creates the 67 tables from `server/src/schema.sql` when it starts; every
+statement is idempotent, so an existing installation is kept as it is.
 
 **3. Settings file**
 
@@ -39,16 +41,15 @@ Fill in `.env`:
 
 | Key | Meaning | Default |
 |---|---|---|
-| `DATABASE_URL` | PostgreSQL session pooler URL; percent-encode password characters | required |
-| `DATABASE_APP_URL` | restricted runtime connection provisioned by `server/test/provision-runtime.ts`; required for RLS | required |
-| `DB_SSL_CA_FILE` | Supabase CA certificate, relative to `server/` | `../database/supabase/prod-ca-2021.crt` |
-| `DB_POOL_SIZE` | maximum server database connections | `5` |
+| `DATABASE_URL` | `mysql://user:password@host:3306/database`; percent-encode password characters. Or use `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | the wizard's `server/data/config.json` |
+| `DB_SSL` / `DB_SSL_CA_FILE` | `1` and an optional CA file for a remote server that requires TLS | off |
+| `DB_POOL_SIZE` | maximum server database connections | `10` |
 | `HOST` | listening address; set deliberately for remote deployment | `127.0.0.1` |
 | `PORT` | API port | `4000` |
 | `TRUST_PROXY` | `1` behind Nginx or a load balancer, so lockouts see the real client IP | `0` |
 | `APP_KEY` | optional base64 32-byte key that encrypts secrets and backups; without it, `server/data/app.key` is generated | — |
 
-`.env` is in `.gitignore`. Never commit it or send database credentials to the frontend. The wizard uses the configured server connection. An alternative PostgreSQL connection can be saved locally if `DATABASE_URL` is absent.
+`.env` is in `.gitignore`. Never commit it or send database credentials to the frontend. The wizard uses the configured server connection. Without `DATABASE_URL` / `DB_*`, the wizard saves the connection it tested in `server/data/config.json`.
 
 **4. Start**
 
@@ -56,16 +57,13 @@ Fill in `.env`:
 pnpm dev                   # API on http://localhost:4000, web on http://localhost:5173 (proxies /api)
 ```
 
-**5. Setup wizard (first run only)**
+**5. First start (no setup screens)**
 
-Open http://localhost:5173/setup and go through the six steps:
-
-1. **Database:** test the connection and save it.
-2. **Tables & Data:** creates the 64 tables, default settings, the five built-in roles and the Saudi cities.
-3. **Platform Info:** organization name in Arabic and English, logos, registration documents.
-4. **Admin Account:** the first Super Admin (name, email, password). The username is the part of the email before `@`.
-5. **Email (SMTP):** optional here; it can also be set later from *System › Email templates › SMTP settings*.
-6. **Complete:** the wizard closes for good. Every visit to `/setup` after this is refused.
+At start the server creates or completes the tables, the settings, the five built-in roles, the plans and the Saudi cities.
+The first time, it also creates the platform owner's account from `OWNER_EMAIL` / `OWNER_PASSWORD` / `OWNER_NAME`
+(username: the part of the email before `@`). Without `OWNER_PASSWORD` a random password is written to
+`server/data/first-login.txt`; change it from the profile and delete the file. The organisation details, logos and SMTP
+are set later from *System › Settings* and *System › Email templates*.
 
 **6. Sign in**
 
@@ -119,16 +117,33 @@ Run the smoke test on a **fresh** install whose Super Admin is `admin@example.co
 
 It changes data, so never run it against a live database.
 
+## SaaS: many companies on one installation
+
+- **Sign-up:** `/signup` opens a company account with a 14-day free trial on the Starter plan. Everyone signs in on the same
+  `/admin/login`; usernames and emails are unique on the platform, so the account names its company.
+- **Isolation:** every company-owned table has `tenant_id`. `server/src/tenancy.ts` rewrites each query before it is sent
+  (company-filtered sources, `tenant_id` added to inserts, conditions added to updates and deletes); a query on company data without a
+  company is refused. `server/test/tenant-isolation.mjs` signs up two companies and checks that one never sees or changes the other's data.
+- **Plans:** Starter, Growth, Scale (LogisTap's tiers). Prices, limits (riders, vehicles, staff accounts) and which plans are on sale are
+  edited in *Platform › Plans & prices*; an empty limit is unlimited. A new rider, vehicle or account beyond the limit is refused from any
+  screen, import or sync.
+- **Payments:** a company chooses a plan in *System › Plan & billing*, transfers to the bank account set in the owner dashboard and sends the
+  reference and receipt. The platform owner approves it in *Platform › Payments*: the plan starts and runs a month or a year after the
+  current end. When a trial or period ends the company can still read and export, but changes are paused until it renews.
+- **Platform owner:** the account created at the first start from `OWNER_EMAIL` (company 0). Only it sees *Platform*, backups, blocked networks and languages.
+- **Known limit:** a rider ID (the delivery app's ID) is unique on the whole platform, so the same rider cannot be registered in two companies at once.
+
 ## The database
 
-- `database/supabase/schema.sql` is the PostgreSQL structure (64 tables). The installer applies it only to an empty destination. Future schema changes require reviewed PostgreSQL migrations.
-- `database/supabase/seed.sql` contains repository defaults; it creates no accounts or operational data.
-- `server/src/sql.ts` binds query parameters and translates legacy application query templates to PostgreSQL. `mysql2` is no longer a runtime dependency.
-- The former MySQL schema files remain as migration references only; the application does not execute them.
-- Express enforces the existing staff/rider session permissions. Browser Data API access to application tables is closed with RLS and revoked grants; this application does not use Supabase Auth.
-- Backups restore inside a PostgreSQL transaction, respecting foreign-key order and repairing identity sequences. Uploaded files and encryption keys remain in `server/data/`; keep that directory with your database backup.
+- `server/src/schema.sql` is the baseline MySQL structure every install starts from (`CREATE TABLE IF NOT EXISTS`). Every change after it is a numbered step in `server/src/migrations.ts`, recorded in `schema_migrations` and applied once per database at start (it checks `information_schema` first, so a half-applied step can run again). Never edit an existing step; add the next number, with new columns nullable or defaulted. `database/schema.sql` is the baseline as a single file for phpMyAdmin › Import; the server still applies the migrations on its next start.
+- `server/src/sql.ts` expands `?` placeholders (objects after `SET`, lists, `VALUES` rows) and escapes every value with the MySQL driver.
+- Connections run in UTC with `ANSI_QUOTES` and strict mode. JSON columns read the same on MySQL 8 and on MariaDB, where JSON is stored as text.
+- Express enforces the staff/rider session permissions on every route.
+- Backups restore inside one transaction, parents before children; MySQL moves `AUTO_INCREMENT` past the restored ids. Uploaded files and encryption keys remain in `server/data/`; keep that directory with your database backup.
+- Business rules (statuses, each document's alert period) live once in `server/src/domain/rules.ts`; screens read them from `GET /meta/rules`. Plan limits go through `server/src/domain/quotas.ts` (`ensureQuota` on every add and every switch back on, under a lock per company); a company's standing (trial, active, ended, suspended) is `server/src/domain/subscription.ts`.
+- Plans (phase 1) are declared once in `server/src/domain/plans.ts`: the quotas (riders, vehicles, staff accounts, delivery platforms, contracts; branches, designations and invoice limits are stored for the phases that add their screens), the device limit per account, the features a plan can include, the Free plan and the annual discount (an empty annual price is 12 months less `platform.annual_discount`, 15% by default). When a trial or paid period ends the company falls back to Free (nothing deleted); records above the limits are "paused" (`pausedGate`): the oldest stay open, the rest open again after an upgrade. A smaller plan approved during a paid period starts when that period ends. Test: `server/test/plans.mjs`.
 
-For the destructive smoke test, use `server/test/prepare-postgres.ts` with an isolated `DB_SCHEMA=mandoob_test_*`, a separate `APP_DATA_DIR`, `PORT=4100` and `DISABLE_SCHEDULER=1`. The preparation script refuses the public schema. Never point the smoke test at live operational data.
+For the destructive smoke test, point `DATABASE_URL` at a throwaway database (for example `mysql://root:pw@127.0.0.1:3306/mandoob_test`), with a separate `APP_DATA_DIR`, `PORT=4100` and `DISABLE_SCHEDULER=1`, `OWNER_EMAIL=admin@example.com` and `OWNER_PASSWORD=Admin12345!`, then `node server/test/smoke.mjs http://localhost:4100`. Never point the smoke test at live operational data.
 
 Main groups of tables:
 
@@ -156,8 +171,8 @@ database/            schema.sql, the full database structure
 
 | Symptom | Cause and fix |
 |---|---|
-| Every page goes to `/setup` | The wizard has not finished, or `.env` / `server/data/config.json` points to another database. |
-| `ER_ACCESS_DENIED_ERROR` at start | Wrong `DB_USER` / `DB_PASSWORD` in `.env`. |
+| The server stops with "No database" | `DATABASE_URL` (or `DB_*`) is missing from `.env`. |
+| `ER_ACCESS_DENIED_ERROR` at start | Wrong user or password in `DATABASE_URL` / `DB_USER` / `DB_PASSWORD`. |
 | Port 4000 or 5173 is busy | Change `PORT` in `.env`. For the web dev server, set `API_PORT` to the same value. |
 | Riders get "Email service unavailable" | SMTP is not set up or not enabled: *System › Email templates › SMTP settings*. |
 | "Too many attempts" for many riders | The portal allows 10 failures in 15 minutes per network. Wait 15 minutes. |
@@ -177,7 +192,7 @@ database/            schema.sql, the full database structure
 | 8 Fines, wallet, monthly billing, the rider's financial summary | ✅ |
 | 9 Dashboard, reports, notifications and notification preferences | ✅ |
 | 10 Administration: users, roles and permission matrix, active sessions, blocked IPs, profile, lockout and IP blocking | ✅ |
-| 11 Settings, attachments, activity log, login attempts, setup wizard, email templates and SMTP, email log, system errors, scheduled jobs, backups with restore, languages editor | ✅ |
+| 11 Settings, attachments, activity log, login attempts, automatic first start, email templates and SMTP, email log, system errors, scheduled jobs, backups with restore, languages editor | ✅ |
 | 12 Rider portal (sign-in by rider ID, overview, profile, attendance photos, performance, ratings, update requests, leaves, conversations, security, help), the office's portal account card, public website | ✅ |
 
 ## Known limits
@@ -197,4 +212,4 @@ Each one has a `ponytail:` note in the code where it applies.
   portal; other admin screens fall back to English, as the guide describes.
 - **12.16 rider guides.** Only the Arabic PDF (`rider-portal-guide-ar.pdf`) is in the repository.
 
-Generated QA reports are saved in `.qa-reports/` and ignored by Git. The historical coverage summary is in `database/supabase/FULL-QA.md`; use `server/test/qa-run.ps1` for the isolated full suite.
+Generated QA reports are saved in `.qa-reports/` and ignored by Git. The full test plan is `TEST-PLAN.md`; run it with `server/test/qa-run-mysql.ps1` (set `QA_DATABASE_URL` to a throwaway `mandoob_test…` database and `QA_BROWSER_PATH` to Chrome or Edge).

@@ -10,6 +10,16 @@ import { useI18n } from '../../i18n';
 import { LangPicker, ThemeToggle } from '../../layout';
 import { Alert, Button, cx, Field, Spinner, useErrorText } from '../../ui/kit';
 
+// The company's own portal link carries ?c=<company code>; it is remembered on this device, so a rider whose number
+// also exists in another company still reaches the right one.
+function riderCompany() {
+  const fromLink = new URLSearchParams(location.search).get('c')?.trim().toLowerCase() ?? '';
+  try {
+    if (fromLink) localStorage.setItem('lsp.rider_company', fromLink);
+    return fromLink || localStorage.getItem('lsp.rider_company') || '';
+  } catch { return fromLink; }
+}
+
 // Chapter 12: the rider portal. Phone first; the rider reads and requests, the office approves.
 export type RiderMe = { id: number; full_name: string; alias: string | null; status: string; has_password: boolean; verified_email: string | null; locale: string | null; photo_id: number | null; unread_issues: number };
 const Ctx = createContext<{ me: RiderMe; refresh: () => Promise<void> }>(null!);
@@ -222,7 +232,7 @@ export function RiderLogin() {
     if (!id) { setErr(t('rp.login.enter_id')); return; }
     setBusy(true); setErr(null);
     try {
-      const r = await post<{ step?: string; first?: boolean }>('/portal/login', { rider_id: id, password: step === 'password' ? password : undefined });
+      const r = await post<{ step?: string; first?: boolean }>('/portal/login', { rider_id: id, company: riderCompany(), password: step === 'password' ? password : undefined });
       if (r.step === 'password') { setStep('password'); return; }
       nav(r.first ? '/rider/security?welcome=1' : params.get('next') || '/rider', { replace: true });
     } catch (e) { setErr(errText(e)); setPassword(''); } finally { setBusy(false); }
@@ -325,12 +335,12 @@ export function ForgotPassword() {
   const send = async () => {
     if (!id) { setErr(t('rp.login.enter_id')); return; }
     setBusy(true); setErr(null);
-    try { const r = await post('/portal/forgot', { rider_id: id }); setLeft(r.resend_in); setStep('code'); } catch (e) { setErr(errText(e)); } finally { setBusy(false); }
+    try { const r = await post('/portal/forgot', { rider_id: id, company: riderCompany() }); setLeft(r.resend_in); setStep('code'); } catch (e) { setErr(errText(e)); } finally { setBusy(false); }
   };
   const reset = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true); setErr(null); setFields({});
-    try { await post('/portal/reset', { rider_id: id, code, password: pw, confirm: pw2 }); setStep('done'); }
+    try { await post('/portal/reset', { rider_id: id, company: riderCompany(), code, password: pw, confirm: pw2 }); setStep('done'); }
     catch (e) { const f = { code: fieldText(e, 'code'), password: fieldText(e, 'password'), confirm: fieldText(e, 'confirm') }; setFields(f); if (!f.code && !f.password && !f.confirm) setErr(errText(e)); }
     finally { setBusy(false); }
   };

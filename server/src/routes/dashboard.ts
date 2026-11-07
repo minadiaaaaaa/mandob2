@@ -5,6 +5,7 @@ import { can, requireUser } from '../auth.js';
 import { audit } from '../audit.js';
 import { alertsUnion } from './docs.js';
 import { notifyRider, notifyUsers } from '../notify.js';
+import { EXPIRY_ALERTS } from '../domain/rules.js';
 
 export const dashboardRouter = Router();
 
@@ -169,7 +170,7 @@ dashboardRouter.get('/reports/:name/export', can('reports.export'), async (req, 
 });
 
 // ======================================================================== 9.3 notifications
-const RECIPIENT = "CASE WHEN n.rider_id IS NOT NULL THEN 'rider' WHEN ro.name = 'Super Admin' THEN 'admin' ELSE 'manager' END";
+const RECIPIENT = "CASE WHEN n.rider_id IS NOT NULL THEN 'rider' WHEN ro.name IN ('Super Admin', 'Admin') THEN 'admin' ELSE 'manager' END";
 const noteSpec: Spec = {
   from: 'FROM notifications n LEFT JOIN users u ON u.id = n.user_id LEFT JOIN roles ro ON ro.id = u.role_id LEFT JOIN riders r ON r.id = n.rider_id',
   select: `n.*, COALESCE(u.full_name, r.full_name) recipient, ${RECIPIENT} recipient_kind, (u.id IS NULL AND r.id IS NULL) recipient_gone`,
@@ -240,12 +241,8 @@ dashboardRouter.put('/notifications/preferences/:category', can('notification_pr
 // ======================================================================== the generator (also the daily scheduled job)
 // Documents entering their alert period or expired, oil changes due, instalments due or overdue.
 // One notification per recipient per record per day, so running it twice creates nothing new.
-const ALERT_KEY: Record<string, [string, number]> = {
-  id: ['id_document.expiry_alert_days', 60], license: ['driving_license.expiry_alert_days', 30], health: ['health_cert.expiry_alert_days', 30],
-  driver_card: ['driver_card.expiry_alert_days', 30], ajeer: ['ajeer_permit.expiry_alert_days', 60], operation_card: ['operation_card.expiry_alert_days', 30],
-  vehicle_registration: ['vehicle_registration.expiry_alert_days', 30], vehicle_insurance: ['vehicle_insurance.expiry_alert_days', 30],
-  insurance_policy: ['insurance_policy.expiry_alert_days', 45], transport_license: ['transport_license.expiry_alert_days', 60],
-};
+// the alert period of each document type comes from domain/rules.ts
+const ALERT_KEY: Record<string, [string, number]> = Object.fromEntries(Object.entries(EXPIRY_ALERTS).map(([k, v]) => [k, [v.setting, v.days]]));
 export async function generateNotifications() {
   const day = await today();
   let created = 0;

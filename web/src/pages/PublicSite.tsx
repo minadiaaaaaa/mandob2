@@ -59,7 +59,7 @@ export default function PublicSite() {
         <h2 className="mb-5 text-center text-xl font-semibold">{t('public.org_details')}</h2>
         {!o['org.name'] ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-center dark:border-amber-900 dark:bg-amber-950/30">
-            <p>{t('public.not_set_up')}</p><Link to="/setup"><Button className="mt-3">{t('public.open_wizard')}</Button></Link>
+            <p>{t('public.not_set_up')}</p><Link to="/signup"><Button className="mt-3">{t('login.start_trial')}</Button></Link>
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-3">

@@ -16,7 +16,7 @@ export default function Login() {
   const nav = useNavigate();
   const [params] = useSearchParams();
   const errText = useErrorText();
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useState(() => params.get('u') ?? '');
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
   const [code, setCode] = useState('');
@@ -24,6 +24,8 @@ export default function Login() {
   const [left, setLeft] = useState(0);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // the plan's device limit was reached: the next try may sign out the oldest device (after the right password again)
+  const [deviceLimit, setDeviceLimit] = useState<number | null>(null);
 
   const newCode = useCallback(async () => {
     try { const c = await get<Challenge>('/auth/challenge'); setCh(c); setLeft(c.ttl); setCode(''); }
@@ -43,13 +45,15 @@ export default function Login() {
     if (!username || !password || !code) { setErr(t('err.fill_required')); return; }
     setBusy(true); setErr(null);
     try {
-      await post('/auth/login', { username, password, challengeId: ch?.id, code });
+      await post('/auth/login', { username, password, challengeId: ch?.id, code, replace_oldest: deviceLimit != null });
       await refresh();
       nav(params.get('next') || '/admin', { replace: true });
     } catch (e) {
-      setErr(errText(e));
-      // After any rejection the password is cleared and a new code is issued.
-      setPassword('');
+      const limit = e instanceof ApiError && e.code === 'device_limit_reached';
+      setDeviceLimit(limit ? Number((e as ApiError).params.max) : null);
+      setErr(limit ? null : errText(e));
+      // After any rejection the password is cleared and a new code is issued (the device step keeps it: it was right).
+      if (!limit) setPassword('');
       const next = e instanceof ApiError ? e.params.challenge : null;
       if (next) { setCh(next); setLeft(next.ttl); setCode(''); } else newCode();
     } finally { setBusy(false); }
@@ -57,13 +61,13 @@ export default function Login() {
   const mm = `${String(Math.floor(Math.max(left, 0) / 60)).padStart(2, '0')}:${String(Math.max(left, 0) % 60).padStart(2, '0')}`;
 
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-950 dark:to-zinc-900">
+    <div className="flex min-h-screen flex-col bg-[#f5f5f2] dark:bg-zinc-950">
       <div className="flex justify-end gap-1 p-3"><LangPicker /><ThemeToggle /></div>
       <div className="flex flex-1 items-center justify-center p-4">
-        <form onSubmit={submit} className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+        <form onSubmit={submit} className="w-full max-w-sm rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
           <div className="mb-5 text-center">
             {org?.logos?.logo ? <img src="/api/public/logo/logo" alt="" className="mx-auto mb-3 h-14 object-contain" />
-              : <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-xl bg-brand text-lg font-bold text-white">{(org?.['org.name'] || 'L')[0]}</div>}
+              : <div className="mx-auto mb-3 flex size-11 items-center justify-center rounded-md bg-brand text-lg font-bold text-white">{(org?.['org.name'] || 'L')[0]}</div>}
             <h1 className="text-lg font-semibold">{t('login.title')}</h1>
             <p className="mt-1 text-xs text-zinc-500">{t('login.subtitle')}</p>
           </div>
@@ -92,9 +96,14 @@ export default function Login() {
               </div>
             </div>
             {err && <Alert tone="red">{err}</Alert>}
-            <Button type="submit" variant="primary" className="w-full" loading={busy} disabled={left <= 0}>{busy ? t('login.signing_in') : t('login.sign_in')}</Button>
+            {deviceLimit != null && <Alert tone="amber" title={t('login.device_limit_title', { n: deviceLimit })}>{t('login.device_limit_body')}</Alert>}
+            <Button type="submit" variant="primary" className="w-full" loading={busy} disabled={left <= 0}>
+              {busy ? t('login.signing_in') : deviceLimit != null ? t('login.replace_oldest') : t('login.sign_in')}
+            </Button>
+            {deviceLimit != null && <button type="button" className="w-full text-center text-xs text-zinc-500 hover:underline" onClick={() => { setDeviceLimit(null); setPassword(''); }}>{t('common.cancel')}</button>}
           </div>
           <p className="mt-4 text-center text-xs text-zinc-500">{t('login.never_share')}</p>
+          <p className="mt-3 border-t border-zinc-100 pt-3 text-center text-xs text-zinc-500 dark:border-zinc-800">{t('login.no_account')} <Link to="/signup" className="font-medium text-brand hover:underline">{t('login.start_trial')}</Link></p>
           <p className="mt-1 text-center text-xs"><Link to="/" className="text-brand hover:underline">{t('login.back_to_site')}</Link></p>
         </form>
       </div>

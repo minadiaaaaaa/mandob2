@@ -3,6 +3,7 @@ import { exec, one, q, setSetting, setting, settingInt } from '../db.js';
 import { addDays, clean, fail, latinDigits, today } from '../http.js';
 import { can } from '../auth.js';
 import { audit } from '../audit.js';
+import { requireFeature } from './saas.js';
 import { cellNum, cellStr } from '../importer.js';
 
 // 3.6–3.9 Live riders. The platform board arrives through the sync ingest (source "live"), every minute.
@@ -167,7 +168,7 @@ liveRouter.get('/live/report/export', can('live_riders.view'), async (req, res) 
 });
 
 // ======================================================================== 3.8 a rider's day
-liveRouter.get('/live/riders/:id', can('live_riders.view'), async (req, res) => {
+liveRouter.get('/live/riders/:id', can('live_riders.view'), requireFeature('live_rider_details'), async (req, res) => {
   const id = Number(req.params.id);
   const c = await cfg();
   const b = await one<any>('SELECT b.*, r.id known, r.full_name, r.phone FROM live_board b LEFT JOIN riders r ON r.id = b.rider_id WHERE b.rider_id = ?', [id]);
@@ -184,7 +185,7 @@ liveRouter.get('/live/riders/:id', can('live_riders.view'), async (req, res) => 
     stops: stops(p, c.radius, 10).sort((a, x) => x.minutes - a.minutes), timeline, route: sample, points: p.length,
     first: p[0]?.at ?? null, last: p[p.length - 1]?.at ?? null, performance: perf ?? null });
 });
-liveRouter.get('/live/riders/:id/points.csv', can('live_riders.view'), async (req, res) => {
+liveRouter.get('/live/riders/:id/points.csv', can('live_riders.view'), requireFeature('live_rider_details'), async (req, res) => {
   const day = String(req.query.day ?? await workDay());
   const p = await q<any>('SELECT at, lat, lng, accuracy, status, has_order FROM live_points WHERE rider_id = ? AND work_day = ? ORDER BY at', [req.params.id, day]);
   const tz = (await setting('org.timezone')) || 'Asia/Riyadh';

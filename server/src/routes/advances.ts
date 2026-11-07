@@ -1,5 +1,5 @@
 import { Router, type Request } from 'express';
-import { exec, one, q, settingInt, setting, tx } from '../db.js';
+import { exec, one, q, settingInt, setting, tx, lockedTx } from '../db.js';
 import { addDays, addMonths, clean, eq, fail, fieldError, inList, list, listAll, sendExport, today, where, type Query, type Spec } from '../http.js';
 import { can } from '../auth.js';
 import { audit } from '../audit.js';
@@ -119,8 +119,7 @@ advancesRouter.post('/advances', can('advances.create'), async (req, res) => {
   const allowed = await settingInt('advance.max_open_per_rider', 1);
   if (open >= allowed) fieldError('rider_id', 'advance_open_exists', { n: allowed });
   const year = Number(v.request_date.slice(0, 4));
-  const out = await tx(async () => {
-    await q('SELECT pg_advisory_xact_lock(41001, ?::int)', [year]);
+  const out = await lockedTx(`advance-seq-${year}`, async () => {
     const [{ n }] = await q<any>('SELECT COALESCE(MAX(seq), 0) + 1 n FROM advances WHERE seq_year = ?', [year]);
     const number = `ADV-${year}-${String(n).padStart(4, '0')}`;
     const ins = await exec('INSERT INTO advances SET ?', [{ ...v, seq_year: year, seq: n, number, created_by: req.user!.id }]);

@@ -1,15 +1,16 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { randomBytes, randomInt } from 'node:crypto';
-import { exec, one, q, setting, tx, withActor } from '../db.js';
+import { asPlatform, exec, one, q, setting, tx, withActor, withTenant } from '../db.js';
 import { HttpError, addDays, clean, daysBetween, fail, fieldError, langOf, latinDigits, sendExport, today, tr, type Col } from '../http.js';
 import { can, clientIp, hashPassword, readCookie, sha256, verifyPassword } from '../auth.js';
 import { audit } from '../audit.js';
 import { sendStored, storeFile, upload } from '../files.js';
-import { sendMail, smtpConfig } from '../mail.js';
+import { effectiveSmtp, sendMail } from '../mail.js';
 import { fileChangeRequest } from './requests.js';
 import { leaveFromRider, overlap } from './leaves.js';
 import { addMessage, files10, messages, riderMessage } from './issues.js';
 import { logError } from './maintenance.js';
+import { companyAccess } from '../domain/subscription.js';
 
 // Chapter 12: the rider portal. Riders sign in with their own sessions, never with a staff account.
 declare global {
@@ -26,7 +27,48 @@ const ALLOWED = ['active', 'inactive'];
 const ua = (req: Request) => (req.headers['user-agent'] ?? '').slice(0, 255);
 const riderAudit = (req: Request, e: Parameters<typeof audit>[1]) => audit(req, { ...e, actor_type: 'rider', actor_name: `${req.rider!.full_name} #${req.rider!.id}` });
 
+// The ID a rider types names the company. When two companies hold the same number, the company's own portal link
+// (/rider/login?c=<company code>) sends `company`; without a valid code the password decides which rider it is.
+// Nothing here tells a caller that a number exists in another company or that a company is suspended: those
+// answers come only after the password (login) or never (forgot / reset answer as they always do).
+type Candidate = { tenant_id: number; slug: string | null; portal_password_hash: string | null };
+portalRouter.use(['/portal/login', '/portal/forgot', '/portal/reset'], async (req: Request, res: Response, next: NextFunction) => {
+  const id = latinDigits(String(req.body?.rider_id ?? '').trim());
+  const company = String(req.body?.company ?? '').trim().toLowerCase();
+  const all = /^\d{1,20}$/.test(id) ? await asPlatform(() => q<Candidate>(`SELECT r.tenant_id, t.slug, r.portal_password_hash FROM riders r
+    LEFT JOIN tenants t ON t.id = r.tenant_id WHERE r.id = ?`, [id])) : [];
+  if (!all.length) return next(); // no such rider anywhere: the handler answers as for any unknown number
+  // the code from the link picks the company; a missing, stale or wrong code never blocks a number held only once
+  let pick = company ? all.filter((c) => c.slug === company) : [];
+  if (pick.length !== 1) pick = all.length === 1 ? all : [];
+  if (!pick.length) {
+    const path = req.originalUrl.split('?')[0];
+    if (path.endsWith('/portal/forgot')) return res.json({ ok: true, resend_in: 60 });
+    if (path.endsWith('/portal/reset')) return fieldError('code', 'code_expired');
+    const password = req.body?.password ? String(req.body.password) : '';
+    // the same limit as the sign-in itself (and the same answer as for a number held once), before any password
+    // is tried; failures are recorded in the platform's company
+    if (await tooManyFrom(req)) { await attempt(req, id, null, false, 'too_many'); fail(429, 'portal_too_many'); }
+    if (!password) return res.json({ step: 'password' });
+    const matches: Candidate[] = [];
+    for (const c of all) if (c.portal_password_hash && (await verifyPassword(password, c.portal_password_hash))) matches.push(c);
+    if (matches.length !== 1) { await attempt(req, id, null, false, 'bad_credentials'); fail(401, 'portal_bad_credentials'); }
+    pick = matches;
+  }
+  // a suspended company's riders cannot sign in; the handlers check it only after the password (see companyRefused)
+  res.locals.companyRefused = await companyAccess(pick[0].tenant_id, 'GET', req.originalUrl);
+  return withTenant(pick[0].tenant_id, next);
+});
+const companyRefused = (res: Response) => res.locals.companyRefused as { status: number; error: string } | null | undefined;
+
 // ======================================================================== sign in (12.2)
+// 10 failures from one network within 15 minutes, counted across every company (a number can be tried in each);
+// the password step and the refusals themselves do not count
+async function tooManyFrom(req: Request) {
+  const [{ n }] = await asPlatform(() => q<{ n: number }>(`SELECT COUNT(*) n FROM rider_login_attempts WHERE ip = ? AND success = 0
+    AND reason NOT IN ('no_password', 'too_many') AND created_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL 15 MINUTE)`, [clientIp(req)]));
+  return Number(n) >= 10;
+}
 async function attempt(req: Request, typed: string, riderId: number | null, success: boolean, reason: string | null) {
   await exec('INSERT INTO rider_login_attempts (typed, rider_id, success, reason, ip, user_agent) VALUES (?, ?, ?, ?, ?, ?)',
     [typed.slice(0, 30) || null, riderId, success ? 1 : 0, reason, clientIp(req), ua(req)]);
@@ -36,10 +78,7 @@ portalRouter.post('/portal/login', async (req, res) => {
   const typed = latinDigits(String(req.body?.rider_id ?? '').trim());
   const password = req.body?.password ? String(req.body.password) : '';
   const ip = clientIp(req);
-  // 10 failures from one network within 15 minutes; the password step and the refusals themselves do not count
-  const [{ n }] = await q<any>(`SELECT COUNT(*) n FROM rider_login_attempts WHERE ip = ? AND success = 0 AND reason NOT IN ('no_password', 'too_many')
-    AND created_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL 15 MINUTE)`, [ip]);
-  if (Number(n) >= 10) { await attempt(req, typed, null, false, 'too_many'); fail(429, 'portal_too_many'); }
+  if (await tooManyFrom(req)) { await attempt(req, typed, null, false, 'too_many'); fail(429, 'portal_too_many'); }
   const r = /^\d{1,20}$/.test(typed) ? await one<any>('SELECT id, full_name, status, portal_enabled, portal_password_hash FROM riders WHERE id = ?', [typed]) : undefined;
   if (!r) { await attempt(req, typed, null, false, 'bad_credentials'); fail(401, 'portal_bad_credentials'); }
   if (!r.portal_enabled || !ALLOWED.includes(r.status)) { await attempt(req, typed, r.id, false, 'disabled'); fail(403, 'portal_disabled'); }
@@ -48,6 +87,8 @@ portalRouter.post('/portal/login', async (req, res) => {
     if (!password) { await attempt(req, typed, r.id, false, 'no_password'); return res.json({ step: 'password' }); }
     if (!(await verifyPassword(password, r.portal_password_hash))) { await attempt(req, typed, r.id, false, 'bad_credentials'); fail(401, 'portal_bad_credentials'); }
   }
+  const refused = companyRefused(res);
+  if (refused) { await attempt(req, typed, r.id, false, refused.error); throw new HttpError(refused.status, refused.error); }
   const token = randomBytes(32).toString('hex');
   await exec('INSERT INTO rider_sessions (token_hash, rider_id, ip, user_agent, expires_at) VALUES (?, ?, ?, ?, DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? HOUR))',
     [sha256(token), r.id, ip, ua(req), SESSION_HOURS]);
@@ -72,7 +113,7 @@ async function endSessions(riderId: number, keep = 0) {
 // ======================================================================== emailed codes (12.3, 12.12)
 async function emailAccount() {
   if ((await setting('email.enabled')) === '0') return null;
-  for (const a of ['riders', 'system'] as const) { const c = await smtpConfig(a); if (c.host && c.enabled) return a; }
+  for (const a of ['riders', 'system'] as const) { const c = await effectiveSmtp(a); if (c.host && c.enabled) return a; }
   return null;
 }
 async function emailUnavailable() {
@@ -119,7 +160,8 @@ portalRouter.post('/portal/forgot', async (req, res) => {
   const id = latinDigits(String(req.body?.rider_id ?? '').trim());
   const r = /^\d{1,20}$/.test(id) ? await one<any>(`SELECT r.id, r.full_name, r.status, r.portal_enabled, a.verified_email, a.locale FROM riders r
     LEFT JOIN rider_accounts a ON a.rider_id = r.id WHERE r.id = ?`, [id]) : undefined;
-  if (r?.verified_email && r.portal_enabled && ALLOWED.includes(r.status)) {
+  // a suspended company's rider gets the same answer, but no code
+  if (r?.verified_email && r.portal_enabled && ALLOWED.includes(r.status) && !companyRefused(res)) {
     try { await issueCode(req, r, 'reset_password', r.verified_email, `/rider/forgot-password?id=${r.id}&step=code`); }
     catch (e) { if (!(e instanceof HttpError)) throw e; }
   }
@@ -129,7 +171,7 @@ portalRouter.post('/portal/forgot', async (req, res) => {
 portalRouter.post('/portal/reset', async (req, res) => {
   const id = latinDigits(String(req.body?.rider_id ?? '').trim());
   const r = /^\d{1,20}$/.test(id) ? await one<any>('SELECT id, full_name FROM riders WHERE id = ?', [id]) : undefined;
-  if (!r) fieldError('code', 'code_expired');
+  if (!r || companyRefused(res)) fieldError('code', 'code_expired');
   const p = checkPassword(req.body ?? {});
   await checkCode(r.id, 'reset_password', req.body.code);
   await exec('UPDATE riders SET portal_password_hash = ?, portal_password_set_at = UTC_TIMESTAMP() WHERE id = ?', [await hashPassword(p), r.id]);
@@ -141,9 +183,16 @@ portalRouter.post('/portal/reset', async (req, res) => {
 // ======================================================================== the signed-in rider
 async function riderAuth(req: Request, _res: Response, next: NextFunction) {
   const tok = readCookie(req, COOKIE);
-  const s = tok ? await one<any>(`SELECT s.id sid, s.expires_at < UTC_TIMESTAMP() expired, r.id, r.full_name, r.status, r.portal_enabled, a.locale
-    FROM rider_sessions s JOIN riders r ON r.id = s.rider_id LEFT JOIN rider_accounts a ON a.rider_id = r.id WHERE s.token_hash = ? AND s.status = 'active'`, [sha256(tok)]) : undefined;
+  const s = tok ? await asPlatform(() => one<any>(`SELECT s.id sid, s.tenant_id, s.expires_at < UTC_TIMESTAMP() expired, r.id, r.full_name, r.status, r.portal_enabled, a.locale
+    FROM rider_sessions s JOIN riders r ON r.id = s.rider_id AND r.tenant_id = s.tenant_id LEFT JOIN rider_accounts a ON a.rider_id = r.id AND a.tenant_id = r.tenant_id
+    WHERE s.token_hash = ? AND s.status = 'active'`, [sha256(tok)])) : undefined;
   if (!s) throw new HttpError(401, 'rider_session_ended');
+  return withTenant(s.tenant_id, () => riderSession(req, s, next));
+}
+const RIDER_ALWAYS = [/^\/api\/portal\/logout$/, /^\/api\/portal\/locale$/];
+async function riderSession(req: Request, s: any, next: NextFunction) {
+  const refused = await companyAccess(s.tenant_id, req.method, req.originalUrl.split('?')[0], RIDER_ALWAYS);
+  if (refused) throw new HttpError(refused.status, refused.error);
   if (s.expired) {
     await exec("UPDATE rider_sessions SET status = 'expired', ended_at = UTC_TIMESTAMP() WHERE id = ?", [s.sid]);
     throw new HttpError(401, 'rider_session_ended');
@@ -290,7 +339,7 @@ async function period(req: Request) {
   return { from, to, group };
 }
 async function perfRows(riderId: number, from: string, to: string, group: string) {
-  const key = group === 'month' ? 'LEFT(p.work_date::text, 7)' : 'p.work_date';
+  const key = group === 'month' ? 'LEFT(CAST(p.work_date AS CHAR), 7)' : 'p.work_date';
   return q<any>(`SELECT ${key} label, ${PERF_SUMS} FROM daily_performance p WHERE p.rider_id = ? AND p.work_date BETWEEN ? AND ? GROUP BY label ORDER BY label DESC`, [riderId, from, to]);
 }
 portalRouter.get('/portal/performance', async (req, res) => {
@@ -523,7 +572,7 @@ portalRouter.post('/portal/security/email/verify', async (req, res) => {
   try {
     await exec('INSERT INTO rider_accounts (rider_id, verified_email, email_verified_at) VALUES (?, ?, UTC_TIMESTAMP()) ON DUPLICATE KEY UPDATE verified_email = VALUES(verified_email), email_verified_at = UTC_TIMESTAMP()', [id, c.email]);
   } catch (e: any) {
-    if (e?.code === '23505') fieldError('email', 'email_verified_elsewhere');
+    if (e?.code === 'ER_DUP_ENTRY') fieldError('email', 'email_verified_elsewhere');
     throw e;
   }
   await riderAudit(req, { action: 'portal.email_verified', entity_type: 'rider', entity_id: id, details: c.email });

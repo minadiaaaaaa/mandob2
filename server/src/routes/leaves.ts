@@ -2,7 +2,7 @@ import { asSystem } from '../db.js';
 import { Router, type Request } from 'express';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { STORAGE_DIR, exec, one, q, setSetting, setting, tx } from '../db.js';
+import { STORAGE_DIR, exec, one, q, setSetting, setting, tx, lockedTx } from '../db.js';
 import { addDays, clean, daysBetween, eq, fail, fieldError, inList, list, listAll, sendExport, today, where, type Query, type Spec } from '../http.js';
 import { can, has } from '../auth.js';
 import { audit } from '../audit.js';
@@ -216,8 +216,7 @@ async function stampFor(req: Request, status: string) {
 }
 export async function createLeave(req: Request | null, v: Record<string, any>, source: 'office' | 'rider') {
   const year = Number(v.start_date.slice(0, 4));
-  return tx(async () => {
-    await q('SELECT pg_advisory_xact_lock(41002, ?::int)', [year]);
+  return lockedTx(`leave-seq-${year}`, async () => {
     const [{ n }] = await asSystem(() => q<any>('SELECT COALESCE(MAX(seq), 0) + 1 n FROM leaves WHERE seq_year = ?', [year]));
     const letter_no = `LV-${year}-${String(n).padStart(4, '0')}`;
     const stamped = req && source === 'office' ? await stampFor(req, 'pending') : 0;

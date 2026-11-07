@@ -4,11 +4,12 @@ import { post } from '../../api';
 import { useI18n } from '../../i18n';
 import { Alert, Button, Card, Checkbox, Field, PageHeader, useErrorText, useUi } from '../../ui/kit';
 import { ImportWizard } from '../../ui/importer';
-import { useCityName, useOptions } from '../../ui/common';
+import { useCityName, useOptions, useRules } from '../../ui/common';
 
 // Bulk edit: change what repeats across the selected riders. A field that is not ticked stays as it is.
 export function RidersBulkEdit() {
   const { t } = useI18n();
+  const rules = useRules(); // statuses come from the server (GET /meta/rules)
   const nav = useNavigate();
   const loc = useLocation() as { state?: { ids: number[]; names: string[] } };
   const { confirm, toast } = useUi();
@@ -28,7 +29,7 @@ export function RidersBulkEdit() {
     ['company_id', t('riders.company'), companies.map((c: any) => [c.id, c.name])],
     ['contract_id', t('riders.contract'), contracts.map((c: any) => [c.id, c.name])],
     ['city_id', t('riders.city'), cities.map((c: any) => [c.id, city(c)])],
-    ['status', t('riders.status'), ['active', 'inactive', 'suspended', 'terminated'].map((s) => [s, t(`rider.status.${s}`)])],
+    ['status', t('riders.status'), (rules?.statuses.rider ?? []).map((s) => [s, t(`rider.status.${s}`)])],
   ] as [string, string, [string | number, string][]][];
   const chosen = fields.filter(([k]) => on[k]);
   const contractMismatch = on.contract_id && on.company_id && v.contract_id && !contracts.some((c: any) => String(c.id) === v.contract_id);

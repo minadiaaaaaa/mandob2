@@ -6,7 +6,7 @@ import { useAuth } from '../../auth';
 import { fmtDateTime, useI18n } from '../../i18n';
 import { Alert, Badge, Button, Card, Details, IconButton, Loading, PageHeader, useAction, useErrorText, useUi } from '../../ui/kit';
 import { Attachments } from '../../ui/files';
-import { Remaining, useCityName } from '../../ui/common';
+import { Remaining, useCityName, type ExpiryKind } from '../../ui/common';
 import { DOC_MODULE, DOC_TYPES, RiderStatus, type DocType } from './shared';
 import { RiderOpsCards } from './RiderCards';
 
@@ -107,7 +107,7 @@ export default function RiderView() {
                     <span className="font-medium">{t(`docs.${type}`)}</span>
                     {d ? <>
                       {d.expiry_date && <span className="text-xs text-zinc-500">{t('docs.valid_until')} <span className="num">{d.expiry_date}</span></span>}
-                      <Remaining days={d.days_left} />
+                      <Remaining days={d.days_left} kind={type as ExpiryKind} />
                       <Badge tone={d.days_left !== null && d.days_left < 0 ? 'red' : 'green'} className="ms-auto">{d.days_left !== null && d.days_left < 0 ? t('docs.expired') : t('docs.on_file')}</Badge>
                     </> : <Badge tone="grey" className="ms-auto">{t('docs.no_document')}</Badge>}
                   </div>

@@ -1,4 +1,4 @@
-import { asSystem } from './db.js';
+import { asSystem, currentTenant, withTenant } from './db.js';
 import nodemailer from 'nodemailer';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -27,7 +27,7 @@ export const SEED = [
   T('portal.reset_password', 'Rider portal password recovery', 'portal', 'owner_name,code,link', 'رمز استعادة كلمة المرور: {code}', '<p>{owner_name}، رمز استعادة كلمة المرور هو <b style="font-size:20px">{code}</b>. صالح لمدة 15 دقيقة. إن لم تطلبه فتجاهل هذه الرسالة.</p><p><a href="{link}">إدخال الرمز</a></p>', 1),
 ];
 export async function seedTemplates() {
-  await exec('INSERT INTO email_templates (tkey, name, subject, body_html, placeholders, grp, is_system, is_required) VALUES ? ON CONFLICT DO NOTHING',
+  await exec('INSERT IGNORE INTO email_templates (tkey, name, subject, body_html, placeholders, grp, is_system, is_required) VALUES ?',
     [SEED.map(t => [t.key, t.name, t.subject, t.body, t.placeholders, t.grp, 1, t.required])]);
 }
 
@@ -88,9 +88,26 @@ async function smtpConfigInternal(account: Account) {
     sender_name: (await get('sender_name')) ?? '', sender_email: (await get('sender_email')) ?? '', enabled: (await get('enabled')) === '1',
   };
 }
+// The mail server a company actually sends through: its own when it has set one up, otherwise the platform's,
+// so a new company's rider codes and alerts work from day one. Mail sent through the platform carries the
+// company's name. The settings screen keeps showing only the company's own settings (smtpConfig).
+async function effectiveSmtpInternal(account: Account) {
+  const own = await smtpConfigInternal(account);
+  // a company that set up its own mail server keeps it, even switched off; only one with none borrows the platform's
+  if (own.host || !currentTenant()) return { ...own, via: 'company' as const };
+  const platform = await withTenant(0, async () => {
+    for (const a of [account, 'system'] as const) { const c = await smtpConfigInternal(a); if (c.host && c.enabled) return c; }
+    return null;
+  });
+  if (!platform) return { ...own, via: 'company' as const };
+  const org = await orgValues();
+  return { ...platform, sender_name: org.name || platform.sender_name, via: 'platform' as const };
+}
+export function effectiveSmtp(account: Account) { return asSystem(() => effectiveSmtpInternal(account)); }
+
 async function deliver(account: Account, to: string, subject: string, html: string, cc?: string | null) {
   if ((await setting('email.enabled')) === '0') throw Object.assign(new Error('Email sending is switched off'), { code: 'email_disabled' });
-  const c = await smtpConfig(account);
+  const c = await effectiveSmtp(account);
   if (!c.host || !c.enabled) throw Object.assign(new Error('The SMTP settings have not been set'), { code: 'smtp_not_configured' });
   if ((await setting('email.dry_run')) === '1') return 'dry-run';
   const transport = nodemailer.createTransport({ host: c.host, port: c.port, secure: c.encryption === 'ssl', requireTLS: c.encryption === 'starttls',

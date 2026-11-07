@@ -4,7 +4,7 @@ import { useAuth } from '../../auth';
 import { fmtNum, useI18n } from '../../i18n';
 import { Badge, IconButton, PageHeader, StatCard, StatGrid, toneIf } from '../../ui/kit';
 import { DataTable, FilterBar, FilterNumber, FilterSelect, FilterToggles, useList, type Column } from '../../ui/table';
-import { ExportButton, Remaining, useCityName, useOptions } from '../../ui/common';
+import { ExportButton, Remaining, useCityName, useOptions, type ExpiryKind } from '../../ui/common';
 import { DOC_MODULE, DOC_SLUG } from './shared';
 
 const STATE_TONE = { expired: 'red', near: 'amber', valid: 'green', none: 'grey' } as const;
@@ -22,7 +22,7 @@ export default function RiderDocuments() {
   const cities = useOptions<any>(can('riders.view') ? '/lookups/cities' : null);
   if (!type) return null;
   const s = list.stats ?? {};
-  const win = Number(list.query.window) || 30;
+  const win = Number(list.query.window) || undefined;
   const numberHeader = { id: t('riders.national_id'), license: t('docs.f.licence_number'), health: t('docs.f.certificate_number'), driver_card: t('docs.f.card_number'), ajeer: t('docs.f.permit_number') }[type];
   const extraHeader = { id: t('docs.f.document_type'), license: t('docs.f.licence_type'), health: t('docs.f.issuing_authority'), driver_card: t('docs.f.card_category'), ajeer: t('docs.f.beneficiary_company') }[type];
   const extra = (r: any) => ({ id: r.id_kind && t(`docs.kind.${r.id_kind}`), license: r.license_type, health: r.issuing_authority, driver_card: r.card_category && t(`docs.cat.${r.card_category}`), ajeer: r.beneficiary_company_name }[type]);
@@ -39,7 +39,7 @@ export default function RiderDocuments() {
         {r.validity_days != null && <div className="text-zinc-500">{t('docs.validity_period', { n: fmtNum(r.validity_days) })}</div>}
         {type === 'health' && r.expiry_date_hijri && <div className="text-zinc-500">{r.expiry_date_hijri} هـ</div>}</div>
     ) },
-    { key: 'remaining', header: t('docs.remaining'), sort: 'remaining', render: (r) => <Remaining days={r.days_left} window={win} /> },
+    { key: 'remaining', header: t('docs.remaining'), sort: 'remaining', render: (r) => <Remaining days={r.days_left} window={win} kind={type as ExpiryKind} /> },
     { key: 'validity', header: t('docs.validity'), render: (r) => (
       <div><Badge tone={STATE_TONE[r.state as keyof typeof STATE_TONE]}>{t(`docs.state.${r.state}`)}</Badge>{!r.is_current && <div className="mt-0.5 text-xs text-zinc-500">{t('docs.superseded')}</div>}</div>
     ) },

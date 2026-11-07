@@ -1,6 +1,6 @@
 import { Router, type Request } from 'express';
 import { exec, one, q } from '../db.js';
-import { addDays, clean, daysBetween, eq, fail, fieldError, latinDigits, list, listAll, sendExport, today, where, type Col, type Query, type Spec } from '../http.js';
+import { addDays, clean, daysBetween, eq, fail, fieldError, latinDigits, list, listAll, sendExport, today, where, type Col, type Query, type Spec, mustExist } from '../http.js';
 import { can } from '../auth.js';
 import { audit } from '../audit.js';
 import { cellDate, cellNum, cellStr, importRoutes, type Ctx, type ImportDef, type Parsed } from '../importer.js';
@@ -119,7 +119,7 @@ async function saveRecord(req: Request, v: Record<string, any>, id = 0) {
     if (id) await exec('UPDATE daily_performance SET ?, updated_at = UTC_TIMESTAMP() WHERE id = ?', [v, id]);
     else return (await exec('INSERT INTO daily_performance SET ?', [{ ...v, source: 'manual', created_by: req.user!.id }])).insertId;
   } catch (e: any) {
-    if (e?.code === '23505') fieldError('work_date', 'perf_day_taken');
+    if (e?.code === 'ER_DUP_ENTRY') fieldError('work_date', 'perf_day_taken');
     throw e;
   }
   return id;
@@ -146,7 +146,7 @@ async function removeRecords(req: Request, ids: number[]) {
   await audit(req, { action: 'performance.delete', entity_type: 'performance', entity_id: ids.join(',').slice(0, 60), severity: 'warning', details: `${r.affectedRows} records` });
   return r.affectedRows;
 }
-performanceRouter.delete('/performance/:id', can('performance.delete'), async (req, res) => res.json({ deleted: await removeRecords(req, [Number(req.params.id)]) }));
+performanceRouter.delete('/performance/:id', can('performance.delete'), async (req, res) => { await mustExist('daily_performance', req.params.id); res.json({ deleted: await removeRecords(req, [Number(req.params.id)]) }); });
 performanceRouter.post('/performance/bulk-delete', can('performance.delete'), async (req, res) => res.json({ deleted: await removeRecords(req, (req.body.ids ?? []).map(Number)) }));
 
 // ---------- import: the company's file does not carry the date; the screen gives it ----------
@@ -365,7 +365,7 @@ performanceRouter.post('/ratings/bulk-delete', can('ratings.delete'), async (req
 });
 // The rider file's "HungerStation monthly rating" card.
 performanceRouter.get('/ratings/rider/:id', can('ratings.view'), async (req, res) => {
-  const rows = await q<any>(`SELECT m.*, c.min_final floor, (SELECT c2.min_final FROM rating_cutoffs c2 WHERE c2.month = m.month AND c2.segment = CHR(ASCII(m.segment) - 1)) next_floor
+  const rows = await q<any>(`SELECT m.*, c.min_final floor, (SELECT c2.min_final FROM rating_cutoffs c2 WHERE c2.month = m.month AND c2.segment = CHAR(ASCII(m.segment) - 1 USING utf8mb4)) next_floor
     FROM monthly_ratings m LEFT JOIN rating_cutoffs c ON c.month = m.month AND c.segment = m.segment WHERE m.rider_id = ? ORDER BY m.month`, [req.params.id]);
   res.json(rows);
 });

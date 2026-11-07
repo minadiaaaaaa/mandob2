@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Download, MapPin, RefreshCw, Settings2 } from 'lucide-react';
-import { download, get } from '../../api';
+import { ApiError, download, get } from '../../api';
+import { LockedFeature } from '../../ui/plan';
 import { useAuth } from '../../auth';
 import { fmtDateTime, fmtNum, useI18n } from '../../i18n';
 import { Alert, Badge, Button, Card, cx, Field, Loading, PageHeader, StatCard, StatGrid, useAction, type Tone } from '../../ui/kit';
@@ -136,8 +137,9 @@ export function RiderDay() {
   const run = useAction();
   const [params, setParams] = useSearchParams();
   const [d, setD] = useState<any>(null);
-  useEffect(() => { setD(null); get(`/live/riders/${id}`, Object.fromEntries(params)).then(setD).catch(() => setD({ error: true })); }, [id, params.toString()]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setD(null); get(`/live/riders/${id}`, Object.fromEntries(params)).then(setD).catch((e) => setD({ error: true, locked: e instanceof ApiError && e.code === 'feature_locked' })); }, [id, params.toString()]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!d) return <Loading />;
+  if (d.locked) return <LockedFeature feature="live_rider_details" />;
   if (d.error) return <Alert tone="amber">{t('err.server_error')}</Alert>;
   const today = new Intl.DateTimeFormat('en-CA').format(new Date());
   const Prev = dir === 'rtl' ? ChevronRight : ChevronLeft; const Next = dir === 'rtl' ? ChevronLeft : ChevronRight;

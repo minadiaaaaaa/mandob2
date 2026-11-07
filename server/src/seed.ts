@@ -1,7 +1,10 @@
-import { readFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ROOT, DB_SCHEMA, exec, q, executeScript } from './db.js';
-import { ALL_PERMS, BUILTIN_ROLES } from './perms.js';
+import { DATA_DIR, ROOT, exec, q, executeScript, withTenant, asPlatform, setSetting, setting } from './db.js';
+import { hashPassword } from './auth.js';
+import { runMigrations } from './migrations.js';
+import { ALL_PERMS, BUILTIN_ROLES, COMPANY_ADMIN, SUPER_ADMIN, adminRoleName } from './perms.js';
 import { seedTemplates } from './mail.js';
 
 // [key, default, type, category, description] — the operational keys of "System settings" (guide 11.1.3).
@@ -68,7 +71,7 @@ const OTHER: [string, string, string][] = [
   ['org.timezone', 'Asia/Riyadh', 'organization'], ['org.currency', 'SAR', 'organization'], ['org.date_format', 'YYYY-MM-DD', 'organization'],
   ['org.maintenance', '0', 'organization'], ['org.maintenance_message', '', 'organization'], ['org.description', '', 'organization'],
   ['platform.name', 'مندوب', 'platform'], ['platform.tagline', '', 'platform'],
-  ['platform.primary_color', '#0f766e', 'platform'], ['platform.secondary_color', '#0f172a', 'platform'],
+  ['platform.primary_color', '#1d6b4f', 'platform'], ['platform.secondary_color', '#0f172a', 'platform'],
   ['platform.currency', 'SAR', 'platform'], ['platform.locale', 'ar', 'platform'], ['platform.timezone', 'Asia/Riyadh', 'platform'],
   ['platform.country', 'SA', 'platform'], ['platform.date_format', 'YYYY-MM-DD', 'platform'], ['platform.time_format', '24', 'platform'],
   ['platform.number_format', '1,234.56', 'platform'], ['platform.meta_title', '', 'platform'], ['platform.meta_keywords', '', 'platform'],
@@ -99,36 +102,108 @@ const WIDENED: [string, string, string][] = [
   ['rider_change_requests', 'rider_note', 'VARCHAR(1000) NULL'],
 ];
 
-async function tablesAndSettings() {
-  const [table] = await q('SELECT 1 FROM information_schema.tables WHERE table_schema = ? AND table_name = ?', [DB_SCHEMA, 'settings']);
-  if (!table) await executeScript(readFileSync(join(ROOT, '..', 'database', 'supabase', 'schema.sql'), 'utf8').replace(/public\./g, `"${DB_SCHEMA}".`));
-  // the product is now called "مندوب"; installs that kept the old default name take the new one
-  await exec("UPDATE settings SET value = 'مندوب' WHERE `key` IN ('org.system_name', 'platform.name') AND value = 'Logistics Services Platform'");
-  await exec('INSERT INTO settings ("key", value, type, category, description) VALUES ? ON CONFLICT DO NOTHING', [SYSTEM]);
-  await exec('INSERT INTO settings ("key", value, type, category, editable) VALUES ? ON CONFLICT DO NOTHING', [OTHER.map(([k,v,c])=>[k,v,'text',c,0])]);
-}
-
-// Runs at every start of an installed system: tables and settings added by later versions appear,
-// and the Super Admin keeps every permission. Every statement is idempotent.
-export async function upgrade() {
-  await tablesAndSettings();
-  await seedTemplates();
-  await exec(`INSERT IGNORE INTO role_permissions (role_id, perm) SELECT r.id, p.perm FROM roles r
-    CROSS JOIN jsonb_array_elements_text(?::jsonb) AS p(perm) WHERE r.name = 'Super Admin'`, [JSON.stringify(ALL_PERMS)]);
-}
-
-export async function install(log: (s: string) => void) {
-  await tablesAndSettings();
-  await seedTemplates();
-  log('tables');
-  log('settings');
-  for (const role of BUILTIN_ROLES) {
-    await exec('INSERT IGNORE INTO roles (name, description) VALUES (?, ?)', [role.name, role.description]);
-    const [{ id }] = await q<{ id: number }>('SELECT id FROM roles WHERE name = ?', [role.name]);
-    const [{ n }] = await q<{ n: number }>('SELECT COUNT(*) n FROM role_permissions WHERE role_id = ?', [id]);
-    if (!n) await exec('INSERT INTO role_permissions (role_id, perm) VALUES ?', [[...new Set(role.perms)].map((p) => [id, p])]);
+async function ensureSchema() {
+  // server/src/schema.sql is idempotent (CREATE TABLE IF NOT EXISTS), so it runs at every start.
+  await executeScript(readFileSync(join(ROOT, 'src', 'schema.sql'), 'utf8'));
+  for (const [t, c, def] of WIDENED) {
+    const [col] = await q<{ ty: string }>('SELECT COLUMN_TYPE ty FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?', [t, c]);
+    if (col && !def.toLowerCase().startsWith(col.ty.toLowerCase())) await executeScript(`ALTER TABLE ${t} MODIFY ${c} ${def}`);
   }
+}
+
+// The plans offered at sign-up, editable afterwards from the owner dashboard (the defaults follow LogisTap's tiers).
+export const DEFAULT_PLANS = [
+  { key: 'starter', name_ar: 'البداية', name_en: 'Starter', price_monthly: 0, price_annual: 0, max_riders: 50, max_users: 2, max_vehicles: 60, sort: 1 },
+  { key: 'growth', name_ar: 'النمو', name_en: 'Growth', price_monthly: 0, price_annual: 0, max_riders: 100, max_users: 5, max_vehicles: 120, sort: 2 },
+  { key: 'scale', name_ar: 'التوسع', name_en: 'Scale', price_monthly: 0, price_annual: 0, max_riders: 200, max_users: 8, max_vehicles: 240, sort: 3 },
+];
+export const TRIAL_PLAN = 'starter';
+export const TRIAL_DAYS = 14;
+async function seedPlans() {
+  await asPlatform(() => exec('INSERT IGNORE INTO plans (`key`, name_ar, name_en, price_monthly, price_annual, max_riders, max_users, max_vehicles, sort) VALUES ?',
+    [DEFAULT_PLANS.map(p => [p.key, p.name_ar, p.name_en, p.price_monthly, p.price_annual, p.max_riders, p.max_users, p.max_vehicles, p.sort])]));
+}
+
+// Everything one company needs before its first sign-in: settings, email templates, the built-in roles.
+// Idempotent, so it also runs at every start to give existing companies what later versions add.
+export async function seedTenant(tenant: number) {
+  await withTenant(tenant, async () => {
+    // the product is now called "مندوب"; installs that kept the old default name take the new one
+    await exec("UPDATE settings SET value = 'مندوب' WHERE `key` IN ('org.system_name', 'platform.name') AND value = 'Logistics Services Platform'");
+    await exec('INSERT IGNORE INTO settings (`key`, value, type, category, description) VALUES ?', [SYSTEM]);
+    await exec('INSERT IGNORE INTO settings (`key`, value, type, category, editable) VALUES ?', [OTHER.map(([k,v,c])=>[k,v,'text',c,0])]);
+    await seedTemplates();
+    // companies signed up before the rename: their full role becomes Admin
+    if (tenant !== 0) await exec('UPDATE IGNORE roles SET name = ?, description = ? WHERE name = ?', [COMPANY_ADMIN, 'Full permissions inside this company', SUPER_ADMIN]);
+    for (const builtin of BUILTIN_ROLES) {
+      const full = builtin.name === SUPER_ADMIN;
+      const role = full ? { ...builtin, name: adminRoleName(tenant), description: tenant === 0 ? builtin.description : 'Full permissions inside this company' } : builtin;
+      await exec('INSERT IGNORE INTO roles (name, description) VALUES (?, ?)', [role.name, role.description]);
+      const [{ id }] = await q<{ id: number }>('SELECT id FROM roles WHERE name = ?', [role.name]);
+      const [{ n }] = await q<{ n: number }>('SELECT COUNT(*) n FROM role_permissions WHERE role_id = ?', [id]);
+      if (!n) await exec('INSERT INTO role_permissions (role_id, perm) VALUES ?', [[...new Set(role.perms)].map((p) => [id, p])]);
+    }
+    // the full role (Super Admin on the platform, Admin in a company) keeps every permission, including later ones
+    const admin = (await q<{ id: number }>('SELECT id FROM roles WHERE name = ?', [adminRoleName(tenant)]))[0];
+    if (admin) await exec('INSERT IGNORE INTO role_permissions (role_id, perm) VALUES ?', [ALL_PERMS.map(perm => [admin.id, perm])]);
+  });
+}
+
+// Runs at every start of an installed system. Every statement is idempotent.
+export async function upgrade() {
+  await asPlatform(ensureSchema);
+  await seedPlans();
+  const tenants = await asPlatform(() => q<{ id: number }>('SELECT id FROM tenants'));
+  for (const t of [0, ...tenants.map(x => x.id)]) await seedTenant(t);
+}
+
+// The setup wizard installs the platform itself (company 0, where the platform owner signs in).
+export async function install(log: (s: string) => void) {
+  await asPlatform(ensureSchema);
+  log('tables');
+  await seedPlans();
+  await seedTenant(0);
+  log('settings');
   log('roles');
-  for (const [ar, en] of CITIES) await exec('INSERT IGNORE INTO cities (name_ar, name_en) VALUES (?, ?)', [ar, en]);
+  for (const [ar, en] of CITIES) await asPlatform(() => exec('INSERT IGNORE INTO cities (name_ar, name_en) VALUES (?, ?)', [ar, en]));
   log('cities');
+}
+
+// No setup screens: at every start the tables are created or completed, and the platform owner's account (company 0)
+// is created once from OWNER_EMAIL / OWNER_PASSWORD / OWNER_NAME in .env. Without them a random password is written to
+// server/data/first-login.txt; change it from the profile after signing in.
+export async function bootstrap() {
+  const fresh = (await withTenant(0, () => setting('system.installed').catch(() => null))) !== '1';
+  if (fresh) await install(() => {}); else await upgrade();
+  // every change after the schema.sql baseline, once per database (see migrations.ts)
+  await runMigrations();
+  await withTenant(0, async () => {
+    if (fresh) {
+      if (!(await setting('platform.name'))) await setSetting('platform.name', process.env.PLATFORM_NAME || 'مندوب');
+      await setSetting('org.system_name', process.env.PLATFORM_NAME || 'مندوب');
+      if (!(await setting('org.name'))) await setSetting('org.name', process.env.PLATFORM_NAME || 'مندوب');
+    }
+    const [owner] = await q<{ id: number }>('SELECT id FROM users ORDER BY id LIMIT 1');
+    if (!owner) {
+      const email = (process.env.OWNER_EMAIL || 'admin@mandoob.local').trim().toLowerCase();
+      const generated = !process.env.OWNER_PASSWORD;
+      const password = process.env.OWNER_PASSWORD || randomBytes(9).toString('base64url');
+      if (password.length < 8) throw new Error('OWNER_PASSWORD must be at least 8 characters');
+      const username = email.split('@')[0].replace(/[^A-Za-z0-9._-]/g, '').slice(0, 50) || 'admin';
+      const [role] = await q<{ id: number }>("SELECT id FROM roles WHERE name = 'Super Admin'");
+      await exec('INSERT INTO users (username, full_name, email, password_hash, role_id) VALUES (?, ?, ?, ?, ?)',
+        [username, process.env.OWNER_NAME || 'Platform owner', email, await hashPassword(password), role.id]);
+      if (generated) {
+        const file = join(DATA_DIR, 'first-login.txt');
+        writeFileSync(file, `Mandoob platform owner
+Username: ${username}
+Email: ${email}
+Password: ${password}
+Change this password from the profile after signing in, then delete this file.
+`);
+        console.log(`Platform owner created. Sign-in details: ${file}`);
+      } else console.log(`Platform owner created: ${email}`);
+    }
+    await setSetting('system.installed', '1');
+  });
 }

@@ -1,6 +1,6 @@
 import { Router, type Request } from 'express';
 import { exec, one, q, tx } from '../db.js';
-import { clean, fail, fieldError, where, type Query, type Spec } from '../http.js';
+import { clean, fail, fieldError, where, type Query, type Spec, mustExist } from '../http.js';
 import { can, has } from '../auth.js';
 import { audit } from '../audit.js';
 import { attachAny, upload } from '../files.js';
@@ -83,6 +83,7 @@ issuesRouter.get('/issues/:id', can('rider_portal.view_issues'), async (req, res
 
 // Read when the last message is on screen and the tab is visible.
 issuesRouter.post('/issues/:id/read', can('rider_portal.view_issues'), async (req, res) => {
+  await mustExist('rider_issues', req.params.id);
   await exec('UPDATE rider_issues SET staff_read_at = NOW(3) WHERE id = ?', [req.params.id]);
   res.json({ ok: true });
 });

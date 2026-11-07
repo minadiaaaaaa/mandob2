@@ -1,11 +1,10 @@
 import type { ReactNode } from 'react';
-import { Link, Route, Routes, useParams } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { RequireAuth, useAuth } from './auth';
 import { AdminLayout } from './layout';
 import { useI18n } from './i18n';
 import { Alert, Button } from './ui/kit';
 import Login from './pages/Login';
-import Setup from './pages/Setup';
 import PublicSite from './pages/PublicSite';
 import Dashboard from './pages/Dashboard';
 import RidersList from './pages/riders/RidersList';
@@ -44,6 +43,9 @@ import { ForgotPassword, PortalLayout, RiderLogin } from './pages/portal/shell';
 import { Attendance, Overview, Performance, Profile as RiderProfilePage, Ratings } from './pages/portal/home';
 import { Help, Leaves, Requests, Security } from './pages/portal/requests';
 import { RiderIssues } from './pages/portal/issues';
+import Signup from './pages/Signup';
+import BillingPage from './pages/system/Billing';
+import PlatformPage from './pages/platform/Platform';
 
 // A screen opened by a direct link without its permission.
 function Guard({ perm, children }: { perm: string[]; children: ReactNode }) {
@@ -76,7 +78,9 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<PublicSite />} />
-      <Route path="/setup" element={<Setup />} />
+      {/* no setup screens any more: the server prepares itself */}
+      <Route path="/setup" element={<Navigate to="/admin/login" replace />} />
+      <Route path="/signup" element={<Signup />} />
       <Route path="/rider/login" element={<RiderLogin />} />
       <Route path="/rider/forgot-password" element={<ForgotPassword />} />
       <Route path="/rider" element={<PortalLayout />}>
@@ -244,6 +248,9 @@ export default function App() {
         <Route path="logs/errors" element={g('logs.view', <SystemErrors />)} />
         <Route path="cron-jobs" element={g('cron_jobs.view', <CronJobs />)} />
         <Route path="backups" element={g('backups.view', <Backups />)} />
+        <Route path="billing" element={g('subscription.view', <BillingPage />)} />
+        <Route path="platform" element={<PlatformPage />} />
+        <Route path="platform/:tab" element={<PlatformPage />} />
         <Route path="languages" element={g('languages.view', <Languages />)} />
         <Route path="logs/login" element={g('login_log.view', <LoginAttempts />)} />
         <Route path="*" element={<NotFound />} />

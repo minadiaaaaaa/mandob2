@@ -1,13 +1,15 @@
 import type { NextFunction, Request, Response } from 'express';
 import { createHash, randomBytes, randomInt, scrypt as _scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
-import { exec, one, q, settingInt, withActor } from './db.js';
+import { asPlatform, exec, one, q, settingInt, withActor, withTenant } from './db.js';
 import { HttpError } from './http.js';
 import { audit } from './audit.js';
+import { deviceLimit } from './domain/subscription.js';
+import { pausedIds } from './domain/quotas.js';
 
 const scrypt = promisify(_scrypt) as (p: string, s: Buffer, n: number) => Promise<Buffer>;
 
-export type SessionUser = { id: number; username: string; full_name: string; email: string; role_id: number; role_name: string; locale: string | null; perms: Set<string>; sessionId: number };
+export type SessionUser = { id: number; tenant_id: number; username: string; full_name: string; email: string; role_id: number; role_name: string; locale: string | null; perms: Set<string>; sessionId: number };
 declare global {
   namespace Express {
     interface Request { user?: SessionUser; rid?: string }
@@ -46,7 +48,8 @@ export async function issueChallenge(ip: string) {
 }
 
 // ---------- IP blocks ----------
-export async function ipBlocked(ip: string) {
+export async function ipBlocked(ip: string) { return asPlatform(() => ipBlockedAll(ip)); }
+async function ipBlockedAll(ip: string) {
   const b = await one<{ id: number; expires_at: string | null; expired: number }>(
     "SELECT id, expires_at, expires_at IS NOT NULL AND expires_at < UTC_TIMESTAMP() expired FROM blocked_ips WHERE ip = ? AND status = 'blocked'", [ip]);
   if (!b) return false;
@@ -66,20 +69,22 @@ async function maybeBlockIp(ip: string) {
   const limit = await settingInt('auth.block_ip_after_failures', 20);
   const win = await settingInt('auth.window_minutes', 15);
   const mins = await settingInt('auth.lockout_minutes', 15);
-  const [{ n }] = await q<{ n: number }>('SELECT COUNT(*) n FROM login_attempts WHERE ip = ? AND success = 0 AND created_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? MINUTE)', [ip, win]);
+  // failures from one network count across every company
+  const [{ n }] = await asPlatform(() => q<{ n: number }>('SELECT COUNT(*) n FROM login_attempts WHERE ip = ? AND success = 0 AND created_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? MINUTE)', [ip, win]));
   if (n >= limit) {
-    await exec(`INSERT INTO blocked_ips (ip, reason, failed_attempts, status, expires_at) VALUES (?, ?, ?, 'blocked', DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? MINUTE))
+    await asPlatform(() => exec(`INSERT INTO blocked_ips (ip, reason, failed_attempts, status, expires_at) VALUES (?, ?, ?, 'blocked', DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? MINUTE))
       ON DUPLICATE KEY UPDATE reason = VALUES(reason), failed_attempts = VALUES(failed_attempts), status = 'blocked', expires_at = VALUES(expires_at), blocked_by = NULL, created_at = UTC_TIMESTAMP()`,
-    [ip, `Automatic: ${n} failed sign-in attempts within ${win} minutes; blocked for ${mins} minutes`, n, mins]);
+    [ip, `Automatic: ${n} failed sign-in attempts within ${win} minutes; blocked for ${mins} minutes`, n, mins]));
     await audit(null, { action: 'ip.auto_block', entity_type: 'blocked_ip', entity_id: ip, severity: 'warning', actor_type: 'system', details: `${n} failures` });
   }
 }
 
-const reject = async (req: Request, typed: string | null, userId: number | null, reason: string, code: string, params: Record<string, unknown> = {}, newChallenge = true) => {
+// `status`: a refusal after the right password (plan limits) is not a failed guess, so it does not count towards a block
+const reject = async (req: Request, typed: string | null, userId: number | null, reason: string, code: string, params: Record<string, unknown> = {}, newChallenge = true, status?: number) => {
   await recordAttempt(req, typed, userId, false, reason);
-  await maybeBlockIp(clientIp(req));
+  if (!status) await maybeBlockIp(clientIp(req));
   const challenge = newChallenge ? await issueChallenge(clientIp(req)) : undefined;
-  throw new HttpError(code === 'too_many' ? 429 : 401, code, { ...params, challenge });
+  throw new HttpError(status ?? (code === 'too_many' ? 429 : 401), code, { ...params, challenge });
 };
 
 export async function login(req: Request, res: Response) {
@@ -89,7 +94,7 @@ export async function login(req: Request, res: Response) {
   if (!typed || !password || !code) return reject(req, typed, null, 'missing_credentials', 'fill_required', {}, false);
   if (await ipBlocked(ip)) return reject(req, typed, null, 'ip_blocked', 'ip_blocked', {}, false);
 
-  const [{ recent }] = await q<{ recent: number }>('SELECT COUNT(*) recent FROM login_attempts WHERE ip = ? AND success = 0 AND created_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 MINUTE)', [ip]);
+  const [{ recent }] = await asPlatform(() => q<{ recent: number }>('SELECT COUNT(*) recent FROM login_attempts WHERE ip = ? AND success = 0 AND created_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 MINUTE)', [ip]));
   if (recent >= 10) return reject(req, typed, null, 'rate_limited', 'too_many');
 
   const ch = await one<{ id: string; code: string; attempts: number; used_at: string | null; expired: number }>(
@@ -104,10 +109,19 @@ export async function login(req: Request, res: Response) {
   }
   await exec('UPDATE login_challenges SET used_at = UTC_TIMESTAMP() WHERE id = ?', [ch.id]);
 
-  const u = await one<any>(`SELECT u.*, locked_until IS NOT NULL AND locked_until < UTC_TIMESTAMP() lock_over,
+  // one sign-in page for every company: the username or email (unique on the platform) finds the company
+  const u = await asPlatform(() => one<any>(`SELECT u.*, locked_until IS NOT NULL AND locked_until < UTC_TIMESTAMP() lock_over,
       CEIL(TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), locked_until) / 60) lock_minutes
-    FROM users u WHERE username = ? OR email = ?`, [typed, typed]);
+    FROM users u WHERE username = ? OR email = ?`, [typed, typed]));
   if (!u) return reject(req, typed, null, 'unknown_user', 'bad_credentials');
+  return withTenant(u.tenant_id, () => finishLogin(req, res, u, typed, ip, String(password)));
+}
+
+async function finishLogin(req: Request, res: Response, u: any, typed: string, ip: string, password: string) {
+  if (u.tenant_id !== 0) {
+    const t = await asPlatform(() => one<{ status: string }>('SELECT status FROM tenants WHERE id = ?', [u.tenant_id]));
+    if (!t || t.status === 'suspended') return reject(req, typed, u.id, 'company_suspended', 'company_suspended');
+  }
   if (!(await one('SELECT 1 FROM roles WHERE id = ? AND is_active = 1', [u.role_id]))) return reject(req, typed, u.id, 'role_disabled', 'account_suspended');
   if (u.status === 'disabled') return reject(req, typed, u.id, 'account_disabled', 'account_suspended');
   if (u.status === 'locked') {
@@ -131,6 +145,23 @@ export async function login(req: Request, res: Response) {
     throw new HttpError(401, n >= max ? 'account_locked' : 'bad_credentials', { minutes: mins, challenge: await issueChallenge(ip) });
   }
 
+  // the plan's places, only after the right password (nothing here tells a stranger about the account)
+  if (u.tenant_id !== 0) {
+    // a staff account above the plan's staff places (after a plan ended or got smaller) waits for an upgrade
+    if ((await pausedIds('users')).has(String(u.id))) return reject(req, typed, u.id, 'staff_paused', 'staff_paused', {}, true, 402);
+    const limit = await deviceLimit(u.tenant_id);
+    if (limit != null) {
+      const max = Math.max(1, limit); // at least the device signing in now
+      const open = await q<{ id: number }>("SELECT id FROM sessions WHERE user_id = ? AND status = 'active' AND expires_at > UTC_TIMESTAMP() ORDER BY last_activity_at, id", [u.id]);
+      if (open.length >= max) {
+        // the person may sign out their oldest devices to make room for this one
+        if (req.body?.replace_oldest !== true) return reject(req, typed, u.id, 'device_limit', 'device_limit_reached', { max }, true, 409);
+        const ids = open.slice(0, open.length - max + 1).map((s) => s.id);
+        await exec("UPDATE sessions SET status = 'revoked', ended_at = UTC_TIMESTAMP() WHERE id IN (?) AND status = 'active'", [ids]);
+        await audit(req, { action: 'session.device_replaced', entity_type: 'user', entity_id: u.id, actor_type: 'user', actor_id: u.id, details: `${ids.length} signed out` });
+      }
+    }
+  }
   const token = randomBytes(32).toString('hex');
   const ttl = await settingInt('auth.session_ttl_minutes', 120);
   await exec('INSERT INTO sessions (token_hash, user_id, ip, user_agent, expires_at) VALUES (?, ?, ?, ?, DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? MINUTE))',
@@ -157,16 +188,21 @@ export async function permsOf(roleId: number) {
 export async function authenticate(req: Request, _res: Response, next: NextFunction) {
   const tok = readCookie(req, COOKIE);
   if (!tok) return next();
-  const s = await one<any>(`SELECT s.id sid, s.expires_at < UTC_TIMESTAMP() expired, u.id, u.username, u.full_name, u.email, u.role_id, u.locale, u.status, r.name role_name
-    FROM sessions s JOIN users u ON u.id = s.user_id JOIN roles r ON r.id = u.role_id AND r.is_active = 1 WHERE s.token_hash = ? AND s.status = 'active'`, [sha256(tok)]);
+  const s = await asPlatform(() => one<any>(`SELECT s.id sid, s.expires_at < UTC_TIMESTAMP() expired, u.id, u.tenant_id, u.username, u.full_name, u.email, u.role_id, u.locale, u.status, r.name role_name
+    FROM sessions s JOIN users u ON u.id = s.user_id AND u.tenant_id = s.tenant_id JOIN roles r ON r.id = u.role_id AND r.is_active = 1 AND r.tenant_id = u.tenant_id
+    WHERE s.token_hash = ? AND s.status = 'active'`, [sha256(tok)]));
   if (!s) return next();
+  // from here on every query of this request belongs to the user's company
+  return withTenant(s.tenant_id, () => authenticated(req, s, next));
+}
+async function authenticated(req: Request, s: any, next: NextFunction) {
   if (s.expired) {
     await exec("UPDATE sessions SET status = 'expired', ended_at = UTC_TIMESTAMP() WHERE id = ?", [s.sid]);
     return next();
   }
   if (s.status !== 'active' || (await ipBlocked(clientIp(req)))) return next();
   await exec('UPDATE sessions SET last_activity_at = UTC_TIMESTAMP() WHERE id = ? AND last_activity_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 SECOND)', [s.sid]);
-  req.user = { id: s.id, username: s.username, full_name: s.full_name, email: s.email, role_id: s.role_id, role_name: s.role_name, locale: s.locale, perms: await permsOf(s.role_id), sessionId: s.sid };
+  req.user = { id: s.id, tenant_id: s.tenant_id, username: s.username, full_name: s.full_name, email: s.email, role_id: s.role_id, role_name: s.role_name, locale: s.locale, perms: await permsOf(s.role_id), sessionId: s.sid };
   withActor({ kind: 'staff', id: s.id }, next);
 }
 
@@ -183,3 +219,11 @@ export const can = (...perms: string[]) => async (req: Request, _res: Response, 
   throw new HttpError(403, 'forbidden', { perm: perms[0] });
 };
 export const has = (req: Request, perm: string) => !!req.user?.perms.has(perm);
+
+// Pages that act on the whole platform (backups, blocked networks, languages, the owner dashboard) are only for the
+// platform owner's account (company 0); their queries see every company.
+export function platformOnly(req: Request, _res: Response, next: NextFunction) {
+  if (!req.user) throw new HttpError(401, 'session_ended');
+  if (req.user.tenant_id !== 0) throw new HttpError(403, 'platform_only');
+  return asPlatform(next);
+}

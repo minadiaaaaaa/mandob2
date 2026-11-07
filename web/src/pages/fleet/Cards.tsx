@@ -39,7 +39,7 @@ export function CardsList() {
     { key: 'number', header: t('cards.number'), sort: 'number', render: (r) => <div><div className="font-medium num">{r.number}</div><div className="text-xs text-zinc-500 num">{r.license_number}</div>{!r.has_scan && <Badge tone="amber">{t('cards.no_scan')}</Badge>}</div> },
     { key: 'vehicle', header: t('cards.vehicle'), render: (r) => { const vs = plates(r.vehicles); return <div>{vs.map((v) => <div key={v.id}><Link to={`/admin/vehicles/${v.id}`} className="hover:text-brand">{v.plate}</Link> <span className="text-xs text-zinc-500">{[v.maker, v.model, v.year].filter(Boolean).join(' ')}</span></div>)}</div>; } },
     { key: 'dates', header: t('cards.issue_expiry'), sort: 'expiry', render: (r) => <div className="num text-xs">{r.issue_date ?? '—'} → {r.expiry_date}{r.renew_date && <div className="text-zinc-500">{t('cards.renew_date')}: {r.renew_date}</div>}</div> },
-    { key: 'remaining', header: t('docs.remaining'), sort: 'remaining', render: (r) => <Remaining days={r.days_left} /> },
+    { key: 'remaining', header: t('docs.remaining'), sort: 'remaining', render: (r) => <Remaining days={r.days_left} kind="operation_card" /> },
     { key: 'status', header: t('cards.status'), sort: 'status', render: (r) => (
       <div><Badge tone={r.status === 'valid' && r.days_left < 0 ? 'red' : CARD_STATUS[r.status]}>{t(`card.status.${r.status}`)}</Badge>
         {r.status === 'valid' && r.days_left < 0 && <div className="text-xs text-red-600">{t('cards.marked_valid_date_gone')}</div>}</div>
@@ -198,14 +198,14 @@ export function CardView() {
   return (
     <>
       <PageHeader title={first?.plate ?? c.number} back="/admin/operation-cards"
-        subtitle={<span className="flex flex-wrap items-center gap-2"><span className="num">{c.number}</span><Badge tone={CARD_STATUS[c.status]}>{t(`card.status.${c.status}`)}</Badge><Remaining days={c.days_left} /></span>}
+        subtitle={<span className="flex flex-wrap items-center gap-2"><span className="num">{c.number}</span><Badge tone={CARD_STATUS[c.status]}>{t(`card.status.${c.status}`)}</Badge><Remaining days={c.days_left} kind="operation_card" /></span>}
         actions={can('operation_cards.update') && <Link to={`/admin/operation-cards/${id}/edit`}><Button icon={<Pencil className="size-4" />}>{t('common.edit')}</Button></Link>} />
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title={t('cards.vehicle')} actions={first && <Link to={`/admin/vehicles/${first.id}`}><Button size="sm">{t('vehicles.open')}</Button></Link>}>
           {first ? <Details rows={[[t('vehicles.plate'), first.plate], [t('vehicles.make_model'), [first.maker, first.model, first.year].filter(Boolean).join(' ')]]} /> : '—'}
         </Card>
         <Card title={t('cards.card')}>
-          <Details rows={[[t('cards.number'), c.number], [t('cards.issue_date'), c.issue_date], [t('cards.expiry_date'), <ExpiryDate date={c.expiry_date} days={c.days_left} />], [t('cards.renew_date'), c.renew_date], [t('common.notes'), c.notes]]} />
+          <Details rows={[[t('cards.number'), c.number], [t('cards.issue_date'), c.issue_date], [t('cards.expiry_date'), <ExpiryDate date={c.expiry_date} days={c.days_left} kind="operation_card" />], [t('cards.renew_date'), c.renew_date], [t('common.notes'), c.notes]]} />
         </Card>
       </div>
       <Card title={t('cards.vehicles_on_card')} className="mt-4" pad={false}>
@@ -239,12 +239,12 @@ export function RegistrationsList() {
   const list = useList('/vehicle-registrations');
   const vehicles = useVehicleOptions();
   const s = list.stats ?? {};
-  const within = Number(list.query.within) || 30;
+  const within = Number(list.query.within) || undefined;
   const columns: Column<any>[] = [
     { key: 'plate', header: t('regs.plate'), sort: 'plate', render: (r) => <div><div className="font-medium">{r.plate}</div><div className="text-xs text-zinc-500">{[r.maker, r.model].filter(Boolean).join(' ')}</div></div> },
     { key: 'serial', header: t('regs.serial'), sort: 'serial', render: (r) => <span className="num">{r.serial}</span> },
     { key: 'owner', header: t('regs.owner'), render: (r) => <div>{r.owner}<div className="text-xs text-zinc-500 num">{r.owner_id_no}</div></div> },
-    { key: 'expires', header: t('regs.expires'), sort: 'remaining', render: (r) => <ExpiryDate date={r.expiry_date} days={r.days_left} window={within} /> },
+    { key: 'expires', header: t('regs.expires'), sort: 'remaining', render: (r) => <ExpiryDate date={r.expiry_date} days={r.days_left} window={within} kind="vehicle_registration" /> },
     { key: 'status', header: t('regs.status'), sort: 'status', render: (r) => <Badge tone={REG_STATUS[r.status]}>{t(`reg.status.${r.status}`)}</Badge> },
     { key: 'current', header: t('regs.current'), render: (r) => (r.is_current ? <Badge tone="green">{t('regs.current')}</Badge> : '—') },
   ];
@@ -335,7 +335,7 @@ export function RegistrationView() {
         actions={<><Link to={`/admin/vehicles/${g.vehicle_id}`}><Button>{t('vehicles.open')}</Button></Link>{can('vehicle_registrations.update') && <Link to={`/admin/vehicle-registrations/${id}/edit`}><Button icon={<Pencil className="size-4" />}>{t('common.edit')}</Button></Link>}</>} />
       {!g.expiry_date && <div className="mb-4"><Alert tone="amber">{t('regs.no_date_alert')}</Alert></div>}
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
-        <StatCard label={t('regs.expiry_date')} value={g.expiry_date ?? '—'} sub={<Remaining days={g.days_left} notRecorded={t('regs.no_date_yet')} />} />
+        <StatCard label={t('regs.expiry_date')} value={g.expiry_date ?? '—'} sub={<Remaining days={g.days_left} notRecorded={t('regs.no_date_yet')} kind="vehicle_registration" />} />
         <StatCard label={t('regs.current')} value={g.is_current ? t('regs.current') : t('regs.past_issue')} />
         <StatCard label={t('regs.owner')} value={g.owner} />
       </div>
@@ -392,7 +392,7 @@ export function LicensesList() {
     { key: 'number', header: t('tl.number'), sort: 'number', render: (r) => <div><div className="font-medium num">{r.number}</div><div className="text-xs text-zinc-500">{r.activity_ar}</div></div> },
     { key: 'city', header: t('tl.city'), sort: 'city', render: (r) => city(r) },
     { key: 'issued', header: t('tl.issued'), render: (r) => <span className="num">{r.issue_date ?? '—'}</span> },
-    { key: 'expires', header: t('tl.expires'), sort: 'expiry', render: (r) => <ExpiryDate date={r.expiry_date} days={r.days_left} /> },
+    { key: 'expires', header: t('tl.expires'), sort: 'expiry', render: (r) => <ExpiryDate date={r.expiry_date} days={r.days_left} kind="transport_license" /> },
     { key: 'status', header: t('tl.status'), sort: 'status', render: (r) => <div><Badge tone={TL_STATUS[r.status]}>{t(`tl.status.${r.status}`)}</Badge>{r.status === 'valid' && r.days_left < 0 && <div className="text-xs text-red-600">{t('tl.status.expired')}</div>}</div> },
     { key: 'cards', header: t('tl.cards_issued'), render: (r) => <span className="num">{fmtNum(r.driver_cards + r.operation_cards)}</span> },
     { key: 'actions', header: t('common.actions'), render: (r) => <div className="flex">
@@ -491,7 +491,7 @@ export function LicenseView() {
         actions={can('transport_licenses.update') && <Link to={`/admin/transport-licenses/${id}/edit`}><Button icon={<Pencil className="size-4" />}>{t('common.edit')}</Button></Link>} />
       {l.status === 'valid' && l.days_left < 0 && <div className="mb-4"><Alert tone="amber">{t('tl.valid_but_past')}</Alert></div>}
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
-        <StatCard label={t('tl.expires')} value={l.expiry_date} sub={<Remaining days={l.days_left} />} />
+        <StatCard label={t('tl.expires')} value={l.expiry_date} sub={<Remaining days={l.days_left} kind="transport_license" />} />
         <StatCard label={t('tl.driver_cards')} value={fmtNum(l.driver_cards)} />
         <StatCard label={t('tl.operation_cards')} value={fmtNum(l.operation_cards)} />
       </div>

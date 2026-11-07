@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Bike, Building2, Car, ChevronDown, FileBadge, FileText, Fuel, Globe, IdCard, KeyRound, LayoutDashboard, LogOut, Menu, Moon, Paperclip,
-  Mail, MailCheck, Bug, Timer, DatabaseBackup, Languages, Activity, ScanFace, Star, RefreshCcw, Radar, MapPinned, BarChart3, Bell, SlidersHorizontal, BellRing, FileSpreadsheet, Receipt, Wallet, FilePen, MessagesSquare, CalendarDays, CalendarX2, HandCoins, RefreshCw, ScrollText, Settings, Shield, ShieldBan, Sun, User, UserPlus, Users, Wrench, X, Handshake, ClipboardList, MonitorSmartphone, History,
+  Activity, BarChart3, BellRing, Building, CalendarDays, Car, ChevronDown, Globe, KeyRound, LayoutDashboard, LogOut, Menu, Moon, Settings, Sun, User, Users, Wallet, X,
 } from 'lucide-react';
 import { get, patch, post } from './api';
 import { useAuth } from './auth';
@@ -11,91 +10,97 @@ import { cx } from './ui/kit';
 import { NotificationBell } from './ui/bell';
 import { SyncButton } from './pages/performance/Sync';
 
-type Item = { to: string; label: string; perm: string[]; icon?: ReactNode; badge?: string[]; end?: boolean; children?: Item[] };
-type Section = { key: string; label: string; items: Item[] };
+type Item = { to: string; label: string; perm: string[]; icon?: ReactNode; badge?: string[]; end?: boolean };
+type Section = { key: string; label: string; icon: ReactNode; items: Item[] };
 type Badges = Record<string, { expired: number; soon: number }>;
 const ALL_BADGES = ['id', 'license', 'health', 'driver_card', 'ajeer', 'operation_cards', 'vehicle_registrations', 'insurance_policies', 'vehicle_insurance', 'transport_licenses', 'oil_changes'];
 
-// Sections ordered by how often they are used each day (guide 1.3). Items without permission do not appear.
+// Main tabs, each with its pages underneath (one tab open at a time). Pages without permission do not appear,
+// a main tab with no visible page is hidden, and a main tab with a single page is a direct link.
 function useSections(): Section[] {
   const { t } = useI18n();
-  const i = (to: string, label: string, perm: string | string[], icon?: ReactNode, badge?: string[], children?: Item[], end?: boolean): Item =>
-    ({ to, label: t(label), perm: Array.isArray(perm) ? perm : [perm], icon, badge, children, end });
+  const i = (to: string, label: string, perm: string | string[], badge?: string[], end?: boolean): Item =>
+    ({ to, label: t(label), perm: Array.isArray(perm) ? perm : [perm], badge, end });
   return [
-    { key: 'main', label: t('nav.main'), items: [i('/admin', 'nav.dashboard', 'dashboard.view', <LayoutDashboard />, undefined, undefined, true)] },
-    { key: 'riders', label: t('nav.riders'), items: [
-      i('/admin/riders', 'nav.rider_list', 'riders.view', <Users />, undefined, undefined, true),
-      i('/admin/rider-applicants', 'nav.applicants', 'applicants.view', <UserPlus />),
-      i('/admin/leaves', 'nav.leaves', 'leaves.view', <CalendarDays />),
-      i('/admin/absences', 'nav.absences', 'absences.view', <CalendarX2 />),
-      i('/admin/live', 'nav.live', 'live_riders.view', <Radar />, undefined, undefined, true),
-      i('/admin/live/report', 'nav.live_report', 'live_riders.view', <MapPinned />),
-      i('/admin/riders/docs', 'nav.rider_documents', ['id_documents.view', 'driving_licenses.view', 'health_certs.view', 'driver_cards.view', 'ajeer_permits.view'], <IdCard />,
-        ['id', 'license', 'health', 'driver_card', 'ajeer'], [
-          i('/admin/riders/id-documents', 'docs.id', 'id_documents.view', undefined, ['id']),
-          i('/admin/riders/driving-licenses', 'docs.license', 'driving_licenses.view', undefined, ['license']),
-          i('/admin/riders/health-certificates', 'docs.health', 'health_certs.view', undefined, ['health']),
-          i('/admin/riders/driver-cards', 'docs.driver_card', 'driver_cards.view', undefined, ['driver_card']),
-          i('/admin/riders/ajeer-permits', 'docs.ajeer', 'ajeer_permits.view', undefined, ['ajeer']),
-        ]),
-      i('/admin/rider-change-requests', 'nav.change_requests', 'rider_portal.view_requests', <FilePen />),
-      i('/admin/rider-issues', 'nav.issues', 'rider_portal.view_issues', <MessagesSquare />, ['issues']),
-      i('/admin/advances', 'nav.advances', 'advances.view', <HandCoins />),
+    { key: 'main', label: t('nav.dashboard'), icon: <LayoutDashboard />, items: [i('/admin', 'nav.dashboard', 'dashboard.view', undefined, true)] },
+    // the platform owner's own pages (only on the owner's account, see OWNER_ONLY)
+    { key: 'platform', label: t('nav.platform'), icon: <Building />, items: [
+      i('/admin/platform', 'platform.tab.overview', 'dashboard.view', undefined, true),
+      i('/admin/platform/companies', 'platform.tab.companies', 'dashboard.view'),
+      i('/admin/platform/plans', 'platform.tab.plans', 'dashboard.view'),
+      i('/admin/platform/payments', 'platform.tab.payments', 'dashboard.view'),
     ] },
-    { key: 'fleet', label: t('nav.fleet'), items: [
-      i('/admin/vehicles', 'nav.vehicles', 'vehicles.view', <Car />),
-      i('/admin/operation-cards', 'nav.operation_cards', 'operation_cards.view', <FileBadge />, ['operation_cards']),
-      i('/admin/vehicle-registrations', 'nav.vehicle_registrations', 'vehicle_registrations.view', <FileText />, ['vehicle_registrations']),
-      i('/admin/insurance', 'nav.insurance', ['insurance_companies.view', 'insurance_policies.view', 'vehicle_insurance.view'], <Shield />, ['insurance_policies', 'vehicle_insurance'], [
-        i('/admin/insurance/companies', 'nav.insurance_companies', 'insurance_companies.view'),
-        i('/admin/insurance/policies', 'nav.insurance_policies', 'insurance_policies.view', undefined, ['insurance_policies']),
-        i('/admin/insurance/vehicles', 'nav.vehicle_insurance', 'vehicle_insurance.view', undefined, ['vehicle_insurance']),
-      ]),
-      i('/admin/vehicle-assignments', 'nav.vehicle_assignments', 'vehicle_assignments.view', <Bike />),
-      i('/admin/fuel-cards', 'nav.fuel_cards', 'fuel_cards.view', <Fuel />),
-      i('/admin/oil-changes', 'nav.oil_changes', 'oil_changes.view', <Wrench />, ['oil_changes']),
+    { key: 'riders', label: t('nav.riders'), icon: <Users />, items: [
+      i('/admin/riders', 'nav.rider_list', 'riders.view', undefined, true),
+      i('/admin/rider-applicants', 'nav.applicants', 'applicants.view'),
+      i('/admin/riders/id-documents', 'docs.id', 'id_documents.view', ['id']),
+      i('/admin/riders/driving-licenses', 'docs.license', 'driving_licenses.view', ['license']),
+      i('/admin/riders/health-certificates', 'docs.health', 'health_certs.view', ['health']),
+      i('/admin/riders/driver-cards', 'docs.driver_card', 'driver_cards.view', ['driver_card']),
+      i('/admin/riders/ajeer-permits', 'docs.ajeer', 'ajeer_permits.view', ['ajeer']),
+      i('/admin/rider-change-requests', 'nav.change_requests', 'rider_portal.view_requests'),
+      i('/admin/rider-issues', 'nav.issues', 'rider_portal.view_issues', ['issues']),
     ] },
-    { key: 'docs', label: t('nav.documents_renewals'), items: [
-      i('/admin/alerts', 'nav.alerts', 'alerts.view', <BellRing />, ALL_BADGES),
-      i('/admin/renewals', 'nav.renewals', 'renewals.view', <RefreshCw />),
-      i('/admin/transport-licenses', 'nav.transport_licenses', 'transport_licenses.view', <ScrollText />, ['transport_licenses']),
+    { key: 'attendance', label: t('nav.attendance'), icon: <CalendarDays />, items: [
+      i('/admin/leaves', 'nav.leaves', 'leaves.view'),
+      i('/admin/absences', 'nav.absences', 'absences.view'),
+      i('/admin/live', 'nav.live', 'live_riders.view', undefined, true),
+      i('/admin/live/report', 'nav.live_report', 'live_riders.view'),
     ] },
-    { key: 'performance', label: t('nav.performance'), items: [
-      i('/admin/performance', 'nav.daily_performance', 'performance.view', <Activity />),
-      i('/admin/branding', 'nav.branding', 'performance.view', <ScanFace />),
-      i('/admin/rider-ratings', 'nav.ratings', 'ratings.view', <Star />),
-      i('/admin/sync', 'nav.sync', 'sync.view', <RefreshCcw />),
-      i('/admin/companies', 'nav.companies', 'companies.view', <Building2 />),
-      i('/admin/contracts', 'nav.contracts', 'contracts.view', <Handshake />),
+    { key: 'fleet', label: t('nav.fleet'), icon: <Car />, items: [
+      i('/admin/vehicles', 'nav.vehicles', 'vehicles.view'),
+      i('/admin/vehicle-assignments', 'nav.vehicle_assignments', 'vehicle_assignments.view'),
+      i('/admin/operation-cards', 'nav.operation_cards', 'operation_cards.view', ['operation_cards']),
+      i('/admin/vehicle-registrations', 'nav.vehicle_registrations', 'vehicle_registrations.view', ['vehicle_registrations']),
+      i('/admin/insurance/companies', 'nav.insurance_companies', 'insurance_companies.view'),
+      i('/admin/insurance/policies', 'nav.insurance_policies', 'insurance_policies.view', ['insurance_policies']),
+      i('/admin/insurance/vehicles', 'nav.vehicle_insurance', 'vehicle_insurance.view', ['vehicle_insurance']),
+      i('/admin/fuel-cards', 'nav.fuel_cards', 'fuel_cards.view'),
+      i('/admin/oil-changes', 'nav.oil_changes', 'oil_changes.view', ['oil_changes']),
+      i('/admin/transport-licenses', 'nav.transport_licenses', 'transport_licenses.view', ['transport_licenses']),
     ] },
-    { key: 'finance', label: t('nav.finance'), items: [
-      i('/admin/finance/fines', 'nav.fines', 'finance.view', <Receipt />),
-      i('/admin/finance/wallet', 'nav.wallet', 'finance.view', <Wallet />),
-      i('/admin/finance/billing', 'nav.billing', 'finance.view', <FileSpreadsheet />),
+    { key: 'docs', label: t('nav.documents_renewals'), icon: <BellRing />, items: [
+      i('/admin/alerts', 'nav.alerts', 'alerts.view', ALL_BADGES),
+      i('/admin/renewals', 'nav.renewals', 'renewals.view'),
     ] },
-    { key: 'reports', label: t('nav.reports_notifications'), items: [
-      i('/admin/reports', 'nav.reports', 'reports.view', <BarChart3 />),
-      i('/admin/notifications', 'nav.notifications', 'notifications.view', <Bell />, undefined, undefined, true),
-      i('/admin/notifications/preferences', 'nav.notification_prefs', 'notification_prefs.view', <SlidersHorizontal />),
+    { key: 'performance', label: t('nav.performance'), icon: <Activity />, items: [
+      i('/admin/performance', 'nav.daily_performance', 'performance.view'),
+      i('/admin/branding', 'nav.branding', 'performance.view'),
+      i('/admin/rider-ratings', 'nav.ratings', 'ratings.view'),
+      i('/admin/sync', 'nav.sync', 'sync.view'),
+      i('/admin/companies', 'nav.companies', 'companies.view'),
+      i('/admin/contracts', 'nav.contracts', 'contracts.view'),
     ] },
-    { key: 'admin', label: t('nav.administration'), items: [
-      i('/admin/users', 'nav.users', 'users.view', <User />),
-      i('/admin/roles', 'nav.roles', ['roles.view', 'permissions.view'], <KeyRound />),
-      i('/admin/sessions', 'nav.sessions', 'sessions.view', <MonitorSmartphone />),
-      i('/admin/blocked-ips', 'nav.blocked_ips', 'blocked_ips.view', <ShieldBan />),
+    { key: 'finance', label: t('nav.finance'), icon: <Wallet />, items: [
+      i('/admin/advances', 'nav.advances', 'advances.view'),
+      i('/admin/finance/fines', 'nav.fines', 'finance.view'),
+      i('/admin/finance/wallet', 'nav.wallet', 'finance.view'),
+      i('/admin/finance/billing', 'nav.billing', 'finance.view'),
     ] },
-    { key: 'system', label: t('nav.system'), items: [
-      i('/admin/settings', 'nav.settings', ['system_settings.view', 'platform_settings.view', 'secrets.view'], <Settings />),
-      i('/admin/settings/organization', 'nav.organization', 'organization.view', <Building2 />),
-      i('/admin/attachments', 'nav.attachments', 'attachments.view', <Paperclip />),
-      i('/admin/email/templates', 'nav.email_templates', ['email_templates.view', 'smtp.view'], <Mail />),
-      i('/admin/email/log', 'nav.email_log', 'email_log.view', <MailCheck />),
-      i('/admin/logs/audit', 'nav.activity_log', ['audit_log.view', 'logs.view'], <ClipboardList />),
-      i('/admin/logs/login', 'nav.login_attempts', 'login_log.view', <History />),
-      i('/admin/logs/errors', 'nav.system_errors', 'logs.view', <Bug />),
-      i('/admin/cron-jobs', 'nav.cron_jobs', 'cron_jobs.view', <Timer />),
-      i('/admin/backups', 'nav.backups', 'backups.view', <DatabaseBackup />),
-      i('/admin/languages', 'nav.languages', 'languages.view', <Languages />),
+    { key: 'reports', label: t('nav.reports_notifications'), icon: <BarChart3 />, items: [
+      i('/admin/reports', 'nav.reports', 'reports.view'),
+      i('/admin/notifications', 'nav.notifications', 'notifications.view', undefined, true),
+      i('/admin/notifications/preferences', 'nav.notification_prefs', 'notification_prefs.view'),
+    ] },
+    { key: 'admin', label: t('nav.administration'), icon: <KeyRound />, items: [
+      i('/admin/users', 'nav.users', 'users.view'),
+      i('/admin/roles', 'nav.roles', ['roles.view', 'permissions.view']),
+      i('/admin/sessions', 'nav.sessions', 'sessions.view'),
+      i('/admin/blocked-ips', 'nav.blocked_ips', 'blocked_ips.view'),
+    ] },
+    { key: 'system', label: t('nav.system'), icon: <Settings />, items: [
+      i('/admin/settings', 'nav.settings', ['system_settings.view', 'platform_settings.view', 'secrets.view'], undefined, true),
+      i('/admin/settings/organization', 'nav.organization', 'organization.view'),
+      i('/admin/attachments', 'nav.attachments', 'attachments.view'),
+      i('/admin/email/templates', 'nav.email_templates', ['email_templates.view', 'smtp.view']),
+      i('/admin/email/log', 'nav.email_log', 'email_log.view'),
+      i('/admin/logs/audit', 'nav.activity_log', ['audit_log.view', 'logs.view']),
+      i('/admin/logs/login', 'nav.login_attempts', 'login_log.view'),
+      i('/admin/logs/errors', 'nav.system_errors', 'logs.view'),
+      i('/admin/cron-jobs', 'nav.cron_jobs', 'cron_jobs.view'),
+      i('/admin/billing', 'nav.billing_plan', 'subscription.view'),
+      i('/admin/backups', 'nav.backups', 'backups.view'),
+      i('/admin/languages', 'nav.languages', 'languages.view'),
     ] },
   ];
 }
@@ -115,56 +120,85 @@ function NavBadge({ keys, badges }: { keys?: string[]; badges: Badges }) {
   );
 }
 
-function Sidebar({ collapsed, onNavigate, badges }: { collapsed: boolean; onNavigate: () => void; badges: Badges }) {
-  const { can, org } = useAuth();
-  const sections = useSections();
+// Pages about the whole platform appear only on the owner's account; a company's own subscription page only on companies.
+const OWNER_ONLY = (to: string) => to.startsWith('/admin/platform') || ['/admin/backups', '/admin/blocked-ips', '/admin/languages'].includes(to);
+const COMPANY_ONLY = (to: string) => to === '/admin/billing';
+
+// The main tab a path belongs to: the longest matching page, so /admin/live/report is not counted as /admin/live.
+const owns = (it: Item, path: string) => path === it.to || path === it.to + '/' || (!it.end && path.startsWith(it.to + '/'));
+function activeSection(sections: Section[], path: string) {
+  let best: { key: string; len: number } | null = null;
+  for (const s of sections) for (const it of s.items) if (owns(it, path) && (!best || it.to.length > best.len)) best = { key: s.key, len: it.to.length };
+  if (!best) for (const s of sections) for (const it of s.items) if (path.startsWith(it.to + '/') && (!best || it.to.length > best.len)) best = { key: s.key, len: it.to.length };
+  return best?.key ?? null;
+}
+
+function Sidebar({ collapsed, onNavigate, onExpand, badges }: { collapsed: boolean; onNavigate: () => void; onExpand: () => void; badges: Badges }) {
+  const { can, org, me } = useAuth();
+  const owner = !!me?.platform_owner;
+  const sections = useSections().map((s) => ({ ...s, items: s.items.filter((it) => can(...it.perm) && (owner ? !COMPANY_ONLY(it.to) : !OWNER_ONLY(it.to))) })).filter((s) => s.items.length);
   const loc = useLocation();
-  const [open, setOpen] = useState<Record<string, boolean>>({});
-  const visible = (it: Item) => can(...it.perm);
-  const linkCls = ({ isActive }: { isActive: boolean }) => cx('flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition [&_svg]:size-4 [&_svg]:shrink-0',
-    isActive ? 'bg-brand font-medium text-white shadow-sm shadow-black/30' : 'text-zinc-400 hover:bg-white/[.06] hover:text-white');
+  const nav = useNavigate();
+  const current = activeSection(sections, loc.pathname);
+  // one main tab open at a time; moving to a page elsewhere opens that page's tab
+  const [open, setOpen] = useState<string | null>(current);
+  useEffect(() => { if (current) setOpen(current); }, [current]);
+  const tabCls = (active: boolean) => cx('flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition [&_svg]:size-[18px] [&_svg]:shrink-0',
+    active ? 'font-semibold text-zinc-900 dark:text-white [&_svg]:text-brand' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white [&_svg]:text-zinc-400');
+  const linkCls = ({ isActive }: { isActive: boolean }) => cx('relative flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] transition',
+    isActive ? 'bg-brand/[.08] font-medium text-brand before:absolute before:inset-y-1.5 before:-start-[9px] before:w-[2px] before:rounded-full before:bg-brand dark:bg-brand/15 dark:text-emerald-300'
+      : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white');
   return (
-    <nav className="scroll-thin flex h-full flex-col overflow-y-auto border-e border-white/5 bg-gradient-to-b from-zinc-900 to-zinc-950 px-2 py-3 text-zinc-100">
-      <Link to="/admin" onClick={onNavigate} className="mb-3 flex items-center gap-2.5 border-b border-white/[.06] px-2 pb-3">
+    <nav className="scroll-thin flex h-full flex-col overflow-y-auto border-e border-zinc-200 bg-white px-2 py-3 text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
+      <Link to="/admin" onClick={onNavigate} className="mb-3 flex items-center gap-2.5 border-b border-zinc-100 px-2 pb-3 dark:border-zinc-800">
         {org?.logos?.logo ? <img src="/api/public/logo/logo" alt="" className="h-8 w-8 rounded bg-white object-contain p-0.5" />
-          : <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand font-bold shadow-sm">{(org?.['org.name'] || 'L')[0]}</span>}
+          : <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-brand font-bold text-white">{(org?.['org.name'] || 'L')[0]}</span>}
         {!collapsed && <span className="truncate text-sm font-semibold">{org?.['org.name'] || org?.['platform.name']}</span>}
       </Link>
-      {sections.map((s) => {
-        const items = s.items.filter(visible);
-        if (!items.length) return null;
-        return (
-          <div key={s.key} className="mb-3">
-            {!collapsed && (
-              <div className="mb-1 flex items-center px-2.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-500/90">
-                {s.label}
-                <NavBadge keys={[...new Set(items.flatMap((x) => x.badge ?? []))]} badges={badges} />
-              </div>
-            )}
-            <div className="space-y-0.5">
-              {items.map((it) => it.children ? (
-                <div key={it.to}>
-                  <button title={collapsed ? it.label : undefined} onClick={() => setOpen({ ...open, [it.to]: !(open[it.to] ?? loc.pathname.startsWith(it.to)) })}
-                    className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm text-zinc-400 hover:bg-white/[.06] hover:text-white [&_svg]:size-4">
-                    {it.icon}{!collapsed && <><span className="truncate">{it.label}</span><NavBadge keys={it.badge} badges={badges} /><ChevronDown className="!size-3.5 opacity-60" /></>}
-                  </button>
-                  {(open[it.to] ?? it.children.some((c) => loc.pathname.startsWith(c.to))) && !collapsed && (
-                    <div className="ms-[1.15rem] mt-0.5 space-y-0.5 border-s border-white/10 ps-2">
-                      {it.children.filter(visible).map((c) => (
-                        <NavLink key={c.to} to={c.to} onClick={onNavigate} className={linkCls}><span className="truncate">{c.label}</span><NavBadge keys={c.badge} badges={badges} /></NavLink>
-                      ))}
-                    </div>
-                  )}
+      <div className="space-y-0.5">
+        {sections.map((s) => {
+          const badge = [...new Set(s.items.flatMap((x) => x.badge ?? []))];
+          const isCurrent = current === s.key;
+          if (s.items.length === 1) {
+            const it = s.items[0];
+            return (
+              <NavLink key={s.key} to={it.to} end={it.end} onClick={onNavigate} title={collapsed ? s.label : undefined}
+                className={({ isActive }) => cx(tabCls(isActive), isActive && 'bg-brand/[.08] !text-brand dark:!text-emerald-300')}>
+                {s.icon}{!collapsed && <><span className="truncate">{s.label}</span><NavBadge keys={badge} badges={badges} /></>}
+              </NavLink>
+            );
+          }
+          const expanded = open === s.key && !collapsed;
+          return (
+            <div key={s.key}>
+              <button type="button" aria-expanded={expanded} title={collapsed ? s.label : undefined} className={tabCls(isCurrent)}
+                onClick={() => {
+                  // icon-only sidebar: widen it and show this tab's pages
+                  if (collapsed) { onExpand(); setOpen(s.key); if (!isCurrent) nav(s.items[0].to); return; }
+                  setOpen(expanded ? null : s.key);
+                }}>
+                {s.icon}
+                {!collapsed && <>
+                  <span className="truncate">{s.label}</span>
+                  <span className="ms-auto flex items-center gap-1.5">
+                    {!expanded && <NavBadge keys={badge} badges={badges} />}
+                    <ChevronDown className={cx('!size-3.5 opacity-60 transition-transform', expanded && 'rotate-180')} />
+                  </span>
+                </>}
+              </button>
+              {expanded && (
+                <div className="mb-1 ms-[1.3rem] mt-0.5 space-y-0.5 border-s border-zinc-200 ps-2 dark:border-zinc-800">
+                  {s.items.map((it) => (
+                    <NavLink key={it.to} to={it.to} end={it.end} onClick={onNavigate} className={linkCls}>
+                      <span className="truncate">{it.label}</span><NavBadge keys={it.badge} badges={badges} />
+                    </NavLink>
+                  ))}
                 </div>
-              ) : (
-                <NavLink key={it.to} to={it.to} end={it.end} onClick={onNavigate} className={linkCls} title={collapsed ? it.label : undefined}>
-                  {it.icon}{!collapsed && <><span className="truncate">{it.label}</span><NavBadge keys={it.badge} badges={badges} /></>}
-                </NavLink>
-              ))}
+              )}
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </nav>
   );
 }
@@ -230,7 +264,7 @@ export function AdminLayout() {
   return (
     <div className="flex min-h-screen">
       <aside className={cx('fixed inset-y-0 start-0 z-40 transition-all lg:sticky lg:top-0 lg:h-screen', collapsed ? 'lg:w-16' : 'lg:w-64', mobile ? 'w-72' : 'hidden lg:block')}>
-        <Sidebar collapsed={collapsed && !mobile} onNavigate={() => setMobile(false)} badges={badges} />
+        <Sidebar collapsed={collapsed && !mobile} onNavigate={() => setMobile(false)} onExpand={() => setCollapsed(false)} badges={badges} />
       </aside>
       {mobile && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setMobile(false)} />}
       <div className="flex min-w-0 flex-1 flex-col">
@@ -261,9 +295,29 @@ export function AdminLayout() {
             </div>
           </div>
         </header>
+        <TrialBanner />
         <main className="mx-auto w-full max-w-[1500px] flex-1 p-4 sm:p-6"><Outlet /></main>
       </div>
     </div>
   );
 }
 
+
+// The company's trial or subscription status, shown above every page when it needs attention.
+function TrialBanner() {
+  const { t } = useI18n();
+  const { me, can } = useAuth();
+  const c = me?.company;
+  if (!c || (c.state === 'active' && c.days_left > 7)) return null;
+  const tone = c.state === 'expired' || c.state === 'suspended' ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200'
+    : c.days_left <= 3 ? 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200'
+    : 'border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300';
+  const text = c.state === 'trial' ? t('banner.trial', { n: c.days_left }) : c.state === 'active' ? t('banner.renew_soon', { n: c.days_left })
+    : c.state === 'suspended' ? t('banner.suspended') : t('banner.expired');
+  return (
+    <div className={cx('no-print flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b px-4 py-2 text-sm', tone)}>
+      <span>{text}</span>
+      {can('subscription.view') && c.state !== 'suspended' && <Link to="/admin/billing" className="font-semibold underline-offset-2 hover:underline">{t('banner.choose_plan')}</Link>}
+    </div>
+  );
+}

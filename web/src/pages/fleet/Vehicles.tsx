@@ -10,6 +10,7 @@ import { DataTable, FilterBar, FilterSelect, useList, type Column } from '../../
 import { Attachments, ScanUpload, type Scan } from '../../ui/files';
 import { ImportWizard } from '../../ui/importer';
 import { ExpiryDate, ExportButton, useCityName, useOptions } from '../../ui/common';
+import { PausedMark, PlanCounter } from '../../ui/plan';
 
 export const VEHICLE_STATUS: Record<string, Tone> = { active: 'green', maintenance: 'amber', retired: 'grey' };
 export const VStatus = ({ s }: { s: string }) => { const { t } = useI18n(); return <Badge tone={VEHICLE_STATUS[s]}>{t(`vehicle.status.${s}`)}</Badge>; };
@@ -49,12 +50,12 @@ export function VehiclesList() {
     if (await delWith(() => (ids.length > 1 ? post('/vehicles/bulk-delete', { ids }) : del(`/vehicles/${ids[0]}`)))) { list.setSelected(new Set()); list.reload(); }
   };
   const columns: Column<any>[] = [
-    { key: 'plate', header: t('vehicles.plate'), sort: 'plate', render: (r) => <div><div className="font-medium">{r.plate}</div><div className="text-xs text-zinc-500">{[r.plate_en, typeLabel(t, r.vehicle_type), `#${r.id}`].filter(Boolean).join(' · ')}</div></div> },
+    { key: 'plate', header: t('vehicles.plate'), sort: 'plate', render: (r) => <div><div className={r.paused ? 'flex items-center gap-1.5 font-medium text-zinc-400' : 'font-medium'}>{r.plate}{r.paused && <PausedMark />}</div><div className="text-xs text-zinc-500">{[r.plate_en, typeLabel(t, r.vehicle_type), `#${r.id}`].filter(Boolean).join(' · ')}</div></div> },
     { key: 'make', header: t('vehicles.make_model'), sort: 'make', render: (r) => <div>{[r.maker, r.model].filter(Boolean).join(' ') || '—'}{r.color && <div className="text-xs text-zinc-500">{r.color}</div>}</div> },
     { key: 'year', header: t('vehicles.year'), sort: 'year', render: (r) => <span className="num">{r.year ?? '—'}</span> },
     { key: 'ownership', header: t('vehicles.ownership'), sort: 'ownership', render: (r) => t(`vehicle.own.${r.ownership}`) },
     { key: 'rider', header: t('vehicles.current_rider'), render: (r) => { const rs = riderList(r.riders); return rs.length ? <div>{rs.map((x) => <div key={x.id}><Link to={`/admin/riders/${x.id}`} className="hover:text-brand">{x.name}</Link> <span className="text-xs text-zinc-500 num">#{x.id}</span></div>)}{rs.length > 1 && <Badge tone="amber">{rs.length}</Badge>}</div> : <span className="text-zinc-500">{t('vehicles.unassigned')}</span>; } },
-    { key: 'card', header: t('vehicles.card'), sort: 'card', render: (r) => r.card_id ? <div><ExpiryDate date={r.card_expiry} days={r.card_days} /><div className="text-xs text-zinc-500 num">{r.card_number}{r.card_vehicles > 1 && ` · ${t('vehicles.n_vehicles', { n: r.card_vehicles })}`}</div></div> : <span className="text-zinc-500">{t('vehicles.no_card')}</span> },
+    { key: 'card', header: t('vehicles.card'), sort: 'card', render: (r) => r.card_id ? <div><ExpiryDate date={r.card_expiry} days={r.card_days} kind="operation_card" /><div className="text-xs text-zinc-500 num">{r.card_number}{r.card_vehicles > 1 && ` · ${t('vehicles.n_vehicles', { n: r.card_vehicles })}`}</div></div> : <span className="text-zinc-500">{t('vehicles.no_card')}</span> },
     { key: 'status', header: t('vehicles.status'), sort: 'status', render: (r) => <VStatus s={r.status} /> },
     { key: 'actions', header: t('common.actions'), render: (r) => (
       <div className="flex">
@@ -67,7 +68,7 @@ export function VehiclesList() {
   const st = (k: string) => () => list.set('status', list.query.status === k ? null : k);
   return (
     <>
-      <PageHeader title={t('vehicles.title')} actions={<>
+      <PageHeader title={t('vehicles.title')} subtitle={<PlanCounter kind="vehicles" />} actions={<>
         {can('vehicles.export') && <ExportButton path="/vehicles/export" query={list.query} />}
         {can('vehicles.import') && <Button size="sm" onClick={() => run(() => download('/vehicles/import/template'))}>{t('import.download_template')}</Button>}
         {can('vehicles.import') && <Link to="/admin/vehicles/import"><Button size="sm" icon={<FileUp className="size-3.5" />}>{t('import.import_file')}</Button></Link>}

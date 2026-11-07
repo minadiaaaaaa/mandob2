@@ -43,15 +43,15 @@ export const permLabel = (t: (k: string) => string, perm: string) => {
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'warn'; size?: 'sm' | 'md'; loading?: boolean; icon?: ReactNode };
 export function Button({ variant = 'secondary', size = 'md', loading, icon, className, children, disabled, ...p }: BtnProps) {
   const v = {
-    primary: 'bg-brand text-white hover:brightness-110 shadow-sm',
+    primary: 'bg-brand text-white hover:brightness-95',
     secondary: 'bg-white text-zinc-800 ring-1 ring-inset ring-zinc-300 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-100 dark:ring-zinc-700 dark:hover:bg-zinc-800',
-    danger: 'bg-red-600 text-white hover:bg-red-700 shadow-sm',
-    warn: 'bg-amber-500 text-white hover:bg-amber-600 shadow-sm',
+    danger: 'bg-red-600 text-white hover:bg-red-700',
+    warn: 'bg-amber-500 text-white hover:bg-amber-600',
     ghost: 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800',
   }[variant];
   return (
     <button {...p} disabled={disabled || loading}
-      className={cx('inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition disabled:cursor-not-allowed disabled:opacity-50 whitespace-nowrap',
+      className={cx('inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition disabled:cursor-not-allowed disabled:opacity-50 whitespace-nowrap',
         size === 'sm' ? 'px-2.5 py-1.5 text-xs' : 'px-3.5 py-2 text-sm', v, className)}>
       {loading ? <Loader2 className="size-4 animate-spin" /> : icon}
       {children}
@@ -72,7 +72,7 @@ export function IconButton({ title, tone, className, children, ...p }: ButtonHTM
 
 export function Card({ title, actions, children, className, subtitle, pad = true }: { title?: ReactNode; subtitle?: ReactNode; actions?: ReactNode; children?: ReactNode; className?: string; pad?: boolean }) {
   return (
-    <section className={cx('rounded-xl border border-zinc-200/80 bg-white shadow-xs dark:border-zinc-800 dark:bg-zinc-900', className)}>
+    <section className={cx('rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900', className)}>
       {(title || actions) && (
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 px-4 py-3 dark:border-zinc-800/80">
           <div>
@@ -116,9 +116,9 @@ const TONE_BAR: Record<Tone, string> = {
 export function StatCard({ label, value, tone = 'none', sub, onClick, active, icon }: { label: ReactNode; value: ReactNode; tone?: Tone; sub?: ReactNode; onClick?: () => void; active?: boolean; icon?: ReactNode }) {
   const Comp = onClick ? 'button' : 'div';
   return (
-    <Comp onClick={onClick} className={cx('relative min-w-36 shrink-0 snap-start sm:min-w-0 overflow-hidden rounded-xl border bg-white px-3.5 py-3 text-start shadow-xs transition dark:bg-zinc-900',
-      'before:absolute before:inset-y-0 before:start-0 before:w-[3px]', TONE_BAR[tone],
-      active ? 'border-brand ring-2 ring-brand/25' : 'border-zinc-200/80 dark:border-zinc-800', onClick && 'cursor-pointer hover:-translate-y-px hover:border-brand/50 hover:shadow-sm')}>
+    <Comp onClick={onClick} className={cx('relative min-w-36 shrink-0 snap-start sm:min-w-0 rounded-lg border bg-white px-3.5 py-3 text-start transition dark:bg-zinc-900',
+      tone !== 'none' && 'before:absolute before:top-3.5 before:start-3.5 before:size-1.5 before:rounded-full ps-6', tone !== 'none' && TONE_BAR[tone],
+      active ? 'border-brand bg-brand/[.04]' : 'border-zinc-200 dark:border-zinc-800', onClick && 'cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600')}>
       <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400 [&_svg]:size-3.5">{icon}<span className="truncate">{label}</span></div>
       <div className={cx('mt-1 text-xl font-semibold tracking-tight', !ARABIC.test(String(value)) && 'num', TONE_TEXT[tone])}>{value}</div>
       {sub && <div className="mt-0.5 text-xs text-zinc-500">{sub}</div>}
