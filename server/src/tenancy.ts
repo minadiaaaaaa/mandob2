@@ -12,7 +12,7 @@ export const TENANT_TABLES = new Set([
   'cron_runs', 'daily_performance', 'designations', 'email_log', 'email_templates', 'error_log', 'fines', 'fuel_cards', 'insurance_companies',
   'insurance_policies', 'leaves', 'live_board', 'live_days', 'live_points', 'login_attempts', 'monthly_ratings', 'notification_prefs',
   'notifications', 'oil_changes', 'oil_schedules', 'operation_card_vehicles', 'operation_cards', 'platform_id_transfers', 'platform_ids', 'rating_cutoffs', 'renewals',
-  'rider_absences', 'rider_accounts', 'rider_change_requests', 'rider_codes', 'rider_documents', 'rider_issue_messages', 'rider_issues',
+  'rider_absences', 'rider_accounts', 'rider_bank_accounts', 'rider_change_requests', 'rider_codes', 'rider_documents', 'rider_issue_messages', 'rider_issues',
   'rider_login_attempts', 'rider_sessions', 'riders', 'role_permissions', 'roles', 'secrets', 'sessions', 'settings',
   'subscription_payments', 'sync_runs', 'sync_sources', 'transport_licenses', 'users', 'vehicle_accident_events', 'vehicle_accidents', 'vehicle_assignments', 'vehicle_insurance', 'vehicle_services',
   'vehicle_registrations', 'vehicles', 'wallet_entries', 'wallet_snapshots',

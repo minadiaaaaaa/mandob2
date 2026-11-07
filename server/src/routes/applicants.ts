@@ -28,7 +28,7 @@ const spec: Spec = {
 
 const rules = {
   full_name: { req: true, max: 150 }, name_en: { max: 150 }, phone: { req: true, max: 20 }, national_id: { max: 30 }, nationality: { max: 100 },
-  birth_date: { type: 'date' as const }, city_id: { type: 'int' as const }, status: { enum: ['new', 'review', 'approved', 'rejected', 'withdrawn'] },
+  birth_date: { type: 'date' as const }, city_id: { type: 'int' as const }, status: { enum: ['new', 'contacted', 'interview', 'documents', 'review', 'approved', 'rejected', 'withdrawn'] },
   heard_from: { max: 100 }, featured: { type: 'bool' as const }, featured_reason: { max: 255 }, notes: { max: 500 },
   has_vehicle: { type: 'bool' as const }, vehicle_type: { max: 50 }, vehicle_plate: { max: 30 }, vehicle_maker: { max: 60 }, vehicle_model: { max: 60 },
   vehicle_year: { type: 'int' as const, min: 1950, max: new Date().getFullYear() + 2 },
@@ -53,8 +53,8 @@ applicantsRouter.get('/applicants', can('applicants.view'), async (req, res) => 
   const query = req.query as Query;
   const data = await list(spec, query);
   const w = where(spec, query);
-  const [stats] = await q(`SELECT COUNT(*) total, COALESCE(SUM(status IN ('new','review')),0) open, COALESCE(SUM(status = 'new'),0) \`new\`, COALESCE(SUM(status = 'review'),0) review,
-    COALESCE(SUM(status = 'approved'),0) approved, COALESCE(SUM(status = 'rejected'),0) rejected, COALESCE(SUM(status = 'hired'),0) hired,
+  const [stats] = await q(`SELECT COUNT(*) total, COALESCE(SUM(status IN ('new','contacted','interview','documents','review')),0) open, COALESCE(SUM(status = 'new'),0) \`new\`, COALESCE(SUM(status = 'review'),0) review,
+    COALESCE(SUM(status = 'contacted'),0) contacted, COALESCE(SUM(status = 'interview'),0) interview, COALESCE(SUM(status = 'documents'),0) documents, COALESCE(SUM(status = 'approved'),0) approved, COALESCE(SUM(status = 'rejected'),0) rejected, COALESCE(SUM(status = 'hired'),0) hired,
     COALESCE(SUM(status = 'withdrawn'),0) withdrawn, COALESCE(SUM(has_vehicle),0) own_vehicle, COALESCE(SUM(featured),0) featured, COALESCE(SUM(official),0) official
     FROM (SELECT a.status, a.has_vehicle, a.featured, (a.rider_id IS NOT NULL OR MIN(mr.id) IS NOT NULL) official ${spec.from}${w.sql} GROUP BY a.id) t`, w.params);
   res.json({ ...data, stats });
@@ -194,6 +194,7 @@ applicantsRouter.post('/applicants/:id/link', can('applicants.hire'), async (req
 const STATUS_IN: Record<string, string> = {
   new: 'new', 'جديد': 'new', review: 'review', 'under review': 'review', 'قيد المراجعة': 'review', approved: 'approved', 'مقبول': 'approved',
   rejected: 'rejected', 'مرفوض': 'rejected', withdrawn: 'withdrawn', 'منسحب': 'withdrawn',
+  contacted: 'contacted', 'تم التواصل': 'contacted', interview: 'interview', 'مقابلة': 'interview', documents: 'documents', 'المستندات': 'documents', ready: 'approved', 'جاهز': 'approved',
 };
 const applicantImport: ImportDef = {
   name: 'applicants', perm: 'applicants.import', matchOn: 'applicants.phone',

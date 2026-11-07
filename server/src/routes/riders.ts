@@ -9,6 +9,7 @@ import { removeAttachment } from '../files.js';
 import { cellDate, cellStr, importRoutes, type ImportDef } from '../importer.js';
 import { NOT_COUNTED, comesBack, ensureQuota, withQuota } from '../domain/quotas.js';
 import { RIDER_STATUSES } from '../domain/rules.js';
+import { stampExit } from '../domain/employees.js';
 import { checkBranch, checkDesignation, importOrgId, withRiderDefaults } from '../domain/branches.js';
 
 export const ridersRouter = Router();
@@ -101,6 +102,9 @@ const riderRules = {
   nationality: { max: 100 }, birth_date: { type: 'date' as const }, birth_place: { max: 150 },
   blood_type: { enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] }, notes: { max: 500 },
   branch_id: { type: 'int' as const }, designation_id: { type: 'int' as const },
+  // phase 5: visa, sponsor (kafeel) and passport
+  visa_number: { max: 30 }, visa_type: { max: 60 }, visa_expiry: { type: 'date' as const }, sponsor_name: { max: 150 }, sponsor_number: { max: 30 },
+  passport_number: { max: 30 }, passport_expiry: { type: 'date' as const },
 };
 
 function riderSpec(day: string): Spec {
@@ -255,6 +259,7 @@ ridersRouter.patch('/riders/:id', can('riders.update'), async (req, res) => {
     if (Object.keys(v).length) await exec('UPDATE riders SET ?, updated_at = UTC_TIMESTAMP() WHERE id = ?', [v, id]);
     if ('vehicle_id' in body) await assignVehicle(req, id, body.vehicle_id ? Number(body.vehicle_id) : null);
   });
+  if (v.status === 'terminated' && before.status !== 'terminated') await stampExit([id], await today());
   if (Object.keys(v).length) await audit(req, { action: 'rider.update', entity_type: 'rider', entity_id: id, before: Object.fromEntries(Object.keys(v).map((k) => [k, before[k]])), after: v });
   const failed = await saveDocuments(req, id, body.documents);
   res.json({ id, failed });
@@ -345,6 +350,7 @@ ridersRouter.post('/riders/bulk-edit', can('riders.update'), async (req, res) =>
     }
     return exec('UPDATE riders SET ?, updated_at = UTC_TIMESTAMP() WHERE id IN (?)', [changes, ids]);
   });
+  if (changes.status === 'terminated') await stampExit(ids, await today());
   await audit(req, { action: 'rider.bulk_edit', entity_type: 'rider', entity_id: ids.join(',').slice(0, 60), after: changes, details: `${ids.length} riders` });
   res.json({ updated: r.affectedRows });
 });

@@ -33,6 +33,8 @@ function useSections(): Section[] {
     { key: 'riders', label: t('nav.riders'), icon: <Users />, items: [
       i('/admin/riders', 'nav.rider_list', 'riders.view', undefined, true),
       i('/admin/rider-applicants', 'nav.applicants', 'applicants.view'),
+      i('/admin/riders/papers', 'nav.rider_papers', 'riders.view'),
+      i('/admin/riders/exited', 'nav.exited', 'riders.view'),
       i('/admin/platform-ids', 'nav.platform_ids', 'platform_ids.view'),
       i('/admin/riders/id-documents', 'docs.id', 'id_documents.view', ['id']),
       i('/admin/riders/driving-licenses', 'docs.license', 'driving_licenses.view', ['license']),

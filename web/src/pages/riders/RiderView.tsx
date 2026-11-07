@@ -6,10 +6,13 @@ import { useAuth } from '../../auth';
 import { fmtDateTime, useI18n } from '../../i18n';
 import { Alert, Badge, Button, Card, Details, IconButton, Loading, PageHeader, useAction, useErrorText, useUi } from '../../ui/kit';
 import { Attachments } from '../../ui/files';
-import { Remaining, localName, useCityName, type ExpiryKind } from '../../ui/common';
+import { ExpiryDate, Remaining, localName, useCityName, type ExpiryKind } from '../../ui/common';
+// whole days from today to a date (negative when it has passed)
+const daysTo = (d: string) => Math.round((Date.parse(String(d).slice(0, 10)) - Date.parse(new Date().toISOString().slice(0, 10))) / 86400000);
 import { DOC_MODULE, DOC_TYPES, RiderStatus, type DocType } from './shared';
 import { RiderOpsCards } from './RiderCards';
 import { RiderPlatformIds } from './PlatformIds';
+import { RiderBankAccounts } from './Employees';
 
 export default function RiderView() {
   // the profile shares the /admin/riders/:slug route with the document screens
@@ -97,6 +100,17 @@ export default function RiderView() {
             [t('riders.assigned_since'), r.assigned_since],
           ]} />
         </Card>
+      </div>
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Card title={t('riders.sec.visa')}>
+          <Details rows={[
+            [t('riders.visa_number'), r.visa_number], [t('riders.visa_type'), r.visa_type], [t('riders.visa_expiry'), r.visa_expiry ? <ExpiryDate date={r.visa_expiry} days={daysTo(r.visa_expiry)} /> : null],
+            [t('riders.sponsor_name'), r.sponsor_name], [t('riders.sponsor_number'), r.sponsor_number],
+            [t('riders.passport_number'), r.passport_number], [t('riders.passport_expiry'), r.passport_expiry ? <ExpiryDate date={r.passport_expiry} days={daysTo(r.passport_expiry)} /> : null],
+            ...(r.status === 'terminated' ? [[t('exited.exit_date'), r.exit_date], [t('exited.clearance'), r.exit_clearance ? t(`exited.c.${r.exit_clearance}`) : null], [t('exited.reason'), r.exit_reason]] as any[] : []),
+          ]} />
+        </Card>
+        <Card title={t('bank.title')}><RiderBankAccounts riderId={r.id} /></Card>
       </div>
       {can('platform_ids.view') && <div className="mt-4"><Card title={t('pids.rider_section')}><RiderPlatformIds riderId={r.id} /></Card></div>}
       <div className="mt-4">

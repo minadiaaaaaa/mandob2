@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { asPlatform, closeDb, dbConfig, executeScript, q, withTenant } from "../src/db.js";
 import { ensureCompanyDefaults } from "../src/domain/branches.js";
-import { FLEET_LINKS, MIGRATIONS, PLATFORM_ID_LINKS, RIDER_LINKS, addColumn, addIndex, columnExists, indexExists, runMigrations, type Migration } from "../src/migrations.js";
+import { EMPLOYEE_LINKS, FLEET_LINKS, MIGRATIONS, PLATFORM_ID_LINKS, RIDER_LINKS, addColumn, addIndex, columnExists, indexExists, runMigrations, type Migration } from "../src/migrations.js";
 
 assert.match(dbConfig()?.database ?? "", /^mandoob_test[a-z0-9_]*$/, "Disposable test databases only");
 let checks = 0;
@@ -41,7 +41,7 @@ try {
     const riderFks = async () => Number((await q<{ n: number }>(`SELECT COUNT(DISTINCT CONSTRAINT_NAME) n FROM information_schema.KEY_COLUMN_USAGE
       WHERE TABLE_SCHEMA = DATABASE() AND REFERENCED_TABLE_NAME = 'riders' AND COLUMN_NAME = 'tenant_id'`))[0].n);
     // links added by later steps (platform IDs, migration 5) are counted on top and left alone here
-    const later = [...PLATFORM_ID_LINKS, ...FLEET_LINKS].filter(([, , target]) => target === "riders").length;
+    const later = [...PLATFORM_ID_LINKS, ...FLEET_LINKS, ...EMPLOYEE_LINKS].filter(([, , target]) => target === "riders").length;
     ok((await riderFks()) === RIDER_LINKS.length + later, `all ${RIDER_LINKS.length + later} rider links are per company`);
     for (const [table, column] of RIDER_LINKS) await executeScript(`ALTER TABLE \`${table}\` DROP FOREIGN KEY \`fk_${table}_${column}\``);
     ok((await riderFks()) === later, "links dropped (simulated crash)");

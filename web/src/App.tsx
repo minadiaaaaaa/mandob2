@@ -23,6 +23,7 @@ import {
 } from './pages/fleet/Fleet2';
 import { BranchesPage, DesignationsPage } from './pages/system/Branches';
 import { PlatformIdsImport, PlatformIdsPage } from './pages/riders/PlatformIds';
+import { ExitedPage, RiderPapersPage } from './pages/riders/Employees';
 import { CompaniesList, CompanyForm, CompanyView, ContractForm, ContractsList, ContractView } from './pages/performance/Companies';
 import { BlockedIps, Profile, RoleEdit, RolesList, RoleView, SessionsList, UserForm, UsersList, UserView } from './pages/admin/Access';
 import { AttachmentsIndex, AuditLog, LoginAttempts, Settings } from './pages/system/System';
@@ -117,6 +118,8 @@ export default function App() {
         <Route path="rider-applicants/:id" element={g('applicants.view', <ApplicantView />)} />
         <Route path="rider-applicants/:id/edit" element={g('applicants.update', <ApplicantForm />)} />
         <Route path="platform-ids" element={g('platform_ids.view', <PlatformIdsPage />)} />
+        <Route path="riders/exited" element={g('riders.view', <ExitedPage />)} />
+        <Route path="riders/papers" element={g('riders.view', <RiderPapersPage />)} />
         <Route path="platform-ids/import" element={g('platform_ids.import', <PlatformIdsImport />)} />
 
         <Route path="leaves" element={g('leaves.view', <LeavesList />)} />

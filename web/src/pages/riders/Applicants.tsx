@@ -11,7 +11,7 @@ import { ImportWizard } from '../../ui/importer';
 import { Attachments } from '../../ui/files';
 import { ExportButton, useCityName, useOptions } from '../../ui/common';
 
-const STATUS_TONE: Record<string, Tone> = { new: 'blue', review: 'amber', approved: 'green', rejected: 'red', withdrawn: 'grey', hired: 'green' };
+const STATUS_TONE: Record<string, Tone> = { new: 'blue', contacted: 'blue', interview: 'amber', documents: 'amber', review: 'amber', approved: 'green', rejected: 'red', withdrawn: 'grey', hired: 'green' };
 export const AppStatus = ({ s }: { s: string }) => { const { t } = useI18n(); return <Badge tone={STATUS_TONE[s]}>{t(`app.status.${s}`)}</Badge>; };
 
 function StarButton({ on, onClick, title }: { on: boolean; onClick: () => void; title: string }) {
@@ -72,7 +72,7 @@ export function ApplicantsList() {
       </>} />
       <StatGrid>
         {card('total', t('app.s.total'))}{card('open', t('app.s.open'), 'blue')}{card('new', t('app.status.new'), 'blue', ['status', 'new'])}
-        {card('review', t('app.status.review'), 'amber', ['status', 'review'])}{card('approved', t('app.status.approved'), 'green', ['status', 'approved'])}
+        {card('contacted', t('app.status.contacted'), 'blue', ['status', 'contacted'])}{card('interview', t('app.status.interview'), 'amber', ['status', 'interview'])}{card('documents', t('app.status.documents'), 'amber', ['status', 'documents'])}{card('review', t('app.status.review'), 'amber', ['status', 'review'])}{card('approved', t('app.status.approved'), 'green', ['status', 'approved'])}
         {card('rejected', t('app.status.rejected'), 'red', ['status', 'rejected'])}{card('hired', t('app.status.hired'), 'green', ['status', 'hired'])}
         {card('withdrawn', t('app.status.withdrawn'), 'none', ['status', 'withdrawn'])}{card('own_vehicle', t('app.s.own_vehicle'), 'none', ['own_vehicle', 'yes'])}
         {card('featured', t('app.featured'), 'amber', ['featured', 'yes'])}{card('official', t('app.s.official'), 'green', ['official', 'yes'])}
@@ -90,7 +90,7 @@ export function ApplicantsList() {
             <Button size="sm" onClick={() => run(() => post('/applicants/bulk-feature', { ids, featured: true })).then((r) => r && list.reload())}>{t('app.feature_selected')}</Button>
             <Button size="sm" onClick={() => run(() => post('/applicants/bulk-feature', { ids, featured: false })).then((r) => r && list.reload())}>{t('app.unfeature_selected')}</Button>
             <select className="input w-auto py-1 text-xs" value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)}>
-              <option value="">{t('app.status')}</option>{['new', 'review', 'approved', 'rejected', 'withdrawn'].map((v) => <option key={v} value={v}>{t(`app.status.${v}`)}</option>)}
+              <option value="">{t('app.status')}</option>{['new', 'contacted', 'interview', 'documents', 'review', 'approved', 'rejected', 'withdrawn'].map((v) => <option key={v} value={v}>{t(`app.status.${v}`)}</option>)}
             </select>
             <Button size="sm" disabled={!bulkStatus} onClick={async () => {
               if (!(await confirm({ title: t('app.bulk_status_q', { n: ids.length, status: t(`app.status.${bulkStatus}`) }), tone: 'primary' }))) return;
@@ -148,7 +148,7 @@ export function ApplicantForm() {
         <div className="space-y-4">
           <Card title={t('app.sec.application')}>
             <Grid>
-              {id && loaded.status !== 'hired' && <SelectInput form={form} name="status" label={t('app.status')} empty={false} options={['new', 'review', 'approved', 'rejected', 'withdrawn'].map((v) => ({ value: v, label: t(`app.status.${v}`) }))} />}
+              {id && loaded.status !== 'hired' && <SelectInput form={form} name="status" label={t('app.status')} empty={false} options={['new', 'contacted', 'interview', 'documents', 'review', 'approved', 'rejected', 'withdrawn'].map((v) => ({ value: v, label: t(`app.status.${v}`) }))} />}
               <TextInput form={form} name="heard_from" label={t('app.heard_from')} maxLength={100} />
             </Grid>
             <div className="mt-3 space-y-3">

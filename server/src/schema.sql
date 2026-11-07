@@ -270,6 +270,23 @@ CREATE TABLE IF NOT EXISTS platform_id_transfers (
   KEY ix_t_at (tenant_id, transferred_at)
 );
 
+-- A rider's bank accounts (phase 5): one or more, one of them the main one (used on payslips and prints).
+-- The IBAN is stored without spaces, upper-case. The key to riders includes tenant_id (migration 7).
+CREATE TABLE IF NOT EXISTS rider_bank_accounts (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  rider_id BIGINT NOT NULL,
+  bank_name VARCHAR(100) NOT NULL,
+  iban VARCHAR(34) NOT NULL,
+  account_holder VARCHAR(150) NULL,
+  is_primary TINYINT(1) NOT NULL DEFAULT 0,
+  notes VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY uq_rider_iban (tenant_id, rider_id, iban),
+  KEY ix_t_rider (tenant_id, rider_id)
+);
+
 -- Servicing log (phase 4): every visit to the workshop, from scheduled to completed (or cancelled). While one is in
 -- progress the vehicle is under maintenance. The cost and its payment are kept on the record.
 CREATE TABLE IF NOT EXISTS vehicle_services (
@@ -401,7 +418,7 @@ CREATE TABLE IF NOT EXISTS applicants (
   nationality VARCHAR(100) NULL,
   birth_date DATE NULL,
   city_id INT NULL,
-  status ENUM('new','review','approved','rejected','withdrawn','hired') NOT NULL DEFAULT 'new',
+  status ENUM('new','contacted','interview','documents','review','approved','rejected','withdrawn','hired') NOT NULL DEFAULT 'new',
   heard_from VARCHAR(100) NULL,
   featured TINYINT(1) NOT NULL DEFAULT 0,
   featured_reason VARCHAR(255) NULL,

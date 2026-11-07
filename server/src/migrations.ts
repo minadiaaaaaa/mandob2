@@ -140,7 +140,30 @@ export const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    // Phase 5: a rider's visa, sponsor and passport, how they left (exit date, reason, the state of their dues),
+    // their bank accounts (table in schema.sql), and the hiring stages Contacted, Interview and Documents.
+    id: 7, name: 'employee files',
+    up: async () => {
+      for (const [column, definition] of RIDER_FILE_COLUMNS) await addColumn('riders', column, definition);
+      await addIndex('riders', 'ix_t_status_exit', ['tenant_id', 'status', 'exit_date']);
+      await executeScript("ALTER TABLE applicants MODIFY status ENUM('new','contacted','interview','documents','review','approved','rejected','withdrawn','hired') NOT NULL DEFAULT 'new'");
+      for (const [table, column, target] of EMPLOYEE_LINKS) {
+        const name = `fk_${table}_${column}`.slice(0, 64);
+        if (!(await constraintExists(table, name)))
+          await executeScript(`ALTER TABLE ${identifier(table)} ADD CONSTRAINT ${identifier(name)} FOREIGN KEY (tenant_id, ${identifier(column)}) REFERENCES ${identifier(target)} (tenant_id, id)`);
+      }
+      // riders who already left get the day of their last change as their exit date
+      await q("UPDATE riders SET exit_date = DATE(COALESCE(updated_at, created_at)) WHERE status = 'terminated' AND exit_date IS NULL");
+    },
+  },
 ];
+const RIDER_FILE_COLUMNS: [string, string][] = [
+  ['visa_number', 'VARCHAR(30) NULL'], ['visa_type', 'VARCHAR(60) NULL'], ['visa_expiry', 'DATE NULL'],
+  ['sponsor_name', 'VARCHAR(150) NULL'], ['sponsor_number', 'VARCHAR(30) NULL'], ['passport_number', 'VARCHAR(30) NULL'], ['passport_expiry', 'DATE NULL'],
+  ['exit_date', 'DATE NULL'], ['exit_reason', 'VARCHAR(255) NULL'], ["exit_clearance", "ENUM('clear','in_debt','settled') NULL"], ['exit_note', 'VARCHAR(500) NULL'],
+];
+export const EMPLOYEE_LINKS: [string, string, string][] = [['rider_bank_accounts', 'rider_id', 'riders']];
 export const FLEET_LINKS: [string, string, string][] = [
   ['vehicle_services', 'vehicle_id', 'vehicles'], ['vehicle_services', 'rider_id', 'riders'], ['vehicle_services', 'accident_id', 'vehicle_accidents'],
   ['vehicle_accidents', 'vehicle_id', 'vehicles'], ['vehicle_accidents', 'rider_id', 'riders'], ['vehicle_accident_events', 'accident_id', 'vehicle_accidents'],

@@ -13,7 +13,7 @@ import { DOC_MODULE, DOC_TYPES, type DocType } from './shared';
 
 const EMPTY = { id: '', full_name: '', name_en: '', alias: '', national_id: '', status: 'active', company_id: '', contract_id: '', city_id: '', hire_date: '',
   occupation: '', phone: '', account_holder_phone: '', email: '', language: '', nationality: '', birth_date: '', birth_place: '', blood_type: '', notes: '', vehicle_id: '',
-  branch_id: '', designation_id: '' };
+  branch_id: '', designation_id: '', visa_number: '', visa_type: '', visa_expiry: '', sponsor_name: '', sponsor_number: '', passport_number: '', passport_expiry: '' };
 
 type DocField = { name: string; label: string; req?: boolean; type?: 'date' | 'select' | 'text'; options?: { value: string; label: string }[]; dir?: 'ltr'; hint?: string };
 type DocState = { open: boolean; values: Record<string, string>; scan: Scan | null };
@@ -223,6 +223,17 @@ export default function RiderForm() {
               <TextArea form={form} name="notes" label={t('common.notes')} maxLength={500} className="sm:col-span-2" />
             </Grid>
             <datalist id="nationalities">{nationalities.map((n) => <option key={n} value={n} />)}</datalist>
+          </Card>
+          <Card title={t('riders.sec.visa')}>
+            <Grid>
+              <TextInput form={form} name="visa_number" label={t('riders.visa_number')} dir="ltr" maxLength={30} />
+              <TextInput form={form} name="visa_type" label={t('riders.visa_type')} maxLength={60} />
+              <TextInput form={form} name="visa_expiry" label={t('riders.visa_expiry')} type="date" />
+              <TextInput form={form} name="sponsor_name" label={t('riders.sponsor_name')} maxLength={150} />
+              <TextInput form={form} name="sponsor_number" label={t('riders.sponsor_number')} dir="ltr" maxLength={30} />
+              <TextInput form={form} name="passport_number" label={t('riders.passport_number')} dir="ltr" maxLength={30} />
+              <TextInput form={form} name="passport_expiry" label={t('riders.passport_expiry')} type="date" />
+            </Grid>
           </Card>
         </div>
         <div className="space-y-4">
