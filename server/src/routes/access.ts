@@ -4,6 +4,7 @@ import { asPlatform, exec, one, q, tx } from '../db.js';
 import { clean, eq, fail, fieldError, list, listAll, sendExport, type Spec, mustExist } from '../http.js';
 import { can, clientIp, has, hashPassword, platformOnly } from '../auth.js';
 import { audit } from '../audit.js';
+import { forgetFirstLogin } from '../firstLogin.js';
 import { ADMIN_PERMS, ALL_PERMS, MATRIX } from '../perms.js';
 import { SUPER_ADMIN } from '../perms.js';
 import { comesBack, withQuota } from '../domain/quotas.js';
@@ -101,6 +102,8 @@ accessRouter.post('/users/:id/password', can('users.update'), async (req, res) =
   if (!req.body.password || String(req.body.password).length < 10) fieldError('password', 'password_min_10');
   await exec('UPDATE users SET password_hash = ?, updated_at = UTC_TIMESTAMP() WHERE id = ?', [await hashPassword(req.body.password), req.params.id]);
   const r = await exec("UPDATE sessions SET status = 'revoked', ended_at = UTC_TIMESTAMP() WHERE user_id = ? AND status = 'active'", [req.params.id]);
+  const u = await one<{ username: string }>('SELECT username FROM users WHERE id = ?', [req.params.id]);
+  if (u) forgetFirstLogin(req.user!.tenant_id, u.username);
   await audit(req, { action: 'user.set_password', entity_type: 'user', entity_id: req.params.id, severity: 'warning' });
   res.json({ ended: r.affectedRows });
 });

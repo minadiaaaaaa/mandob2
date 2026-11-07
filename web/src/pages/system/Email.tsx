@@ -103,7 +103,7 @@ function Templates() {
             </Card>
           </div>
           {preview && <Card title={t('mail.preview')}><div className="mb-2 text-sm"><span className="text-zinc-500">{t('mail.subject_arrives')}:</span> <b dir="auto">{preview.subject}</b></div>
-            <iframe title="preview" srcDoc={preview.html} className="h-96 w-full rounded-lg border border-zinc-200 bg-white dark:border-zinc-700" /></Card>}
+            <iframe title="preview" sandbox="" srcDoc={preview.html} className="h-96 w-full rounded-lg border border-zinc-200 bg-white dark:border-zinc-700" /></Card>}
           {edit && <Card title={t('mail.send_test')}><div className="flex gap-2"><input className="input" type="email" dir="ltr" placeholder={t('mail.to')} value={to} onChange={(e) => setTo(e.target.value)} />
             <Button icon={<Send className="size-4" />} onClick={async () => { try { await post(`/email/templates/${key}/test`, { to, vars: sample }); toast(t('mail.test_sent')); } catch (e) { toast(errText(e), 'red'); } }}>{t('mail.send_test')}</Button></div></Card>}
         </div>
@@ -215,7 +215,7 @@ function Branding() {
           <select className="input w-auto py-1 text-xs" value={lang} onChange={(e) => setLang(e.target.value)}>{['ar', 'en', 'bn'].map((l) => <option key={l} value={l}>{t(`lang.${l}`)}</option>)}</select>
           <select className="input w-auto py-1 text-xs" value={tpl} onChange={(e) => setTpl(e.target.value)}>{d.types.map((x: any) => <option key={x.tkey} value={x.tkey}>{x.name}</option>)}</select>
           <select className="input w-auto py-1 text-xs" value={width} onChange={(e) => setWidth(e.target.value as any)}><option value="desktop">{t('mail.br.desktop')}</option><option value="mobile">{t('mail.br.mobile')}</option></select></div>}>
-          <iframe title="email" srcDoc={html} className={cx('mx-auto h-[28rem] rounded-lg border border-zinc-200 bg-white dark:border-zinc-700', width === 'mobile' ? 'w-[375px]' : 'w-full')} />
+          <iframe title="email" sandbox="" srcDoc={html} className={cx('mx-auto h-[28rem] rounded-lg border border-zinc-200 bg-white dark:border-zinc-700', width === 'mobile' ? 'w-[375px]' : 'w-full')} />
         </Card>
         <Card title={t('mail.br.sent_list')} subtitle={t('mail.br.n_on', { on, total: d.types.length })} pad={false}>
           {groups.map((g) => (

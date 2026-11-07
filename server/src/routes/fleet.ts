@@ -197,7 +197,9 @@ async function vehicleBlockers(ids: number[]) {
     SELECT vehicle_id, 'insurance', COUNT(*) FROM vehicle_insurance WHERE vehicle_id IN (?) GROUP BY vehicle_id UNION ALL
     SELECT vehicle_id, 'registrations', COUNT(*) FROM vehicle_registrations WHERE vehicle_id IN (?) GROUP BY vehicle_id UNION ALL
     SELECT vehicle_id, 'fuel_cards', COUNT(*) FROM fuel_cards WHERE vehicle_id IN (?) GROUP BY vehicle_id UNION ALL
-    SELECT vehicle_id, 'oil_schedule', COUNT(*) FROM oil_schedules WHERE vehicle_id IN (?) GROUP BY vehicle_id`, [ids, ids, ids, ids, ids, ids]);
+    SELECT vehicle_id, 'oil_schedule', COUNT(*) FROM oil_schedules WHERE vehicle_id IN (?) GROUP BY vehicle_id UNION ALL
+    SELECT vehicle_id, 'services', COUNT(*) FROM vehicle_services WHERE vehicle_id IN (?) GROUP BY vehicle_id UNION ALL
+    SELECT vehicle_id, 'accidents', COUNT(*) FROM vehicle_accidents WHERE vehicle_id IN (?) GROUP BY vehicle_id`, [ids, ids, ids, ids, ids, ids, ids, ids]);
 }
 async function deleteVehicles(req: Request, ids: number[]) {
   if (!ids.length) fail(422, 'nothing_selected');

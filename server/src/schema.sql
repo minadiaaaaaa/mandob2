@@ -75,6 +75,14 @@ CREATE TABLE IF NOT EXISTS login_challenges (
   used_at DATETIME NULL
 );
 
+-- Public sign-ups per network (the hourly limit in routes/saas.ts); shared by every server, kept one day.
+CREATE TABLE IF NOT EXISTS signup_attempts (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  ip VARCHAR(64) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY ix_ip_created (ip, created_at)
+);
+
 CREATE TABLE IF NOT EXISTS login_attempts (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   tenant_id INT NOT NULL DEFAULT 0,
@@ -260,6 +268,75 @@ CREATE TABLE IF NOT EXISTS platform_id_transfers (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   KEY ix_t_platform_at (tenant_id, platform_id, transferred_at),
   KEY ix_t_at (tenant_id, transferred_at)
+);
+
+-- Servicing log (phase 4): every visit to the workshop, from scheduled to completed (or cancelled). While one is in
+-- progress the vehicle is under maintenance. The cost and its payment are kept on the record.
+CREATE TABLE IF NOT EXISTS vehicle_services (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  vehicle_id INT NOT NULL,
+  rider_id BIGINT NULL,
+  accident_id INT NULL,
+  service_type ENUM('periodic','repair','accident_repair','tires','battery','inspection','other') NOT NULL DEFAULT 'periodic',
+  details VARCHAR(1000) NULL,
+  workshop VARCHAR(150) NULL,
+  odometer INT NULL,
+  status ENUM('scheduled','in_progress','completed','cancelled') NOT NULL DEFAULT 'scheduled',
+  scheduled_for DATE NULL,
+  started_at DATETIME NULL,
+  completed_at DATETIME NULL,
+  cancelled_at DATETIME NULL,
+  cancel_reason VARCHAR(255) NULL,
+  cost DECIMAL(12,2) NULL,
+  paid_amount DECIMAL(12,2) NULL,
+  paid_on DATE NULL,
+  payment_ref VARCHAR(100) NULL,
+  created_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY uq_service_tenant_id (tenant_id, id),
+  KEY ix_t_vehicle (tenant_id, vehicle_id, status),
+  KEY ix_t_status (tenant_id, status, scheduled_for)
+);
+
+-- Accident records (phase 4): severity, the authority that reports it (Najm or Murur), where and when, and the
+-- stages up to the insurance claim. Every change of stage is kept in vehicle_accident_events.
+CREATE TABLE IF NOT EXISTS vehicle_accidents (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  vehicle_id INT NOT NULL,
+  rider_id BIGINT NULL,
+  occurred_at DATETIME NOT NULL,
+  severity ENUM('minor','moderate','severe') NOT NULL DEFAULT 'minor',
+  authority ENUM('najm','murur') NOT NULL DEFAULT 'najm',
+  report_number VARCHAR(60) NULL,
+  location VARCHAR(255) NULL,
+  lat DECIMAL(9,6) NULL,
+  lng DECIMAL(9,6) NULL,
+  details VARCHAR(2000) NULL,
+  stage ENUM('report_pending','assessment_pending','claim_pending','completed') NOT NULL DEFAULT 'report_pending',
+  assessment_amount DECIMAL(12,2) NULL,
+  claim_amount DECIMAL(12,2) NULL,
+  rider_share DECIMAL(12,2) NULL,
+  completed_at DATETIME NULL,
+  created_by INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY uq_accident_tenant_id (tenant_id, id),
+  KEY ix_t_vehicle (tenant_id, vehicle_id),
+  KEY ix_t_stage (tenant_id, stage, occurred_at)
+);
+CREATE TABLE IF NOT EXISTS vehicle_accident_events (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  accident_id INT NOT NULL,
+  from_stage VARCHAR(30) NULL,
+  to_stage VARCHAR(30) NOT NULL,
+  note VARCHAR(500) NULL,
+  user_id INT NULL,
+  at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY ix_t_accident (tenant_id, accident_id, at)
 );
 
 CREATE TABLE IF NOT EXISTS transport_licenses (

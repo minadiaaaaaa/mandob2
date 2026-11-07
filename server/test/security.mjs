@@ -63,7 +63,7 @@ for (const path of [
 const form = new FormData();
 form.append(
   "file",
-  new Blob(["private"], { type: "application/pdf" }),
+  new Blob(["%PDF-1.4\nprivate"], { type: "application/pdf" }),
   "private.pdf",
 );
 const scan = (await admin("POST", "/scans", form)).body.token;

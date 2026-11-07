@@ -214,6 +214,7 @@ function RestorePanel({ b, onClose, onDone }: { b: any; onClose: () => void; onD
   const [c, setC] = useState<any>(null);
   const [replace, setReplace] = useState(false);
   const [override, setOverride] = useState(false);
+  const [legacy, setLegacy] = useState(false);
   const [word, setWord] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -223,7 +224,7 @@ function RestorePanel({ b, onClose, onDone }: { b: any; onClose: () => void; onD
     <SidePanel open onClose={onClose} title={t('bk.restore_title')} footer={!result && <><Button onClick={onClose}>{t('common.cancel')}</Button>
       <Button variant="danger" disabled={word !== 'RESTORE' || busy} loading={busy} onClick={async () => {
         setBusy(true); setErr(null);
-        try { setResult(await post(`/backups/${b.id}/restore`, { confirm: word, replace_files: replace, override_checksum: override })); } catch (e: any) { setErr(errText(e)); if (e?.code === 'checksum_mismatch') setC({ ...c, mismatch: true }); }
+        try { setResult(await post(`/backups/${b.id}/restore`, { confirm: word, replace_files: replace, override_checksum: override, allow_unencrypted: legacy })); } catch (e: any) { setErr(errText(e)); if (e?.code === 'checksum_mismatch') setC({ ...c, mismatch: true }); }
         setBusy(false);
       }}>{t('bk.run_restore')}</Button></>}>
       <div className="space-y-4 text-sm">
@@ -232,6 +233,7 @@ function RestorePanel({ b, onClose, onDone }: { b: any; onClose: () => void; onD
           [t('bk.tables'), fmtNum(c.manifest.tables?.length)], [t('bk.rows'), fmtNum(c.manifest.rows)], [t('bk.files'), fmtNum(c.manifest.files)]]} /> : <Alert tone="amber">{t('bk.other_key')}</Alert>}
         <Checkbox checked={replace} onChange={setReplace} label={t('bk.replace_files')} />
         {c?.mismatch && <Checkbox checked={override} onChange={setOverride} label={t('bk.override_checksum')} />}
+        {c?.ok && c.encrypted === false && <><Alert tone="amber">{t('bk.unencrypted_warn')}</Alert><Checkbox checked={legacy} onChange={setLegacy} label={t('bk.allow_unencrypted')} /></>}
         <Field label={t('bk.confirm_word')}><input className="input font-mono" dir="ltr" value={word} onChange={(e) => setWord(e.target.value)} /></Field>
         {busy && <Alert tone="blue">{t('bk.restoring')}</Alert>}
         {err && <Alert tone="red">{err}</Alert>}

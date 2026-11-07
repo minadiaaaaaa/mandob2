@@ -204,6 +204,13 @@ export async function langOf(req: Request) {
 export type Col = { key: string; label: string; value?: (r: any) => unknown; fill?: (r: any) => string | null; width?: number };
 const FILL: Record<string, string> = { red: 'FFFDE2E2', amber: 'FFFEF3C7', green: 'FFDCFCE7', blue: 'FFDBEAFE', grey: 'FFF1F5F9' };
 
+// A text cell that starts with = + - @ (or a tab / carriage return) would run as a formula when the CSV is opened in
+// a spreadsheet: it gets a leading apostrophe. Numbers, negative ones included, stay as they are.
+export function csvSafe(v: unknown) {
+  const s = String(v);
+  return typeof v !== 'number' && /^[=+\-@\t\r]/.test(s) && !/^-?\d+(?:\.\d+)?$/.test(s) ? `'${s}` : s;
+}
+
 export async function sendExport(req: Request, res: Response, opts: {
   format: 'xlsx' | 'csv'; title: string; cols: Col[]; rows: any[]; filters?: string; summary?: [string, unknown][];
 }) {
@@ -216,7 +223,7 @@ export async function sendExport(req: Request, res: Response, opts: {
   res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${fname}`);
 
   if (opts.format === 'csv') {
-    const esc = (v: unknown) => { const s = String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const esc = (v: unknown) => { const s = csvSafe(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
     const lines = [headers.map(esc).join(','), ...opts.rows.map((r) => opts.cols.map((c) => esc(cell(c, r))).join(','))];
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     return res.send('﻿' + lines.join('\r\n'));

@@ -284,8 +284,10 @@ async function blockers(ids: number[]) {
     SELECT rider_id, 'fuel_cards', COUNT(*) FROM fuel_cards WHERE rider_id IN (?) GROUP BY rider_id UNION ALL
     SELECT user_rider_id, 'registrations', COUNT(*) FROM vehicle_registrations WHERE user_rider_id IN (?) GROUP BY user_rider_id UNION ALL
     SELECT r.id, 'platform_ids', COUNT(*) FROM riders r JOIN platform_ids p ON p.owner_rider_id = r.id OR p.worker_rider_id = r.id WHERE r.id IN (?) GROUP BY r.id UNION ALL
-    SELECT r.id, 'platform_id_history', COUNT(*) FROM riders r JOIN platform_id_transfers x ON x.from_rider_id = r.id OR x.to_rider_id = r.id WHERE r.id IN (?) GROUP BY r.id`,
-  [ids, ids, ids, ids, ids, ids]);
+    SELECT r.id, 'platform_id_history', COUNT(*) FROM riders r JOIN platform_id_transfers x ON x.from_rider_id = r.id OR x.to_rider_id = r.id WHERE r.id IN (?) GROUP BY r.id UNION ALL
+    SELECT rider_id, 'services', COUNT(*) FROM vehicle_services WHERE rider_id IN (?) GROUP BY rider_id UNION ALL
+    SELECT rider_id, 'accidents', COUNT(*) FROM vehicle_accidents WHERE rider_id IN (?) GROUP BY rider_id`,
+  [ids, ids, ids, ids, ids, ids, ids, ids]);
 }
 async function deleteRiders(req: Request, ids: number[]) {
   if (!ids.length) fail(422, 'nothing_selected');

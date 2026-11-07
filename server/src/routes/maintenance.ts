@@ -238,8 +238,11 @@ function unzip(buf: Buffer) {
   return out;
 }
 const seal = (plain: Buffer) => { const iv = randomBytes(12); const c = createCipheriv('aes-256-gcm', appKey(), iv); const data = Buffer.concat([c.update(plain), c.final()]); return Buffer.concat([MAGIC, iv, c.getAuthTag(), data]); };
-function open(file: Buffer) {
-  if (!file.subarray(0, 6).equals(MAGIC)) return file; // a backup taken before encryption
+const isSealed = (file: Buffer) => file.subarray(0, 6).equals(MAGIC);
+// A backup from before encryption (no header) opens only when asked for (plainOk): restoring one replaces every
+// company's data with a file nothing vouches for, so the restore screen asks for that on purpose.
+function open(file: Buffer, plainOk = false) {
+  if (!isSealed(file)) { if (plainOk) return file; fail(409, 'backup_unencrypted'); }
   const d = createDecipheriv('aes-256-gcm', appKey(), file.subarray(6, 18));
   d.setAuthTag(file.subarray(18, 34));
   return Buffer.concat([d.update(file.subarray(34)), d.final()]);
@@ -330,8 +333,9 @@ maintenanceRouter.get('/backups/:id/download', can('backups.download'), async (r
 maintenanceRouter.get('/backups/:id/contents', can('backups.view'), async (req, res) => {
   const b = await backupOf(req.params.id);
   try {
-    const m = JSON.parse(unzip(open(readFileSync(join(BK_DIR, b.file_name)))).get('manifest.json')?.toString() ?? 'null');
-    res.json({ ok: !!m, manifest: m });
+    const buf = readFileSync(join(BK_DIR, b.file_name));
+    const m = JSON.parse(unzip(open(buf, true)).get('manifest.json')?.toString() ?? 'null');
+    res.json({ ok: !!m, manifest: m, encrypted: isSealed(buf) });
   } catch { res.json({ ok: false, error: 'other_key' }); }
 });
 maintenanceRouter.delete('/backups/:id', can('backups.delete'), async (req, res) => {
@@ -345,7 +349,7 @@ maintenanceRouter.delete('/backups/:id', can('backups.delete'), async (req, res)
 async function register(file_name: string, kind: 'upload' | 'registered', note: string | null, userId: number) {
   const buf = readFileSync(join(BK_DIR, file_name));
   let manifest: any = null; let other = false;
-  try { manifest = JSON.parse(unzip(open(buf)).get('manifest.json')?.toString() ?? 'null'); } catch { other = true; }
+  try { manifest = JSON.parse(unzip(open(buf, true)).get('manifest.json')?.toString() ?? 'null'); } catch { other = true; }
   if (!manifest && !other) { unlinkSync(join(BK_DIR, file_name)); fail(422, 'not_a_backup'); }
   await exec("INSERT INTO backups (file_name, status, type, kind, note, tables_n, rows_n, files_n, missing_files, size, encrypted, key_fp, checksum, created_by) VALUES (?, 'completed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [file_name, manifest?.type ?? 'full', kind, note, manifest?.tables?.length ?? null, manifest?.rows ?? null, manifest?.files ?? null, manifest?.missing ?? null, buf.length,
@@ -381,7 +385,7 @@ maintenanceRouter.put('/backups/schedule', can('backups.settings'), async (req, 
 
 let restoring = false;
 maintenanceRouter.post('/backups/:id/restore', can('backups.restore'), async (req, res) => {
-  const v = clean(req.body, { confirm: { req: true }, replace_files: { type: 'bool' }, override_checksum: { type: 'bool' } });
+  const v = clean(req.body, { confirm: { req: true }, replace_files: { type: 'bool' }, override_checksum: { type: 'bool' }, allow_unencrypted: { type: 'bool' } });
   if (v.confirm !== 'RESTORE') fail(422, 'restore_confirm');
   const b = await backupOf(req.params.id);
   if (b.status !== 'completed') fail(409, 'backup_not_completed');
@@ -389,7 +393,8 @@ maintenanceRouter.post('/backups/:id/restore', can('backups.restore'), async (re
   const buf = readFileSync(join(BK_DIR, b.file_name));
   if (sha(buf) !== b.checksum && !v.override_checksum) fail(409, 'checksum_mismatch');
   let entries: Map<string, Buffer>;
-  try { entries = unzip(open(buf)); } catch { fail(409, 'backup_other_key'); }
+  if (!isSealed(buf) && !v.allow_unencrypted) fail(409, 'backup_unencrypted');
+  try { entries = unzip(open(buf, true)); } catch { fail(409, 'backup_other_key'); }
   restoring = true;
   const started = Date.now();
   const rid = (await exec('INSERT INTO restores (backup_id, file_name, user_id) VALUES (?, ?, ?)', [b.id, b.file_name, req.user!.id])).insertId;

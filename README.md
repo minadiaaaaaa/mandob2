@@ -46,7 +46,7 @@ Fill in `.env`:
 | `DB_POOL_SIZE` | maximum server database connections | `10` |
 | `HOST` | listening address; set deliberately for remote deployment | `127.0.0.1` |
 | `PORT` | API port | `4000` |
-| `TRUST_PROXY` | `1` behind Nginx or a load balancer, so lockouts see the real client IP | `0` |
+| `TRUST_PROXY` | the proxies in front of the server: the number of hops (`1` for one Nginx) or their addresses/subnets separated by commas, so limits and lockouts see the real client IP. Never trust every hop | `0` |
 | `APP_KEY` | optional base64 32-byte key that encrypts secrets and backups; without it, `server/data/app.key` is generated | — |
 
 `.env` is in `.gitignore`. Never commit it or send database credentials to the frontend. The wizard uses the configured server connection. Without `DATABASE_URL` / `DB_*`, the wizard saves the connection it tested in `server/data/config.json`.

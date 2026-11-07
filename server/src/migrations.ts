@@ -125,6 +125,25 @@ export const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    // Phase 4: the servicing log, accident records and their stage history (tables in schema.sql), and a note on a
+    // vehicle's papers. Every link includes the company, so a service or an accident can only point at a vehicle,
+    // rider or accident of its own company.
+    id: 6, name: 'servicing and accidents',
+    up: async () => {
+      await addIndex('vehicles', 'uq_vehicle_tenant_id', ['tenant_id', 'id'], true);
+      await addColumn('vehicles', 'papers_note', 'VARCHAR(500) NULL');
+      for (const [table, column, target] of FLEET_LINKS) {
+        const name = `fk_${table}_${column}`.slice(0, 64);
+        if (!(await constraintExists(table, name)))
+          await executeScript(`ALTER TABLE ${identifier(table)} ADD CONSTRAINT ${identifier(name)} FOREIGN KEY (tenant_id, ${identifier(column)}) REFERENCES ${identifier(target)} (tenant_id, id)`);
+      }
+    },
+  },
+];
+export const FLEET_LINKS: [string, string, string][] = [
+  ['vehicle_services', 'vehicle_id', 'vehicles'], ['vehicle_services', 'rider_id', 'riders'], ['vehicle_services', 'accident_id', 'vehicle_accidents'],
+  ['vehicle_accidents', 'vehicle_id', 'vehicles'], ['vehicle_accidents', 'rider_id', 'riders'], ['vehicle_accident_events', 'accident_id', 'vehicle_accidents'],
 ];
 // Links to riders added after the baseline (migration 2 keeps its own fixed list, RIDER_LINKS).
 export const PLATFORM_ID_LINKS: [string, string, string][] = [

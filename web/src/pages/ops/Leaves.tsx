@@ -18,7 +18,7 @@ const daysOf = (a: string, b: string) => (a && b && b >= a ? Math.round((Date.pa
 function LetterFrame({ html, src, frameRef }: { html?: string; src?: string; frameRef?: React.RefObject<HTMLIFrameElement | null> }) {
   return (
     <div className="overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100 p-3 dark:border-zinc-800 dark:bg-zinc-950">
-      <iframe ref={frameRef} title="letter" srcDoc={html} src={src} className="aspect-[210/297] w-full rounded bg-white shadow-md" />
+      <iframe ref={frameRef} title="letter" sandbox="allow-same-origin allow-modals" srcDoc={html} src={src} className="aspect-[210/297] w-full rounded bg-white shadow-md" />
     </div>
   );
 }

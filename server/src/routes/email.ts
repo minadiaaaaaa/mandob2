@@ -3,6 +3,7 @@ import { exec, one, q, setSetting } from '../db.js';
 import { clean, eq, fail, fieldError, list, listAll, sendExport, type Query, type Spec } from '../http.js';
 import { can, has } from '../auth.js';
 import { audit } from '../audit.js';
+import { sanitizeHtml } from '../html.js';
 import { attempt, BRAND_DEFAULT, branding, fill, frame, sendMail, smtpConfig, type Account } from '../mail.js';
 import { encrypt } from './system.js';
 
@@ -24,6 +25,7 @@ emailRouter.post('/email/templates', can('email_templates.create'), async (req, 
   const v = clean(req.body, { tkey: { req: true, max: 80 }, ...TPL });
   if (!/^[a-z][a-z0-9_.]{2,79}$/.test(v.tkey)) fieldError('tkey', 'template_key_format');
   if (await one('SELECT 1 FROM email_templates WHERE tkey = ?', [v.tkey])) fieldError('tkey', 'template_key_taken');
+  v.body_html = sanitizeHtml(v.body_html);
   await exec('INSERT INTO email_templates SET ?, updated_at = UTC_TIMESTAMP()', [v]);
   await audit(req, { action: 'email_template.create', entity_type: 'email_template', entity_id: v.tkey });
   res.json({ ok: true });
@@ -31,6 +33,8 @@ emailRouter.post('/email/templates', can('email_templates.create'), async (req, 
 emailRouter.patch('/email/templates/:key', can('email_templates.update'), async (req, res) => {
   const v = clean(req.body, TPL, true);
   for (const k of ['name', 'subject', 'body_html']) if (k in v && !v[k]) fieldError(k, 'required');
+  // scripts and handlers never reach a preview or an inbox (html.ts)
+  if (v.body_html) v.body_html = sanitizeHtml(v.body_html);
   const r = await exec('UPDATE email_templates SET ?, updated_at = UTC_TIMESTAMP() WHERE tkey = ?', [v, req.params.key]);
   if (!r.affectedRows) fail(404, 'not_found');
   await audit(req, { action: 'email_template.update', entity_type: 'email_template', entity_id: req.params.key as string });
@@ -60,7 +64,7 @@ emailRouter.post('/email/templates/:key/preview', can('email_templates.view'), a
   const t = await one<any>('SELECT * FROM email_templates WHERE tkey = ?', [req.params.key]);
   if (!t) fail(404, 'not_found');
   const vars = req.body?.vars ?? {};
-  res.json({ subject: fill(t.subject, vars).replace(/&amp;/g, '&'), html: await frame(fill(t.body_html, vars), req.body?.lang ?? 'ar') });
+  res.json({ subject: fill(t.subject, vars).replace(/&amp;/g, '&'), html: await frame(fill(sanitizeHtml(t.body_html), vars), req.body?.lang ?? 'ar') });
 });
 emailRouter.post('/email/templates/:key/test', can('email_templates.update'), async (req, res) => {
   const v = clean(req.body, { to: { req: true, type: 'email' } });
@@ -126,7 +130,7 @@ emailRouter.put('/email/branding', async (req, res, next) => {
 emailRouter.post('/email/branding/preview', can('email_templates.view', 'smtp.view'), async (req, res) => {
   const t = await one<any>('SELECT * FROM email_templates WHERE tkey = ?', [req.body?.template ?? 'system.smtp_test']);
   const vars = { owner_name: 'محمد أحمد', doc_number: 'L-1234', expiry_date: '2026-12-01', days_left: 14, user_name: 'Admin', job_name: 'document_expiry', status: 'completed', duration: '3s', code: '482913' };
-  res.json({ html: await frame(fill(t?.body_html ?? '', vars), req.body?.lang ?? 'ar', req.body?.branding ?? {}) });
+  res.json({ html: await frame(fill(sanitizeHtml(t?.body_html ?? ''), vars), req.body?.lang ?? 'ar', req.body?.branding ?? {}) });
 });
 
 // ---------- 11.4 the log ----------

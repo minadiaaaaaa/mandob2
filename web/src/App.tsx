@@ -15,6 +15,7 @@ import { DOC_MODULE, DOC_SLUG } from './pages/riders/shared';
 import { RidersBulkEdit, RidersImport } from './pages/riders/RidersBulk';
 import { ApplicantForm, ApplicantsImport, ApplicantsList, ApplicantView } from './pages/riders/Applicants';
 import { VehicleForm, VehiclesImport, VehiclesList, VehicleView } from './pages/fleet/Vehicles';
+import { AccidentsPage, ServicingPage, VehiclePapersPage } from './pages/fleet/FleetLog';
 import { CardForm, CardsImport, CardsList, CardView, LicenseForm, LicensesList, LicenseView, RegistrationForm, RegistrationsList, RegistrationView } from './pages/fleet/Cards';
 import {
   AssignmentForm, AssignmentsList, AssignmentView, CoverForm, CoversBulk, CoversList, CoverView, FleetImport, FuelCardForm, FuelCardsBulk, FuelCardsList, FuelCardView,
@@ -174,6 +175,9 @@ export default function App() {
         <Route path="fuel-cards/import" element={imp('/fuel-cards/import', '/admin/fuel-cards', t('fc.import_title'), 'fuel_cards.create')} />
         <Route path="fuel-cards/:id" element={g('fuel_cards.view', <FuelCardView />)} />
         <Route path="fuel-cards/:id/edit" element={g('fuel_cards.update', <FuelCardForm />)} />
+        <Route path="vehicle-services" element={g('vehicle_services.view', <ServicingPage />)} />
+        <Route path="vehicle-accidents" element={g('vehicle_accidents.view', <AccidentsPage />)} />
+        <Route path="vehicle-papers" element={g('vehicles.view', <VehiclePapersPage />)} />
         <Route path="oil-changes" element={g('oil_changes.view', <OilSchedule />)} />
         <Route path="oil-changes/new" element={g('oil_changes.create', <OilScheduleForm />)} />
         <Route path="oil-changes/bulk-edit" element={g('oil_changes.update', <OilBulk />)} />

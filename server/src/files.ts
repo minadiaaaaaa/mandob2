@@ -21,14 +21,29 @@ const MODULE_OF: Record<string, string> = {
   rider_doc_driver_card: 'driver_cards', rider_doc_ajeer: 'ajeer_permits',
   vehicle: 'vehicles', transport_license: 'transport_licenses', operation_card: 'operation_cards',
   vehicle_registration: 'vehicle_registrations', insurance_policy: 'insurance_policies', vehicle_insurance: 'vehicle_insurance',
-  fuel_card: 'fuel_cards', oil_change: 'oil_changes', renewal: 'renewals', advance: 'advances', leave: 'leaves', absence: 'absences',
+  fuel_card: 'fuel_cards', oil_change: 'oil_changes', accident: 'vehicle_accidents', vehicle_service: 'vehicle_services', renewal: 'renewals', advance: 'advances', leave: 'leaves', absence: 'absences',
   // a full permission where the module has no "view"
   change_request: 'rider_portal.view_requests', issue_message: 'rider_portal.view_issues',
 };
 
+// The type a file really is, read from its first bytes (images and PDF only); null when it is none of them.
+// The browser's declared type is only a claim, so documents and photos must match what their bytes say.
+export function sniffMime(buf: Buffer): string | null {
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
+  if (buf.length >= 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
+  if (buf.length >= 6 && /^GIF8[79]a$/.test(buf.subarray(0, 6).toString('latin1'))) return 'image/gif';
+  if (buf.length >= 12 && buf.subarray(0, 4).toString('latin1') === 'RIFF' && buf.subarray(8, 12).toString('latin1') === 'WEBP') return 'image/webp';
+  // a PDF may start with a few bytes of junk before its header
+  if (buf.subarray(0, 1024).toString('latin1').includes('%PDF-')) return 'application/pdf';
+  return null;
+}
+export function checkFileType(file: { buffer: Buffer; mimetype: string }, allowed: Record<string, string> = DOC_MIME) {
+  if (!allowed[file.mimetype] || sniffMime(file.buffer) !== file.mimetype) fail(415, 'file_type_not_allowed');
+}
+
 export async function storeFile(file: Express.Multer.File, allowed = DOC_MIME) {
+  checkFileType(file, allowed);
   const ext = allowed[file.mimetype];
-  if (!ext) fail(415, 'file_type_not_allowed');
   const max = await settingInt('platform.max_upload_mb', 10);
   if (file.size > max * 1024 * 1024) fail(413, 'file_too_large', { max });
   const sub = new Date().toISOString().slice(0, 7);

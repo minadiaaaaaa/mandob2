@@ -53,7 +53,9 @@ export async function markPaused<T extends { id: unknown }>(kind: 'riders' | 've
 }
 
 // ======================================================================== sign-up (public)
-const signupTries = new Map<string, number[]>();
+// Sign-ups per network and hour, counted in the database (signup_attempts) so a restart or a second server does
+// not reset them. SIGNUP_LIMIT_PER_HOUR changes the number (default 5; the test plan raises it).
+const SIGNUP_LIMIT = Math.max(1, Number(process.env.SIGNUP_LIMIT_PER_HOUR) || 5);
 const slugOf = (name: string) => name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30);
 
 // the plans companies can see: prices (the annual one filled in by the discount rule), limits and features
@@ -62,10 +64,9 @@ const publicPlans = async () => priced(await asPlatform(() => q<Plan>(`SELECT ${
 signupRouter.get('/public/plans', async (_req, res) => { res.json(await publicPlans()); });
 
 signupRouter.post('/public/signup', async (req, res) => {
-  // five sign-ups an hour from one network
-  const ip = clientIp(req), now = Date.now();
-  const recent = (signupTries.get(ip) ?? []).filter((x) => now - x < 3600000);
-  if (recent.length >= 5) fail(429, 'too_many');
+  const ip = clientIp(req);
+  const [{ n }] = await asPlatform(() => q<{ n: number }>('SELECT COUNT(*) n FROM signup_attempts WHERE ip = ? AND created_at > UTC_TIMESTAMP() - INTERVAL 1 HOUR', [ip]));
+  if (Number(n) >= SIGNUP_LIMIT) fail(429, 'too_many');
   const v = clean(req.body, {
     company_name: { req: true, max: 150 }, company_name_en: { max: 150 }, full_name: { req: true, max: 150 },
     email: { req: true, type: 'email', max: 150 }, phone: { req: true, max: 30 }, password: { req: true, minLen: 8, max: 72 },
@@ -73,7 +74,10 @@ signupRouter.post('/public/signup', async (req, res) => {
   if (req.body.password !== req.body.confirm) fieldError('confirm', 'passwords_differ');
   const email = v.email.toLowerCase();
   if (await asPlatform(() => one('SELECT 1 FROM users WHERE email = ? OR username = ?', [email, email]))) fieldError('email', 'email_taken');
-  signupTries.set(ip, [...recent, now]);
+  await asPlatform(async () => {
+    await exec('INSERT INTO signup_attempts (ip) VALUES (?)', [ip]);
+    await exec('DELETE FROM signup_attempts WHERE created_at < UTC_TIMESTAMP() - INTERVAL 1 DAY');
+  });
 
   const base = slugOf(v.company_name_en || '') || 'company';
   const tenantId = await asPlatform(async () => {

@@ -4,6 +4,7 @@ import { STORAGE_DIR, asPlatform, exec, one, q, setting } from '../db.js';
 import { clean, fail, fieldError } from '../http.js';
 import { clientIp, hashPassword, issueChallenge, login, logout, requireUser, verifyPassword } from '../auth.js';
 import { audit } from '../audit.js';
+import { forgetFirstLogin } from '../firstLogin.js';
 import { deviceLimit, features, loadTenant, standing } from '../domain/subscription.js';
 
 export const publicRouter = Router();
@@ -67,6 +68,7 @@ accountRouter.post('/profile/password', async (req, res) => {
   if (password !== confirm) fieldError('confirm', 'passwords_differ');
   await exec('UPDATE users SET password_hash = ?, updated_at = UTC_TIMESTAMP() WHERE id = ?', [await hashPassword(password), req.user!.id]);
   const r = await exec("UPDATE sessions SET status = 'revoked', ended_at = UTC_TIMESTAMP() WHERE user_id = ? AND status = 'active' AND id <> ?", [req.user!.id, req.user!.sessionId]);
+  forgetFirstLogin(req.user!.tenant_id, req.user!.username);
   await audit(req, { action: 'profile.password_change', entity_type: 'user', entity_id: req.user!.id, severity: 'warning' });
   res.json({ ended: r.affectedRows });
 });

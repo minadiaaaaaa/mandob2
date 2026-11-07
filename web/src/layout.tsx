@@ -58,6 +58,9 @@ function useSections(): Section[] {
       i('/admin/insurance/vehicles', 'nav.vehicle_insurance', 'vehicle_insurance.view', ['vehicle_insurance']),
       i('/admin/fuel-cards', 'nav.fuel_cards', 'fuel_cards.view'),
       i('/admin/oil-changes', 'nav.oil_changes', 'oil_changes.view', ['oil_changes']),
+      i('/admin/vehicle-services', 'nav.vehicle_services', 'vehicle_services.view'),
+      i('/admin/vehicle-accidents', 'nav.vehicle_accidents', 'vehicle_accidents.view'),
+      i('/admin/vehicle-papers', 'nav.vehicle_papers', 'vehicles.view'),
       i('/admin/transport-licenses', 'nav.transport_licenses', 'transport_licenses.view', ['transport_licenses']),
     ] },
     { key: 'docs', label: t('nav.documents_renewals'), icon: <BellRing />, items: [

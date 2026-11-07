@@ -9,7 +9,7 @@ if (-not $env:QA_PLAYWRIGHT_MODULE) { $env:QA_PLAYWRIGHT_MODULE = (Join-Path $qa
 if (Get-NetTCPConnection -LocalPort 4100 -State Listen -ErrorAction SilentlyContinue) { throw 'Port 4100 is already in use. Stop the previous test server first.' }
 $qaData = Join-Path $env:TEMP ('mandoob-qa-' + (Get-Date -Format 'yyyyMMddHHmmss'))
 $qaEnv = Join-Path $env:TEMP 'mandoob-qa.env'
-"DATABASE_URL=$($env:QA_DATABASE_URL)`nAPP_DATA_DIR=$($qaData -replace '\\','/')`nPORT=4100`nDISABLE_SCHEDULER=1`nOWNER_EMAIL=admin@example.com`nOWNER_PASSWORD=Admin12345!`nOWNER_NAME=Admin" | Set-Content -LiteralPath $qaEnv -Encoding ascii
+"DATABASE_URL=$($env:QA_DATABASE_URL)`nAPP_DATA_DIR=$($qaData -replace '\\','/')`nPORT=4100`nDISABLE_SCHEDULER=1`nSIGNUP_LIMIT_PER_HOUR=1000`nOWNER_EMAIL=admin@example.com`nOWNER_PASSWORD=Admin12345!`nOWNER_NAME=Admin" | Set-Content -LiteralPath $qaEnv -Encoding ascii
 $results = [System.Collections.Generic.List[object]]::new()
 function Step([string]$Name, [scriptblock]$Run) {
     $started = Get-Date
@@ -27,7 +27,7 @@ function Start-Api {
 }
 function Stop-Api { if ($script:api -and -not $script:api.HasExited) { Stop-Process -Id $script:api.Id -Force; Start-Sleep -Milliseconds 800 } }
 try {
-    Step 'U1-U3 unit tests' { npx tsx --test src/sql.test.ts src/tenancy.test.ts src/http.test.ts src/importer.test.ts }
+    Step 'U1-U3 unit tests' { npx tsx --test src/sql.test.ts src/tenancy.test.ts src/http.test.ts src/importer.test.ts src/security.test.ts }
     Step 'U4 server typecheck' { npx tsc --noEmit -p . }
     Step 'U5 every route checks a permission or is an explained exception' { node test/route-guard.mjs }
     Step 'U4 web typecheck and build' { Push-Location ..\web; try { npx tsc --noEmit -p .; if ($LASTEXITCODE -eq 0) { node node_modules/vite/bin/vite.js build | Out-Null } } finally { Pop-Location } }

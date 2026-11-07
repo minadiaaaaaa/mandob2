@@ -12,6 +12,7 @@ import { ImportWizard } from '../../ui/importer';
 import { ExpiryDate, ExportButton, localName, useCityName, useOptions } from '../../ui/common';
 import { MoveToBranch, useOrgOptions } from '../system/Branches';
 import { PausedMark, PlanCounter } from '../../ui/plan';
+import { VehicleFleetLog } from './FleetLog';
 
 export const VEHICLE_STATUS: Record<string, Tone> = { active: 'green', maintenance: 'amber', retired: 'grey' };
 export const VStatus = ({ s }: { s: string }) => { const { t } = useI18n(); return <Badge tone={VEHICLE_STATUS[s]}>{t(`vehicle.status.${s}`)}</Badge>; };
@@ -250,6 +251,7 @@ export function VehicleView() {
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">{v.card_vehicles.map((x: any) => <tr key={x.id} className={x.id === v.id ? 'bg-brand-soft' : ''}><td className="px-3 py-2"><Link to={`/admin/vehicles/${x.id}`} className="hover:text-brand">{x.plate}</Link></td><td className="px-3 py-2">{[x.maker, x.model].filter(Boolean).join(' ')}</td><td className="px-3 py-2">{x.riders ?? '—'}</td><td className="px-3 py-2 num">{x.registration ?? '—'}</td></tr>)}</tbody></table>
         </Card>
       )}
+      {(can('vehicle_services.view') || can('vehicle_accidents.view')) && <Card title={t('vp.fleet_log')} className="mt-4"><VehicleFleetLog vehicleId={v.id} /></Card>}
       <div className="mt-4"><Attachments entityType="vehicle" entityId={v.id} title={t('vehicles.registration_photos')} /></div>
       {can('vehicles.delete') && (
         <Card title={t('vehicles.delete')} className="mt-4">

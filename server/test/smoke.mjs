@@ -470,7 +470,7 @@ const scanFor = async () => {
   const f = new FormData();
   f.append(
     "file",
-    new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: "image/png" }),
+    new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], { type: "image/png" }),
     "scan.png",
   );
   return ok(await api("POST", "/scans", f), "scan").token;
@@ -1388,7 +1388,7 @@ async function rapi(method, path, body) {
 const lastCode = async () =>
   (await api("GET", "/email/log")).rows[0].subject.match(/(\d{6})/)[1];
 const png = () =>
-  new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: "image/png" });
+  new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], { type: "image/png" });
 const dayPlus = (n) =>
   new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
 assert.equal(

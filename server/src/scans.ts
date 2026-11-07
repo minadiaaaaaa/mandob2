@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { STORAGE_DIR } from './db.js';
-import { DOC_MIME, attach, upload } from './files.js';
+import { attach, checkFileType, upload } from './files.js';
 import { fail } from './http.js';
 import { requireUser } from './auth.js';
 
@@ -25,7 +25,7 @@ scansRouter.use(requireUser);
 scansRouter.post('/', upload.single('file'), async (req, res) => {
   const f = req.file;
   if (!f) fail(422, 'file_required');
-  if (!DOC_MIME[f!.mimetype]) fail(415, 'file_type_not_allowed');
+  checkFileType(f!);
   if (f!.size > 10 * 1024 * 1024) fail(413, 'file_too_large', { max: 10 });
   const token = randomBytes(12).toString('hex');
   writeFileSync(join(TMP, token), f!.buffer);
@@ -37,6 +37,8 @@ scansRouter.get('/:token', (req, res) => {
   const meta = ownMeta(req, req.params.token);
   if (!meta) fail(410, 'scan_gone');
   res.setHeader('Content-Type', meta!.mime);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(meta!.name)}`);
   res.send(readFileSync(join(TMP, req.params.token)));
 });
 

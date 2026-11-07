@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { STORAGE_DIR, exec, one, q, setting } from './db.js';
 import { decrypt } from './routes/system.js';
+import { sanitizeHtml } from './html.js';
 
 // 11.3 Email: templates with {placeholders}, a branded frame, and a log of every attempt.
 
@@ -125,7 +126,7 @@ async function sendMailInternal(m: { template: string; to: string; toName?: stri
   const org = await orgValues();
   const vars = { company_name: org.name, company_name_en: org.name_en, ...m.vars };
   const subject = t ? fill(t.subject, vars).replace(/&amp;/g, '&') : m.template;
-  const html = t ? await frame(fill(t.body_html, vars), m.lang ?? 'ar') : '';
+  const html = t ? await frame(fill(sanitizeHtml(t.body_html), vars), m.lang ?? 'ar') : '';
   const log = await exec('INSERT INTO email_log (template_key, to_email, to_name, cc, subject, body, account, entity_type, entity_id, last_attempt_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP())',
     [m.template, m.to, m.toName ?? null, m.cc ?? null, subject.slice(0, 255), html, m.account ?? 'system', m.entity_type ?? null, m.entity_id == null ? null : String(m.entity_id)]);
   await attempt(log.insertId, !t ? 'template_missing' : !t.is_active && !t.is_required && !m.force ? 'template_inactive' : null);

@@ -13,6 +13,7 @@ import { accessRouter } from './routes/access.js';
 import { companiesRouter } from './routes/companies.js';
 import { branchesRouter } from './routes/branches.js';
 import { platformIdsRouter } from './routes/platformIds.js';
+import { fleetLogRouter } from './routes/fleetLog.js';
 import { ridersRouter } from './routes/riders.js';
 import { applicantsRouter } from './routes/applicants.js';
 import { fleetRouter } from './routes/fleet.js';
@@ -36,11 +37,39 @@ import { languagesRouter, publicLanguagesRouter } from './routes/languages.js';
 import { portalAdminRouter, portalRouter } from './routes/portal.js';
 import { billingRouter, pausedGate, platformRouter, signupRouter, subscriptionGate } from './routes/saas.js';
 
+// TRUST_PROXY names the proxies in front of the server, so the client address is read from X-Forwarded-For only as far
+// as they reach: a number of hops ("1" = one Nginx), or addresses / subnets / "loopback" separated by commas.
+// Empty or "0": no proxy. Trusting every hop ("true") would let any client pick its own address, so it means one hop.
+function trustProxy(v: string | undefined): number | string | false {
+  const s = (v ?? '').trim();
+  if (!s || s === '0' || s.toLowerCase() === 'false') return false;
+  if (/^\d+$/.test(s)) return Number(s);
+  if (s.toLowerCase() === 'true') { console.warn('TRUST_PROXY=true trusts one proxy hop; set the number of hops or the proxy addresses'); return 1; }
+  return s;
+}
+
 const app = express();
-app.set('trust proxy', process.env.TRUST_PROXY === '1');
-// report tables sent to the ingest address can be large; everything else stays small
+app.disable('x-powered-by');
+app.set('trust proxy', trustProxy(process.env.TRUST_PROXY));
+// Security headers on every answer: no framing by other sites, no MIME sniffing, a strict content policy for the
+// pages (the web app loads only its own files and Google Fonts), HSTS when the request came over HTTPS.
+const CSP = [
+  "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com", "img-src 'self' data: blob:", "media-src 'self' blob:",
+  "connect-src 'self'", "frame-src 'self' blob:", "frame-ancestors 'self'", "object-src 'none'", "base-uri 'self'", "form-action 'self'",
+].join('; ');
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Content-Security-Policy', CSP);
+  if (req.secure) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  next();
+});
+// report tables sent to the ingest address can be large; everything else stays small. Compressed bodies are only
+// accepted on the ingest address (the browser extension may send them).
 const bigJson = express.json({ limit: '25mb' });
-const smallJson = express.json({ limit: '2mb' });
+const smallJson = express.json({ limit: '2mb', inflate: false });
 app.use((req, res, next) => (req.path === '/api/sync/ingest' ? bigJson : smallJson)(req, res, next));
 app.use((req, _res, next) => { req.rid = randomBytes(8).toString('hex'); next(); });
 
@@ -110,6 +139,7 @@ app.use('/api', languagesRouter);
 app.use('/api', portalAdminRouter);
 app.use('/api', branchesRouter);
 app.use('/api', platformIdsRouter);
+app.use('/api', fleetLogRouter);
 app.use('/api', billingRouter);
 app.use('/api', platformRouter);
 app.use('/api/attachments', attachmentsRouter);

@@ -35,6 +35,9 @@ export const MATRIX: Record<string, Record<string, string[]>> = {
     insurance_policies: ['view', 'create', 'update', 'delete', 'upload', 'download', 'renew', 'export'],
     vehicle_insurance: ['view', 'create', 'update', 'delete', 'upload', 'download', 'renew', 'export', 'print'],
     oil_changes: ['view', 'create', 'update', 'delete', 'export'],
+    // phase 4: the servicing log (pay records what the workshop was paid) and accident records
+    vehicle_services: ['view', 'create', 'update', 'delete', 'export', 'pay'],
+    vehicle_accidents: ['view', 'create', 'update', 'delete', 'export'],
   },
   performance: {
     performance: ['view', 'create', 'update', 'delete', 'export', 'import'],
