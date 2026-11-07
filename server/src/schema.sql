@@ -156,6 +156,39 @@ CREATE TABLE IF NOT EXISTS contracts (
 );
 
 -- The rider id is the number the delivery company knows the rider by. It is typed by hand and never changes.
+-- Branches and job titles (designations) of one company (phase 2). Riders and vehicles point at them through
+-- (tenant_id, branch_id), so a record can never be linked to another company's branch (see migrations.ts step 4).
+CREATE TABLE IF NOT EXISTS branches (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  name_ar VARCHAR(100) NOT NULL,
+  name_en VARCHAR(100) NULL,
+  city_id INT NULL,
+  is_default TINYINT(1) NOT NULL DEFAULT 0,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  notes VARCHAR(500) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY uq_branch_name (tenant_id, name_ar),
+  UNIQUE KEY uq_branch_tenant_id (tenant_id, id),
+  FOREIGN KEY (city_id) REFERENCES cities(id)
+);
+
+-- builtin_key: Driver and Supervisor exist in every company and never count against the plan; NULL = a custom title.
+CREATE TABLE IF NOT EXISTS designations (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  name_ar VARCHAR(100) NOT NULL,
+  name_en VARCHAR(100) NULL,
+  builtin_key ENUM('driver','supervisor') NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY uq_designation_name (tenant_id, name_ar),
+  UNIQUE KEY uq_designation_builtin (tenant_id, builtin_key),
+  UNIQUE KEY uq_designation_tenant_id (tenant_id, id)
+);
+
 CREATE TABLE IF NOT EXISTS riders (
   id BIGINT PRIMARY KEY,
   tenant_id INT NOT NULL DEFAULT 0,
@@ -187,6 +220,46 @@ CREATE TABLE IF NOT EXISTS riders (
   FOREIGN KEY (company_id) REFERENCES companies(id),
   FOREIGN KEY (contract_id) REFERENCES contracts(id),
   FOREIGN KEY (city_id) REFERENCES cities(id)
+);
+
+-- Platform IDs (phase 3): an account number a delivery platform issued to the company. The owner is the rider it is
+-- registered to; the worker is the rider actually working on it now (often the owner, sometimes someone else).
+-- The worker only changes through a transfer, and every transfer is kept in platform_id_transfers.
+-- The keys to riders and between the two tables include tenant_id; they are added by migration 5.
+CREATE TABLE IF NOT EXISTS platform_ids (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  id_number VARCHAR(50) NOT NULL,
+  company_id INT NOT NULL,
+  contract_id INT NULL,
+  owner_rider_id BIGINT NULL,
+  worker_rider_id BIGINT NULL,
+  status ENUM('active','pending','blocked','expired') NOT NULL DEFAULT 'active',
+  notes VARCHAR(500) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY uq_platform_id_number (tenant_id, company_id, id_number),
+  UNIQUE KEY uq_platform_id_tenant_id (tenant_id, id),
+  KEY ix_t_owner (tenant_id, owner_rider_id),
+  KEY ix_t_worker (tenant_id, worker_rider_id),
+  KEY ix_t_status (tenant_id, status),
+  FOREIGN KEY (company_id) REFERENCES companies(id),
+  FOREIGN KEY (contract_id) REFERENCES contracts(id)
+);
+
+-- One row per change of worker, the first assignment included. from/to NULL = nobody.
+CREATE TABLE IF NOT EXISTS platform_id_transfers (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  platform_id INT NOT NULL,
+  from_rider_id BIGINT NULL,
+  to_rider_id BIGINT NULL,
+  transferred_at DATETIME NOT NULL,
+  reason VARCHAR(255) NULL,
+  user_id INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY ix_t_platform_at (tenant_id, platform_id, transferred_at),
+  KEY ix_t_at (tenant_id, transferred_at)
 );
 
 CREATE TABLE IF NOT EXISTS transport_licenses (

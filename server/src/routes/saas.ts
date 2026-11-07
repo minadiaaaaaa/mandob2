@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { asPlatform, exec, one, q, setSetting, setting, tx, withTenant } from '../db.js';
 import { companyAccess, features, forgetTenant, limits, limitsOf, loadTenant, nowUtc, plan, plusDays, standing, type Plan, type Tenant } from '../domain/subscription.js';
 import { pausedCounts, pausedIds, usage } from '../domain/quotas.js';
+import { ensureCompanyDefaults } from '../domain/branches.js';
 import { ANNUAL_DISCOUNT_KEY, FEATURES, FREE_PLAN, LIMIT_COLUMNS, QUOTA_KINDS, annualDiscount, annualPrice, priced, type Feature } from '../domain/plans.js';
 import { HttpError, clean, fail, fieldError } from '../http.js';
 import { can, clientIp, hashPassword, platformOnly, requireUser } from '../auth.js';
@@ -82,6 +83,7 @@ signupRouter.post('/public/signup', async (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, 'trial', DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? DAY))`, [slug, v.company_name, v.company_name_en, v.phone, email, TRIAL_PLAN, TRIAL_DAYS])).insertId;
   });
   await seedTenant(tenantId);
+  await ensureCompanyDefaults(tenantId);
   await withTenant(tenantId, async () => {
     await setSetting('org.name', v.company_name);
     if (v.company_name_en) await setSetting('org.name_en', v.company_name_en);

@@ -8,10 +8,10 @@
 // A query that touches a company table without a company (and outside platform mode) is refused.
 
 export const TENANT_TABLES = new Set([
-  'advance_installments', 'advances', 'applicants', 'attachments', 'audit_log', 'billing', 'branding_photos', 'companies', 'contracts',
-  'cron_runs', 'daily_performance', 'email_log', 'email_templates', 'error_log', 'fines', 'fuel_cards', 'insurance_companies',
+  'advance_installments', 'advances', 'applicants', 'attachments', 'audit_log', 'billing', 'branches', 'branding_photos', 'companies', 'contracts',
+  'cron_runs', 'daily_performance', 'designations', 'email_log', 'email_templates', 'error_log', 'fines', 'fuel_cards', 'insurance_companies',
   'insurance_policies', 'leaves', 'live_board', 'live_days', 'live_points', 'login_attempts', 'monthly_ratings', 'notification_prefs',
-  'notifications', 'oil_changes', 'oil_schedules', 'operation_card_vehicles', 'operation_cards', 'rating_cutoffs', 'renewals',
+  'notifications', 'oil_changes', 'oil_schedules', 'operation_card_vehicles', 'operation_cards', 'platform_id_transfers', 'platform_ids', 'rating_cutoffs', 'renewals',
   'rider_absences', 'rider_accounts', 'rider_change_requests', 'rider_codes', 'rider_documents', 'rider_issue_messages', 'rider_issues',
   'rider_login_attempts', 'rider_sessions', 'riders', 'role_permissions', 'roles', 'secrets', 'sessions', 'settings',
   'subscription_payments', 'sync_runs', 'sync_sources', 'transport_licenses', 'users', 'vehicle_assignments', 'vehicle_insurance',
@@ -92,6 +92,15 @@ export function scopeTenant(sql: string, tenant: number | null): { sql: string; 
   let touches = false;
   const T = String(tenant);
   let deleteFromSeen = false;
+  // A locking read (… FOR UPDATE / LOCK IN SHARE MODE) must see the latest rows, but a derived table is read from the
+  // transaction's snapshot. So a locking SELECT on one company table filters that table in its WHERE instead.
+  const isSource = (i: number) => {
+    const p = prevSig(i), pw = p >= 0 ? up(toks[p]) : '';
+    return pw === 'FROM' || pw === 'JOIN' || pw === 'STRAIGHT_JOIN' || (pw === ',' && clause[p] === 'FROM');
+  };
+  const topSources = stmt === 'SELECT' ? sig.filter((i) => depth[i] === 0 && TENANT_TABLES.has(tableName(toks[i]) ?? '') && toks[nextSig(i)]?.v !== '.' && isSource(i)) : [];
+  const locking = sig.some((j, k) => depth[j] === 0 && ((up(toks[j]) === 'FOR' && ['UPDATE', 'SHARE'].includes(up(toks[sig[k + 1]]))) || (up(toks[j]) === 'LOCK' && up(toks[sig[k + 1]]) === 'IN')));
+  const filterInWhere = locking && topSources.length === 1 ? topSources[0] : -1;
 
   for (const i of sig) {
     const name = tableName(toks[i]);
@@ -100,8 +109,9 @@ export function scopeTenant(sql: string, tenant: number | null): { sql: string; 
     if (n >= 0 && toks[n].v === '.') continue; // riders.id is a column reference
     const p = prevSig(i);
     const pw = p >= 0 ? up(toks[p]) : '';
-    let role: 'insert' | 'update' | 'delete' | 'source' | null = null;
-    if (pw === 'INTO' && depth[i] === 0 && (stmt === 'INSERT' || stmt === 'REPLACE')) role = 'insert';
+    let role: 'insert' | 'update' | 'delete' | 'source' | 'locked' | null = null;
+    if (i === filterInWhere) role = 'locked';
+    else if (pw === 'INTO' && depth[i] === 0 && (stmt === 'INSERT' || stmt === 'REPLACE')) role = 'insert';
     else if (stmt === 'UPDATE' && depth[i] === 0 && pos.get(i) === 1) role = 'update';
     else if (stmt === 'UPDATE' && depth[i] === 0 && ['LOW_PRIORITY', 'IGNORE'].includes(pw) && pos.get(i)! <= 3) role = 'update';
     else if (stmt === 'DELETE' && depth[i] === 0 && pw === 'FROM' && !deleteFromSeen) { role = 'delete'; deleteFromSeen = true; }
@@ -120,14 +130,14 @@ export function scopeTenant(sql: string, tenant: number | null): { sql: string; 
     const hasAlias = alias !== quoted;
     if (role === 'source') {
       replace.set(i, `(SELECT * FROM ${quoted} WHERE ${quoted}.tenant_id = ${T})${hasAlias ? '' : ' AS ' + quoted}`);
-    } else if (role === 'update' || role === 'delete') {
+    } else if (role === 'update' || role === 'delete' || role === 'locked') {
       const cond = `${alias}.tenant_id = ${T}`;
       let where = -1, stop = -1;
       for (const j of sig) {
         if (j <= i || depth[j] !== 0) continue;
         const w = up(toks[j]);
         if (toks[j].type === 'word' && w === 'WHERE' && where < 0) where = j;
-        else if ((toks[j].type === 'word' && (w === 'ORDER' || w === 'LIMIT')) || toks[j].v === ';') { stop = j; break; }
+        else if ((toks[j].type === 'word' && ['GROUP', 'HAVING', 'WINDOW', 'ORDER', 'LIMIT', 'FOR', 'LOCK', 'UNION'].includes(w)) || toks[j].v === ';') { stop = j; break; }
       }
       if (where >= 0) {
         addAfter(where, ' (');

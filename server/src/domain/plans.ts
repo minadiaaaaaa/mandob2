@@ -5,7 +5,7 @@ import { asPlatform, setting, withTenant } from '../db.js';
 // ---------- quotas ----------
 // Counted now: each has its table and what "not counted" means there (a terminated rider, a switched-off contract…).
 // `owner`: the company owner's own account is not one of the plan's places.
-export type QuotaKind = 'riders' | 'vehicles' | 'users' | 'platforms' | 'contracts';
+export type QuotaKind = 'riders' | 'vehicles' | 'users' | 'platforms' | 'contracts' | 'branches' | 'designations';
 export type Quota = { table: string; column: string; counted: string; off: { column: string; value: string | number }; owner?: boolean };
 export const QUOTAS: Record<QuotaKind, Quota> = {
   riders: { table: 'riders', column: 'max_riders', counted: "status <> 'terminated'", off: { column: 'status', value: 'terminated' } },
@@ -14,12 +14,15 @@ export const QUOTAS: Record<QuotaKind, Quota> = {
   // the delivery platforms the company works for (HungerStation, …): the `companies` table
   platforms: { table: 'companies', column: 'max_platforms', counted: 'is_active = 1', off: { column: 'is_active', value: 0 } },
   contracts: { table: 'contracts', column: 'max_contracts', counted: 'is_active = 1', off: { column: 'is_active', value: 0 } },
+  // the company's main branch is one of them
+  branches: { table: 'branches', column: 'max_branches', counted: 'is_active = 1', off: { column: 'is_active', value: 0 } },
+  // only custom job titles: Driver and Supervisor come with every company (written outside the check, domain/branches.ts)
+  designations: { table: 'designations', column: 'max_designations', counted: 'is_active = 1 AND builtin_key IS NULL', off: { column: 'is_active', value: 0 } },
 };
 export const QUOTA_KINDS = Object.keys(QUOTAS) as QuotaKind[];
 export const kindOfTable = (table: string) => QUOTA_KINDS.find((k) => QUOTAS[k].table === table);
-// Set on every plan now; counted by the phases that add their screens (branches and designations: phase 2;
-// invoice buyers, open drafts and invoices a month: phase 7).
-export const LATER_QUOTAS = ['branches', 'designations', 'invoice_buyers', 'open_invoice_drafts', 'invoices_month'] as const;
+// Set on every plan now; counted by the phase that adds their screens (invoice buyers, open drafts and invoices a month: phase 7).
+export const LATER_QUOTAS = ['invoice_buyers', 'open_invoice_drafts', 'invoices_month'] as const;
 // devices each staff account may be signed in from at once (auth.ts)
 export const DEVICE_COLUMN = 'max_devices';
 export const LIMIT_COLUMNS = [...QUOTA_KINDS.map((k) => QUOTAS[k].column), ...LATER_QUOTAS.map((k) => `max_${k}`), DEVICE_COLUMN];

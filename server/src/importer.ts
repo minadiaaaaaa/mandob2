@@ -52,9 +52,19 @@ function headerMap(def: ImportDef, headers: string[]) {
   return { map, unknown, duplicate };
 }
 
+function csvText(buf: Buffer) {
+  let text: string;
+  try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+  catch { text = new TextDecoder('windows-1256').decode(buf); }
+  return text.replace(/^﻿/, '');
+}
 export function readSheet(buf: Buffer) {
   let wb: XLSX.WorkBook;
-  try { wb = XLSX.read(buf, { type: 'buffer', cellDates: true, dense: true }); }
+  // Excel files are zip (xlsx) or OLE (xls) containers; anything else is a text file (CSV). Read as bytes, a CSV
+  // without a BOM would be taken as Latin-1 and Arabic names would arrive garbled, so the text is decoded first:
+  // UTF-8, or Windows-1256 (what Excel's plain "CSV" saves on an Arabic Windows) when it is not valid UTF-8.
+  const binary = (buf[0] === 0x50 && buf[1] === 0x4b) || (buf[0] === 0xd0 && buf[1] === 0xcf);
+  try { wb = binary ? XLSX.read(buf, { type: 'buffer', cellDates: true, dense: true }) : XLSX.read(csvText(buf), { type: 'string', cellDates: true, dense: true }); }
   catch { throw new HttpError(422, 'file_unreadable'); }
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json<Row>(ws, { defval: null, raw: true });

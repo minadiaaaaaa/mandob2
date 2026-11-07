@@ -3,6 +3,7 @@ import { exec, one, q } from '../db.js';
 import { clean, eq, fail, list, listAll, sendExport, today, where, type Query, type Spec } from '../http.js';
 import { can } from '../auth.js';
 import { audit } from '../audit.js';
+import { withRiderDefaults } from '../domain/branches.js';
 import { cellBool, cellNum, cellStr, importRoutes, type ImportDef } from '../importer.js';
 
 // 3.2 Rider absences: the delivery company's record. Everything but the internal note is the company's.
@@ -148,7 +149,7 @@ export const absenceImport: ImportDef = {
     if (!(await one('SELECT 1 FROM riders WHERE id = ?', [data.rider_id]))) {
       if (!ctx.options.create_riders) return 'skipped';
       // a temporary name; the note asks for the details to be completed
-      await exec("INSERT INTO riders (id, full_name, status, notes) VALUES (?, ?, 'active', ?)", [data.rider_id, `Rider ${data.rider_id}`, 'Created by the absences import — complete the details.']);
+      await exec('INSERT INTO riders SET ?', [await withRiderDefaults({ id: data.rider_id, full_name: `Rider ${data.rider_id}`, status: 'active', notes: 'Created by the absences import — complete the details.' }, ctx.cache)]);
     }
     await exec('INSERT INTO rider_absences SET ?', [{ ...data, internal_note }]);
     return 'inserted';

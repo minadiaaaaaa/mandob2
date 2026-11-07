@@ -8,6 +8,7 @@ import { Alert, Badge, Button, By, Card, Details, Field, IconButton, Loading, Pa
 import { Combo, Grid, SaveBar, SelectInput, TextArea, TextInput, useFieldError, useForm } from '../../ui/forms';
 import { DataTable, FilterBar, FilterDate, FilterSelect, useList, type Column } from '../../ui/table';
 import { Attachments, ScanUpload, type Scan } from '../../ui/files';
+import { useOrgOptions } from '../system/Branches';
 import { ExportButton, latin } from '../../ui/common';
 
 export const ALERT_KINDS = ['id', 'license', 'health', 'driver_card', 'ajeer', 'operation_card', 'vehicle_registration', 'vehicle_insurance', 'insurance_policy', 'oil_change', 'transport_license'];
@@ -33,6 +34,7 @@ export function AlertsList() {
   const nav = useNavigate();
   const daysText = useDaysText();
   const list = useList('/alerts');
+  const branches = useOrgOptions('branches', true);
   const s = list.stats ?? {};
   const win = s.window ?? 30;
   const columns: Column<any>[] = [
@@ -59,6 +61,7 @@ export function AlertsList() {
       </StatGrid>
       <FilterBar list={list} placeholder={t('alerts.search_hint')} actions={can('alerts.export') && <ExportButton path="/alerts/export" query={list.query} format="csv" label={t('common.export_csv')} />}>
         <FilterSelect list={list} name="kind" label={t('alerts.document')} options={ALERT_KINDS.map((k) => ({ value: k, label: t(`alerts.kind.${k}`) }))} />
+        <FilterSelect list={list} name="branch" label={t('riders.branch')} options={branches} />
         <FilterSelect list={list} name="owner_type" label={t('alerts.belongs_to')} options={OWNER_TYPES.map((k) => ({ value: k, label: t(`alerts.owner.${k}`) }))} />
         <FilterSelect list={list} name="status" label={t('alerts.status')} options={['expired', 'near', 'valid'].map((k) => ({ value: k, label: t(`alerts.state.${k}`) }))} />
         <FilterSelect list={list} name="window" label={t('alerts.window')} options={[7, 30, 60, 90].map((n) => ({ value: n, label: t('alerts.within', { n }) }))} />

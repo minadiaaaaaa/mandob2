@@ -1,8 +1,9 @@
 // The migration runner on the disposable test database: each step runs once, a half-applied step can run
 // again, the helpers are idempotent, ids must increase, and every real step is recorded after startup.
 import assert from "node:assert/strict";
-import { asPlatform, closeDb, dbConfig, executeScript, q } from "../src/db.js";
-import { MIGRATIONS, RIDER_LINKS, addColumn, addIndex, columnExists, indexExists, runMigrations, type Migration } from "../src/migrations.js";
+import { asPlatform, closeDb, dbConfig, executeScript, q, withTenant } from "../src/db.js";
+import { ensureCompanyDefaults } from "../src/domain/branches.js";
+import { MIGRATIONS, PLATFORM_ID_LINKS, RIDER_LINKS, addColumn, addIndex, columnExists, indexExists, runMigrations, type Migration } from "../src/migrations.js";
 
 assert.match(dbConfig()?.database ?? "", /^mandoob_test[a-z0-9_]*$/, "Disposable test databases only");
 let checks = 0;
@@ -39,12 +40,41 @@ try {
     // migration 2 stopped after dropping the rider links: running it again re-creates every one of them
     const riderFks = async () => Number((await q<{ n: number }>(`SELECT COUNT(DISTINCT CONSTRAINT_NAME) n FROM information_schema.KEY_COLUMN_USAGE
       WHERE TABLE_SCHEMA = DATABASE() AND REFERENCED_TABLE_NAME = 'riders' AND COLUMN_NAME = 'tenant_id'`))[0].n);
-    ok((await riderFks()) === RIDER_LINKS.length, `all ${RIDER_LINKS.length} rider links are per company`);
+    // links added by later steps (platform IDs, migration 5) are counted on top and left alone here
+    const later = PLATFORM_ID_LINKS.filter(([, , target]) => target === "riders").length;
+    ok((await riderFks()) === RIDER_LINKS.length + later, `all ${RIDER_LINKS.length + later} rider links are per company`);
     for (const [table, column] of RIDER_LINKS) await executeScript(`ALTER TABLE \`${table}\` DROP FOREIGN KEY \`fk_${table}_${column}\``);
-    ok((await riderFks()) === 0, "links dropped (simulated crash)");
+    ok((await riderFks()) === later, "links dropped (simulated crash)");
     await q("DELETE FROM schema_migrations WHERE id = 2");
     ok((await runMigrations()).join() === "2", "migration 2 runs again");
-    ok((await riderFks()) === RIDER_LINKS.length, "every rider link is back after the rerun");
+    ok((await riderFks()) === RIDER_LINKS.length + later, "every rider link is back after the rerun");
+
+    // migration 5 stopped half way: running it again adds back the platform ID links
+    for (const [table, column] of PLATFORM_ID_LINKS) await executeScript(`ALTER TABLE \`${table}\` DROP FOREIGN KEY \`fk_${table}_${column}\``);
+    await q("DELETE FROM schema_migrations WHERE id = 5");
+    ok((await runMigrations()).join() === "5", "migration 5 runs again");
+    ok((await riderFks()) === RIDER_LINKS.length + later, "the platform ID links are back after the rerun");
+
+    // phase 2: a company from before branches existed (no branch, records without one) gets its main branch, the
+    // built-in titles and a branch on every record; running it again changes nothing
+    const [{ id: t }] = await q<{ id: number }>("SELECT COALESCE(MAX(id), 0) + 1 id FROM tenants");
+    await q("INSERT INTO tenants (id, slug, name, plan_key, status) VALUES (?, ?, 'QA old company', 'free', 'active')", [t, `qa-old-${t}`]);
+    await q("INSERT INTO riders (id, tenant_id, full_name) VALUES (9900001, ?, 'Old rider'), (9900002, ?, 'Old rider 2')", [t, t]);
+    await q("INSERT INTO vehicles (tenant_id, plate, plate_key, vehicle_type) VALUES (?, 'QA 1', 'QA1', 'car')", [t]);
+    await ensureCompanyDefaults(t);
+    await ensureCompanyDefaults(t);
+    const counts = async () => (await q<any>(`SELECT (SELECT COUNT(*) FROM branches WHERE tenant_id = ?) b, (SELECT COUNT(*) FROM branches WHERE tenant_id = ? AND is_default = 1) d,
+      (SELECT COUNT(*) FROM designations WHERE tenant_id = ?) t, (SELECT COUNT(*) FROM riders WHERE tenant_id = ? AND (branch_id IS NULL OR designation_id IS NULL)) r,
+      (SELECT COUNT(*) FROM vehicles WHERE tenant_id = ? AND branch_id IS NULL) v`, [t, t, t, t, t]))[0];
+    const c = await counts();
+    ok(Number(c.b) === 1 && Number(c.d) === 1 && Number(c.t) === 2, "an old company gets one main branch and the two built-in titles, once");
+    ok(Number(c.r) === 0 && Number(c.v) === 0, "every old rider and vehicle gets a branch (and riders a title)");
+    // the keys include the company: a rider cannot point at another company's branch even by a raw query
+    const [{ other }] = await q<{ other: number }>("SELECT id other FROM branches WHERE tenant_id <> ? LIMIT 1", [t]);
+    await assert.rejects(q("UPDATE riders SET branch_id = ? WHERE tenant_id = ? AND id = 9900001", [other, t]), /foreign key/i);
+    checks++;
+    await withTenant(t, async () => { await q("DELETE FROM riders"); await q("DELETE FROM vehicles"); await q("DELETE FROM designations"); await q("DELETE FROM branches"); });
+    await q("DELETE FROM tenants WHERE id = ?", [t]);
   });
   console.log("MIGRATION CHECKS PASSED:", checks);
 } finally {

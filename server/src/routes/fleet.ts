@@ -8,6 +8,7 @@ import { claimScan } from '../scans.js';
 import { cellDate, cellNum, cellStr, importRoutes, type ImportDef } from '../importer.js';
 import { comesBack, ensureQuota, withQuota } from '../domain/quotas.js';
 import { VEHICLE_STATUSES } from '../domain/rules.js';
+import { checkBranch, importOrgId, withVehicleDefaults } from '../domain/branches.js';
 
 export const fleetRouter = Router();
 const expiryDays = (col: string, day: string) => `DATEDIFF(${col}, '${day}')`;
@@ -33,12 +34,14 @@ const VEHICLE_RULES = {
   model: { max: 60 }, color: { max: 40 }, year: { type: 'int' as const, min: 1900, max: new Date().getFullYear() + 1 }, chassis: { max: 30 },
   weight: { type: 'int' as const, min: 0, max: 99999 }, capacity: { type: 'int' as const, min: 0, max: 999 },
   ownership: { enum: ['owned', 'rented'] }, status: { enum: [...VEHICLE_STATUSES] }, odometer: { type: 'int' as const, min: 0 },
+  branch_id: { type: 'int' as const },
 };
 
 function vehicleSpec(day: string): Spec {
   return {
-    from: `FROM vehicles v LEFT JOIN operation_card_vehicles ocv ON ocv.vehicle_id = v.id AND ocv.is_current = 1 LEFT JOIN operation_cards oc ON oc.id = ocv.card_id`,
-    select: `v.*, oc.id card_id, oc.number card_number, oc.expiry_date card_expiry, ${expiryDays('oc.expiry_date', day)} card_days,
+    from: `FROM vehicles v LEFT JOIN operation_card_vehicles ocv ON ocv.vehicle_id = v.id AND ocv.is_current = 1 LEFT JOIN operation_cards oc ON oc.id = ocv.card_id
+      LEFT JOIN branches br ON br.id = v.branch_id`,
+    select: `v.*, br.name_ar branch_ar, br.name_en branch_en, oc.id card_id, oc.number card_number, oc.expiry_date card_expiry, ${expiryDays('oc.expiry_date', day)} card_days,
       (SELECT COUNT(*) FROM operation_card_vehicles WHERE card_id = oc.id) card_vehicles,
       (SELECT GROUP_CONCAT(CONCAT(r.id, '\t', r.full_name) SEPARATOR '\n') FROM vehicle_assignments a JOIN riders r ON r.id = a.rider_id WHERE a.vehicle_id = v.id AND a.is_current = 1) riders`,
     search: [
@@ -48,7 +51,7 @@ function vehicleSpec(day: string): Spec {
       (s) => ['v.id IN (SELECT a.vehicle_id FROM vehicle_assignments a JOIN riders r ON r.id = a.rider_id WHERE a.is_current = 1 AND (r.full_name LIKE ? OR CAST(r.id AS CHAR) LIKE ?))', [`%${s}%`, `%${s}%`]],
     ],
     filters: {
-      status: inList('v.status'), type: eq('v.vehicle_type'), ownership: eq('v.ownership'), maker: eq('v.maker'), registration_type: eq('v.registration_type'),
+      status: inList('v.status'), branch: eq('v.branch_id'), type: eq('v.vehicle_type'), ownership: eq('v.ownership'), maker: eq('v.maker'), registration_type: eq('v.registration_type'),
       assignment: (v) => `${v === 'assigned' ? '' : 'NOT '}EXISTS (SELECT 1 FROM vehicle_assignments a WHERE a.vehicle_id = v.id AND a.is_current = 1)`,
       card: (v) => v === 'yes' ? 'oc.id IS NOT NULL' : 'oc.id IS NULL',
     },
@@ -108,6 +111,7 @@ fleetRouter.get('/vehicles/export', can('vehicles.export'), async (req, res) => 
     { key: 'vehicle_type', label: 'vehicles.type' }, { key: 'maker', label: 'vehicles.maker' }, { key: 'model', label: 'vehicles.model' }, { key: 'color', label: 'vehicles.color' },
     { key: 'year', label: 'vehicles.year' }, { key: 'chassis', label: 'vehicles.chassis' }, { key: 'weight', label: 'vehicles.weight' }, { key: 'capacity', label: 'vehicles.capacity' },
     { key: 'ownership', label: 'vehicles.ownership' }, { key: 'odometer', label: 'vehicles.odometer' }, { key: 'status', label: 'vehicles.status' },
+    { key: 'branch_ar', label: 'vehicles.branch' },
     { key: 'riders', label: 'vehicles.current_rider', value: (r) => r.riders?.split('\n').map((x: string) => x.split('\t')[1]).join(', ') },
     { key: 'card_number', label: 'vehicles.card' }, { key: 'card_expiry', label: 'vehicles.card_expiry', fill: (r) => r.card_days == null ? null : r.card_days < 0 ? 'red' : r.card_days <= 30 ? 'amber' : 'green' },
   ] });
@@ -121,7 +125,7 @@ fleetRouter.get('/vehicles/options', can('vehicles.view', 'operation_cards.view'
 
 fleetRouter.get('/vehicles/:id', can('vehicles.view'), async (req, res) => {
   const day = await today();
-  const v = await one<any>('SELECT * FROM vehicles WHERE id = ?', [req.params.id]);
+  const v = await one<any>('SELECT v.*, br.name_ar branch_ar, br.name_en branch_en FROM vehicles v LEFT JOIN branches br ON br.id = v.branch_id WHERE v.id = ?', [req.params.id]);
   if (!v) fail(404, 'not_found');
   const riders = await q(`SELECT r.id, r.full_name, r.phone, a.start_date FROM vehicle_assignments a JOIN riders r ON r.id = a.rider_id WHERE a.vehicle_id = ? AND a.is_current = 1`, [v.id]);
   const card = await one<any>(`SELECT oc.*, ${expiryDays('oc.expiry_date', day)} days_left, (SELECT COUNT(*) FROM operation_card_vehicles WHERE card_id = oc.id) vehicles
@@ -137,13 +141,14 @@ fleetRouter.get('/vehicles/:id', can('vehicles.view'), async (req, res) => {
 fleetRouter.post('/vehicles', can('vehicles.create'), async (req, res) => {
   const v = normalizeVehicle(clean(req.body, VEHICLE_RULES));
   await vehicleUnique(v);
+  await checkBranch(v.branch_id);
   const body = req.body;
   if (body.card && !has(req, 'operation_cards.create')) fail(403, 'forbidden', { perm: 'operation_cards.create' });
   if (body.current_card_id && !has(req, 'operation_cards.update')) fail(403, 'forbidden', { perm: 'operation_cards.update' });
   if (body.current_registration_id && !has(req, 'vehicle_registrations.update')) fail(403, 'forbidden', { perm: 'vehicle_registrations.update' });
   // The vehicle and its card are created together: if one fails, neither is saved.
   const out = await tx(async () => {
-    const r = await exec('INSERT INTO vehicles SET ?', [{ ownership: 'owned', status: 'active', odometer: 0, ...v }]);
+    const r = await exec('INSERT INTO vehicles SET ?', [await withVehicleDefaults({ ownership: 'owned', status: 'active', odometer: 0, ...v })]);
     let cardId: number | null = null;
     if (body.card) cardId = await createCard(req, body.card, [r.insertId]);
     else if (body.current_card_id) await linkCard(Number(body.current_card_id), r.insertId);
@@ -160,6 +165,7 @@ fleetRouter.patch('/vehicles/:id', can('vehicles.update'), async (req, res) => {
   if (!before) fail(404, 'not_found');
   const v = normalizeVehicle(clean(req.body, VEHICLE_RULES, true));
   await vehicleUnique(v, id);
+  await checkBranch(v.branch_id, 'branch_id', before.branch_id);
   await tx(async () => {
     if (comesBack('vehicles', before.status, v.status)) await ensureQuota('vehicles', 1);
     if (Object.keys(v).length) await exec('UPDATE vehicles SET ? WHERE id = ?', [v, id]);
@@ -204,6 +210,17 @@ async function deleteVehicles(req: Request, ids: number[]) {
 }
 fleetRouter.delete('/vehicles/:id', can('vehicles.delete'), async (req, res) => { await mustExist('vehicles', req.params.id); await deleteVehicles(req, [Number(req.params.id)]); res.json({ ok: true }); });
 fleetRouter.post('/vehicles/bulk-delete', can('vehicles.delete'), async (req, res) => { await deleteVehicles(req, (req.body.ids ?? []).map(Number)); res.json({ ok: true }); });
+// moves the chosen vehicles to another branch
+fleetRouter.post('/vehicles/bulk-branch', can('vehicles.update'), async (req, res) => {
+  const ids: number[] = (req.body.ids ?? []).map(Number);
+  if (!ids.length) fail(422, 'nothing_selected');
+  if (ids.length > 200) fail(422, 'max_200');
+  const { branch_id } = clean(req.body, { branch_id: { req: true, type: 'int' } });
+  await checkBranch(branch_id);
+  const r = await exec('UPDATE vehicles SET branch_id = ? WHERE id IN (?)', [branch_id, ids]);
+  await audit(req, { action: 'vehicle.bulk_branch', entity_type: 'vehicle', entity_id: ids.join(',').slice(0, 60), after: { branch_id }, details: `${ids.length} vehicles` });
+  res.json({ updated: r.affectedRows });
+});
 
 const vehicleImport: ImportDef = {
   name: 'vehicles', perm: 'vehicles.import', matchOn: 'vehicles.plate',
@@ -211,7 +228,7 @@ const vehicleImport: ImportDef = {
     plate: ['vehicles.plate', 'plate', 'plate number'], plate_en: ['vehicles.plate_en', 'plate (english)'], registration_type: ['vehicles.registration_type'],
     vehicle_type: ['vehicles.type', 'vehicle type', 'type'], maker: ['vehicles.maker', 'make', 'maker'], model: ['vehicles.model', 'model'], color: ['vehicles.color', 'colour', 'color'],
     year: ['vehicles.year', 'year', 'manufacture year'], chassis: ['vehicles.chassis', 'chassis', 'vin'], weight: ['vehicles.weight'], capacity: ['vehicles.capacity'],
-    ownership: ['vehicles.ownership'], odometer: ['vehicles.odometer'], status: ['vehicles.status'],
+    ownership: ['vehicles.ownership'], odometer: ['vehicles.odometer'], status: ['vehicles.status'], branch: ['vehicles.branch', 'branch'],
   },
   requiredColumns: [['plate']],
   async parse(row, ctx) {
@@ -224,6 +241,12 @@ const vehicleImport: ImportDef = {
     const ST: Record<string, string> = { active: 'active', 'نشطة': 'active', maintenance: 'maintenance', 'in maintenance': 'maintenance', 'صيانة': 'maintenance', retired: 'retired', 'خارج الخدمة': 'retired' };
     if (ctx.present.has('ownership')) { const o = cellStr(row.ownership)?.toLowerCase(); if (o && !OWN[o]) return 'invalid_value'; d.ownership = o ? OWN[o] : null; }
     if (ctx.present.has('status')) { const s = cellStr(row.status)?.toLowerCase(); if (s && !ST[s]) return 'invalid_value'; d.status = s ? ST[s] : null; }
+    // a branch the company does not have is an error, not created here (that would go round the plan)
+    if (ctx.present.has('branch')) {
+      const found = await importOrgId(ctx.cache, 'branches', cellStr(row.branch, 100));
+      if (found === false) return 'unknown_branch';
+      if (found) d.branch_id = found;
+    }
     return { line: 0, key: plateKey(plate), data: normalizeVehicle(d), label: plate };
   },
   async existing(items) {
@@ -239,7 +262,7 @@ const vehicleImport: ImportDef = {
       await withQuota('vehicles', comesBack('vehicles', ex.status, values.status) ? 1 : 0, () => exec('UPDATE vehicles SET ? WHERE id = ?', [values, ex.id]));
       return 'replaced';
     }
-    await exec('INSERT INTO vehicles SET ?', [values]);
+    await exec('INSERT INTO vehicles SET ?', [await withVehicleDefaults(values, ctx.cache)]);
     return 'inserted';
   },
 };
@@ -408,7 +431,7 @@ fleetRouter.post('/operation-cards', can('operation_cards.create'), async (req, 
       if (!has(req, 'vehicles.create')) fail(403, 'forbidden', { perm: 'vehicles.create' });
       const v = normalizeVehicle(clean({ vehicle_type: 'car', ...body.new_vehicle }, VEHICLE_RULES));
       await vehicleUnique(v);
-      vehicleIds.push((await exec('INSERT INTO vehicles SET ?', [v])).insertId);
+      vehicleIds.push((await exec('INSERT INTO vehicles SET ?', [await withVehicleDefaults(v)])).insertId);
     } else if (body.vehicle_id) vehicleIds.push(Number(body.vehicle_id));
     vehicleIds = [...new Set([...vehicleIds, ...(body.more_vehicles ?? []).map(Number)])];
     return createCard(req, body, vehicleIds);

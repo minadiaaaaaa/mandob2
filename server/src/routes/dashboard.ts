@@ -74,7 +74,7 @@ const REPORTS: Record<string, Report> = {
       select: `v.plate, v.plate_en, v.maker, v.model, v.color, v.year, v.registration_type, v.ownership, v.status, oc.number card, oc.expiry_date card_expiry, vi.expiry_date insurance_expiry,
         DATEDIFF(oc.expiry_date, '${day}') card_days, DATEDIFF(vi.expiry_date, '${day}') ins_days`,
       search: ['v.plate', 'v.plate_en', 'v.maker', 'v.model'],
-      filters: { status: eq('v.status'), ownership: eq('v.ownership'), maker: eq('v.maker') },
+      filters: { status: eq('v.status'), ownership: eq('v.ownership'), maker: eq('v.maker'), branch: eq('v.branch_id') },
       sorts: { plate: 'v.plate' }, defaultSort: 'plate',
     }),
     stats: (rows) => [['rep.v.vehicles', rows.length], ['rep.v.active', rows.filter((r) => r.status === 'active').length], ['rep.v.owned', rows.filter((r) => r.ownership === 'owned').length], ['rep.v.rented', rows.filter((r) => r.ownership === 'rented').length]],
@@ -88,7 +88,7 @@ const REPORTS: Record<string, Report> = {
       from: 'FROM riders r LEFT JOIN cities ci ON ci.id = r.city_id',
       select: 'r.id, r.full_name, r.alias, r.national_id, r.nationality, r.occupation, r.phone, ci.name_ar city_ar, ci.name_en city_en, r.status, r.hire_date',
       search: [digitsOrLike(['r.full_name', 'r.alias', 'r.national_id', 'r.phone'], 'r.id')],
-      filters: { status: eq('r.status'), city: eq('r.city_id') },
+      filters: { status: eq('r.status'), city: eq('r.city_id'), branch: eq('r.branch_id') },
       sorts: { name: 'r.full_name' }, defaultSort: 'name',
     }),
     stats: (rows) => [['rep.r.riders', rows.length], ['rep.r.active', rows.filter((r) => r.status === 'active').length], ['rep.r.inactive', rows.filter((r) => r.status !== 'active').length]],
@@ -105,6 +105,7 @@ const REPORTS: Record<string, Report> = {
         search: ['a.owner', 'a.number'],
         filters: {
           kind: eq('a.kind'),
+          branch: eq('a.branch_id'),
           validity: (v) => ({ expired: `${days} < 0`, near: `${days} BETWEEN 0 AND ${win}`, valid: `${days} > ${win}` } as Record<string, string>)[v] ?? null,
           // "Within (days)" alone: what has this many days left or fewer, with the expired
           within: (_v, q) => (q.validity ? null : `${days} <= ${win}`),
@@ -127,7 +128,7 @@ const REPORTS: Record<string, Report> = {
         (SELECT MIN(due_date) FROM advance_installments WHERE advance_id = a.id AND status IN ('due','partial')) next_due`,
       search: [digitsOrLike(['r.full_name', 'a.number', 'r.national_id'], 'r.id')],
       filters: {
-        status: eq('a.status'), from: (v) => ['a.request_date >= ?', [v]], to: (v) => ['a.request_date <= ?', [v]],
+        status: eq('a.status'), branch: eq('r.branch_id'), from: (v) => ['a.request_date >= ?', [v]], to: (v) => ['a.request_date <= ?', [v]],
         overdue: (v) => (v === 'yes' ? `EXISTS (SELECT 1 FROM advance_installments i WHERE i.advance_id = a.id AND i.status IN ('due','partial') AND i.due_date < '${day}')` : null),
       },
       sorts: { date: 'a.request_date' }, defaultSort: '-date',

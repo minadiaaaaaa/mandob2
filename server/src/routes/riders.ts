@@ -9,6 +9,7 @@ import { removeAttachment } from '../files.js';
 import { cellDate, cellStr, importRoutes, type ImportDef } from '../importer.js';
 import { NOT_COUNTED, comesBack, ensureQuota, withQuota } from '../domain/quotas.js';
 import { RIDER_STATUSES } from '../domain/rules.js';
+import { checkBranch, checkDesignation, importOrgId, withRiderDefaults } from '../domain/branches.js';
 
 export const ridersRouter = Router();
 
@@ -99,23 +100,28 @@ const riderRules = {
   account_holder_phone: { type: 'phone' as const, max: 30 }, email: { type: 'email' as const, max: 150 }, language: { enum: ['ar', 'en', 'bn'] },
   nationality: { max: 100 }, birth_date: { type: 'date' as const }, birth_place: { max: 150 },
   blood_type: { enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] }, notes: { max: 500 },
+  branch_id: { type: 'int' as const }, designation_id: { type: 'int' as const },
 };
 
 function riderSpec(day: string): Spec {
   return {
     from: `FROM riders r
       LEFT JOIN companies co ON co.id = r.company_id LEFT JOIN contracts k ON k.id = r.contract_id LEFT JOIN cities ci ON ci.id = r.city_id
+      LEFT JOIN branches br ON br.id = r.branch_id LEFT JOIN designations dg ON dg.id = r.designation_id
       LEFT JOIN vehicle_assignments va ON va.rider_id = r.id AND va.is_current = 1 LEFT JOIN vehicles v ON v.id = va.vehicle_id
       LEFT JOIN (SELECT rider_id, GROUP_CONCAT(DISTINCT doc_type) types, SUM(expiry_date < '${day}') expired
         FROM rider_documents WHERE is_current = 1 GROUP BY rider_id) d ON d.rider_id = r.id`,
     select: `r.id, r.full_name, r.name_en, r.alias, r.national_id, r.phone, r.status, r.company_id, co.name company_name, k.name contract_name,
-      ci.name_ar city_ar, ci.name_en city_en, v.id vehicle_id, v.plate vehicle_plate, d.types doc_types, COALESCE(d.expired, 0) docs_expired, r.hire_date, r.nationality`,
+      ci.name_ar city_ar, ci.name_en city_en, v.id vehicle_id, v.plate vehicle_plate, d.types doc_types, COALESCE(d.expired, 0) docs_expired, r.hire_date, r.nationality,
+      r.branch_id, br.name_ar branch_ar, br.name_en branch_en, r.designation_id, dg.name_ar designation_ar, dg.name_en designation_en`,
     search: ['r.full_name', 'r.name_en', 'r.alias', 'CAST(r.id AS CHAR)', 'r.phone', 'r.account_holder_phone', 'r.national_id',
       'r.id IN (SELECT rider_id FROM rider_documents WHERE doc_number LIKE ?)'],
     filters: {
       company: (v) => v === 'none' ? 'r.company_id IS NULL' : ['r.company_id = ?', [v]],
       contract: (v) => v === 'none' ? 'r.contract_id IS NULL' : ['r.contract_id = ?', [v]],
       city: eq('r.city_id'),
+      branch: eq('r.branch_id'),
+      designation: eq('r.designation_id'),
       status: inList('r.status'),
       vehicle: (v) => v === 'yes' ? 'va.id IS NOT NULL' : 'va.id IS NULL',
       vehicle_type: eq('v.vehicle_type'),
@@ -164,7 +170,7 @@ ridersRouter.get('/riders/export', can('riders.export'), async (req, res) => {
       { key: 'birth_date', label: 'riders.birth_date' }, { key: 'birth_place', label: 'riders.birth_place' }, { key: 'blood_type', label: 'riders.blood_type' },
       { key: 'phone', label: 'riders.phone' }, { key: 'account_holder_phone', label: 'riders.account_holder_phone' }, { key: 'email', label: 'riders.email' },
       { key: 'language', label: 'riders.language' }, { key: 'company_name', label: 'riders.company' }, { key: 'contract_name', label: 'riders.contract' },
-      { key: 'city_ar', label: 'riders.city' }, { key: 'vehicle_plate', label: 'riders.vehicle' }, { key: 'occupation', label: 'riders.occupation' },
+      { key: 'city_ar', label: 'riders.city' }, { key: 'branch_ar', label: 'riders.branch' }, { key: 'designation_ar', label: 'riders.designation' }, { key: 'vehicle_plate', label: 'riders.vehicle' }, { key: 'occupation', label: 'riders.occupation' },
       { key: 'hire_date', label: 'riders.hire_date' }, { key: 'status', label: 'riders.status_col', value: (r) => STATUS[r.status] }, { key: 'notes', label: 'riders.notes' },
     ],
   });
@@ -173,8 +179,10 @@ ridersRouter.get('/riders/export', can('riders.export'), async (req, res) => {
 // ---------- one rider ----------
 async function riderProfile(req: Request, id: number) {
   const r = await one<any>(`SELECT r.*, co.name company_name, co.email company_email, co.operator_id, k.name contract_name, ci.name_ar city_ar, ci.name_en city_en,
-      va.id assignment_id, va.start_date assigned_since, v.id vehicle_id, v.plate vehicle_plate, v.maker vehicle_maker, v.model vehicle_model
+      va.id assignment_id, va.start_date assigned_since, v.id vehicle_id, v.plate vehicle_plate, v.maker vehicle_maker, v.model vehicle_model,
+      br.name_ar branch_ar, br.name_en branch_en, dg.name_ar designation_ar, dg.name_en designation_en
     FROM riders r LEFT JOIN companies co ON co.id = r.company_id LEFT JOIN contracts k ON k.id = r.contract_id LEFT JOIN cities ci ON ci.id = r.city_id
+    LEFT JOIN branches br ON br.id = r.branch_id LEFT JOIN designations dg ON dg.id = r.designation_id
     LEFT JOIN vehicle_assignments va ON va.rider_id = r.id AND va.is_current = 1 LEFT JOIN vehicles v ON v.id = va.vehicle_id WHERE r.id = ?`, [id]);
   if (!r) fail(404, 'rider_not_found');
   delete r.portal_password_hash;
@@ -213,6 +221,8 @@ async function checkRider(v: Record<string, any>, id: number, current?: any) {
     const k = await one<any>('SELECT company_id FROM contracts WHERE id = ?', [contract]);
     if (!k || k.company_id !== company) fieldError('contract_id', 'contract_other_company');
   }
+  await checkBranch(v.branch_id, 'branch_id', current?.branch_id);
+  await checkDesignation(v.designation_id, 'designation_id', current?.designation_id);
 }
 
 ridersRouter.post('/riders', can('riders.create'), async (req, res) => {
@@ -225,7 +235,7 @@ ridersRouter.post('/riders', can('riders.create'), async (req, res) => {
   if (taken) fieldError('id', 'rider_id_taken', { name: taken.full_name });
   await checkRider(v, id);
   await tx(async () => {
-    await exec('INSERT INTO riders SET ?', [{ ...v, id, status: v.status ?? 'active' }]);
+    await exec('INSERT INTO riders SET ?', [await withRiderDefaults({ ...v, id, status: v.status ?? 'active' })]);
     if (body.vehicle_id) await assignVehicle(req, id, Number(body.vehicle_id), v.hire_date ?? undefined);
   });
   await audit(req, { action: 'rider.create', entity_type: 'rider', entity_id: id, after: v });
@@ -272,7 +282,10 @@ async function blockers(ids: number[]) {
     SELECT rider_id, 'documents' what, COUNT(*) n FROM rider_documents WHERE rider_id IN (?) GROUP BY rider_id UNION ALL
     SELECT rider_id, 'assignments', COUNT(*) FROM vehicle_assignments WHERE rider_id IN (?) GROUP BY rider_id UNION ALL
     SELECT rider_id, 'fuel_cards', COUNT(*) FROM fuel_cards WHERE rider_id IN (?) GROUP BY rider_id UNION ALL
-    SELECT user_rider_id, 'registrations', COUNT(*) FROM vehicle_registrations WHERE user_rider_id IN (?) GROUP BY user_rider_id`, [ids, ids, ids, ids]);
+    SELECT user_rider_id, 'registrations', COUNT(*) FROM vehicle_registrations WHERE user_rider_id IN (?) GROUP BY user_rider_id UNION ALL
+    SELECT r.id, 'platform_ids', COUNT(*) FROM riders r JOIN platform_ids p ON p.owner_rider_id = r.id OR p.worker_rider_id = r.id WHERE r.id IN (?) GROUP BY r.id UNION ALL
+    SELECT r.id, 'platform_id_history', COUNT(*) FROM riders r JOIN platform_id_transfers x ON x.from_rider_id = r.id OR x.to_rider_id = r.id WHERE r.id IN (?) GROUP BY r.id`,
+  [ids, ids, ids, ids, ids, ids]);
 }
 async function deleteRiders(req: Request, ids: number[]) {
   if (!ids.length) fail(422, 'nothing_selected');
@@ -302,9 +315,12 @@ ridersRouter.post('/riders/bulk-edit', can('riders.update'), async (req, res) =>
   if (ids.length > 200) fail(422, 'max_200');
   const changes = clean(req.body.changes ?? {}, {
     company_id: { type: 'int' }, contract_id: { type: 'int' }, city_id: { type: 'int' }, status: { enum: [...RIDER_STATUSES] },
+    branch_id: { type: 'int' }, designation_id: { type: 'int' },
   }, true);
   for (const [k, val] of Object.entries(changes)) if (val === null) fieldError(k, 'choose_value');
   if (!Object.keys(changes).length) fail(422, 'no_field_chosen');
+  await checkBranch(changes.branch_id);
+  await checkDesignation(changes.designation_id);
   if (changes.contract_id) {
     const k = await one<any>('SELECT company_id FROM contracts WHERE id = ?', [changes.contract_id]);
     if (!k) fieldError('contract_id', 'invalid');
@@ -362,6 +378,7 @@ function docSpec(type: DocType, day: string, windowDays: number): Spec {
       },
       company: eq('r.company_id'),
       city: eq('r.city_id'),
+      branch: eq('r.branch_id'),
       in_force: (v) => v === 'superseded' ? 'd.is_current = 0' : v === 'current' ? 'd.is_current = 1' : null,
     },
     sorts: { rider: 'r.full_name', expiry: 'd.expiry_date', remaining: `${days} IS NULL, ${days}` },
@@ -435,6 +452,7 @@ export const riderImport: ImportDef = {
     account_holder_phone: ['riders.account_holder_phone'], email: ['riders.email', 'email'], language: ['riders.language'],
     company: ['riders.company', 'company'], contract: ['riders.contract', 'contract', 'contract name'], city: ['riders.city', 'city'],
     status: ['riders.status_col', 'status'], vehicle: ['riders.vehicle', 'vehicle', 'plate'],
+    branch: ['riders.branch', 'branch'], designation: ['riders.designation', 'designation', 'job title'],
   },
   requiredColumns: [['id', 'national_id']],
   async parse(row, ctx) {
@@ -460,6 +478,13 @@ export const riderImport: ImportDef = {
       const cid = await byName('contracts', 'name', n, ctx, data.company_id ? `AND company_id = ${Number(data.company_id)}` : '');
       if (n && !cid) warnings.push(`contract:${n}`);
       data.contract_id = cid || null;
+    }
+    // a branch or job title the company does not have is an error, not created here (that would go round the plan)
+    for (const [col, kind, field] of [['branch', 'branches', 'branch_id'], ['designation', 'designations', 'designation_id']] as const) {
+      if (!ctx.present.has(col)) continue;
+      const found = await importOrgId(ctx.cache, kind, cellStr(row[col], 100));
+      if (found === false) return `unknown_${col}`;
+      if (found) data[field] = found;
     }
     return { line: 0, key: id ? `id:${id}` : `nid:${nid}`, data: { ...data, _id: id ? Number(id) : null }, label: data.full_name ?? '', warnings };
   },
@@ -498,7 +523,7 @@ export const riderImport: ImportDef = {
     }
     if (!_id) return 'failed';            // matched on ID number and not registered: needs a rider id
     if (!values.full_name) return 'failed'; // the full name is required for a new rider
-    await exec('INSERT INTO riders SET ?', [{ status: 'active', ...values, id: _id }]);
+    await exec('INSERT INTO riders SET ?', [await withRiderDefaults({ status: 'active', ...values, id: _id }, ctx.cache)]);
     return 'inserted';
   },
 };

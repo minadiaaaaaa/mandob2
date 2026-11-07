@@ -7,6 +7,7 @@ import { fmtDateTime, fmtNum, useI18n } from '../../i18n';
 import { Badge, Button, Card, Checkbox, cx, PageHeader, SidePanel, StatCard, StatGrid, useAction, useUi, type Tone } from '../../ui/kit';
 import { DataTable, FilterBar, FilterSelect, useList, type Column } from '../../ui/table';
 import { ImportWizard } from '../../ui/importer';
+import { useOrgOptions } from '../system/Branches';
 import { ExportButton } from '../../ui/common';
 
 export const SEG_TONE: Record<string, Tone> = { A: 'green', B: 'green', C: 'blue', D: 'amber', E: 'amber', F: 'red' };
@@ -25,6 +26,7 @@ export function RatingsList() {
   const run = useAction();
   const { confirm } = useUi();
   const list = useList('/ratings');
+  const branches = useOrgOptions('branches', true);
   const [cols, setCols] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('lsp.rat.cols') ?? '') ?? DEFAULT; } catch { return DEFAULT; } });
   const [picking, setPicking] = useState(false);
   useEffect(() => { try { localStorage.setItem('lsp.rat.cols', JSON.stringify(cols)); } catch { /* ignore */ } }, [cols]);
@@ -71,6 +73,7 @@ export function RatingsList() {
       )}
       <FilterBar list={list} placeholder={t('rat.search_hint')}>
         <FilterSelect list={list} name="month" label={t('rat.month')} allLabel={d?.month ?? t('common.all')} options={(d?.months ?? []).map((m: any) => ({ value: m.month, label: `${m.month} (${m.n})` }))} />
+        <FilterSelect list={list} name="branch" label={t('riders.branch')} options={branches} />
         <FilterSelect list={list} name="segment" label={t('rat.segment')} options={['A', 'B', 'C', 'D', 'E', 'F'].map((x) => ({ value: x, label: `${x} — ${t(`rat.seg.${x}`)}` }))} />
       </FilterBar>
       <DataTable list={list} columns={columns} onRowClick={(r) => nav(`/admin/riders/${r.rider_id}`)} selectable={can('ratings.delete')}

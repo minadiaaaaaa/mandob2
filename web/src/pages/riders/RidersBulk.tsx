@@ -4,6 +4,7 @@ import { post } from '../../api';
 import { useI18n } from '../../i18n';
 import { Alert, Button, Card, Checkbox, Field, PageHeader, useErrorText, useUi } from '../../ui/kit';
 import { ImportWizard } from '../../ui/importer';
+import { useOrgOptions } from '../system/Branches';
 import { useCityName, useOptions, useRules } from '../../ui/common';
 
 // Bulk edit: change what repeats across the selected riders. A field that is not ticked stays as it is.
@@ -22,6 +23,8 @@ export function RidersBulkEdit() {
   const companies = useOptions<any>('/lookups/companies');
   const contracts = useOptions<any>(on.company_id && v.company_id ? `/lookups/contracts?company=${v.company_id}` : '/lookups/contracts');
   const cities = useOptions<any>('/lookups/cities');
+  const branches = useOrgOptions('branches');
+  const designations = useOrgOptions('designations');
   // Opened without a selection (e.g. after a refresh): back to the list.
   if (!loc.state?.ids?.length) return <Navigate to="/admin/riders" replace />;
   const { ids, names } = loc.state;
@@ -29,6 +32,8 @@ export function RidersBulkEdit() {
     ['company_id', t('riders.company'), companies.map((c: any) => [c.id, c.name])],
     ['contract_id', t('riders.contract'), contracts.map((c: any) => [c.id, c.name])],
     ['city_id', t('riders.city'), cities.map((c: any) => [c.id, city(c)])],
+    ['branch_id', t('riders.branch'), branches.map((o) => [o.value, o.label])],
+    ['designation_id', t('riders.designation'), designations.map((o) => [o.value, o.label])],
     ['status', t('riders.status'), (rules?.statuses.rider ?? []).map((s) => [s, t(`rider.status.${s}`)])],
   ] as [string, string, [string | number, string][]][];
   const chosen = fields.filter(([k]) => on[k]);

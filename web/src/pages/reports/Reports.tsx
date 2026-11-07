@@ -7,6 +7,7 @@ import { fmtDateTime, fmtNum, useI18n } from '../../i18n';
 import { Alert, Badge, Button, Card, Checkbox, cx, Details, IconButton, Loading, PageHeader, SidePanel, StatCard, StatGrid, useAction, useUi, type Tone } from '../../ui/kit';
 import { DataTable, FilterBar, FilterDate, FilterSelect, useList, type Column } from '../../ui/table';
 import { ExportButton, useCityName, useOptions, useRules } from '../../ui/common';
+import { useOrgOptions } from '../system/Branches';
 import { useNoteText } from '../../ui/notes';
 
 // ======================================================================== 9.2 reports
@@ -44,6 +45,7 @@ export function ReportView() {
   const [d, setD] = useState<any>(null);
   const [term, setTerm] = useState(query.search ?? '');
   const cities = useOptions<any>(name === 'riders' ? '/lookups/cities' : null);
+  const branches = useOrgOptions('branches', true);
   const load = () => { setD(null); get(`/reports/${name}`, query).then(setD).catch(() => setD({ rows: [], stats: {}, error: true })); };
   useEffect(load, [name, params.toString()]); // eslint-disable-line react-hooks/exhaustive-deps
   const set = (k: string, v: string | null) => { const n = new URLSearchParams(params); v ? n.set(k, v) : n.delete(k); setParams(n, { replace: true }); };
@@ -93,6 +95,7 @@ export function ReportView() {
       <Card title={t('rep.search')} className="mb-4">
         <div className="flex flex-wrap items-center gap-2">
           <input type="search" className="input w-72" placeholder={t('rep.type_enter')} value={term} onChange={(e) => setTerm(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') set('search', term || null); }} />
+          {['vehicles', 'riders', 'documents', 'advances'].includes(name) && sel('branch', t('riders.branch'), branches.map((b) => ({ value: String(b.value), label: b.label })))}
           {name === 'vehicles' && <>{sel('status', t('vehicles.status'), (rules?.statuses.vehicle ?? []).map((v) => ({ value: v, label: t(`vehicle.status.${v}`) })))}
             {sel('ownership', t('vehicles.ownership'), ['owned', 'rented'].map((v) => ({ value: v, label: t(`vehicle.own.${v}`) })))}
             {sel('maker', t('vehicles.maker'), (d?.facets?.makers ?? []).map((m: string) => ({ value: m, label: m })))}</>}

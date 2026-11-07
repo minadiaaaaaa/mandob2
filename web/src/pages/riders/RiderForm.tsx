@@ -8,10 +8,12 @@ import { Alert, Badge, Button, Card, Field, Loading, PageHeader } from '../../ui
 import { ComboInput, Grid, SaveBar, SelectInput, TextArea, TextInput, useFieldError, useForm, type ComboOption } from '../../ui/forms';
 import { ScanUpload, type Scan } from '../../ui/files';
 import { Remaining, useCityName, useOptions, type ExpiryKind, useRules } from '../../ui/common';
+import { useOrgOptions } from '../system/Branches';
 import { DOC_MODULE, DOC_TYPES, type DocType } from './shared';
 
 const EMPTY = { id: '', full_name: '', name_en: '', alias: '', national_id: '', status: 'active', company_id: '', contract_id: '', city_id: '', hire_date: '',
-  occupation: '', phone: '', account_holder_phone: '', email: '', language: '', nationality: '', birth_date: '', birth_place: '', blood_type: '', notes: '', vehicle_id: '' };
+  occupation: '', phone: '', account_holder_phone: '', email: '', language: '', nationality: '', birth_date: '', birth_place: '', blood_type: '', notes: '', vehicle_id: '',
+  branch_id: '', designation_id: '' };
 
 type DocField = { name: string; label: string; req?: boolean; type?: 'date' | 'select' | 'text'; options?: { value: string; label: string }[]; dir?: 'ltr'; hint?: string };
 type DocState = { open: boolean; values: Record<string, string>; scan: Scan | null };
@@ -33,6 +35,8 @@ export default function RiderForm() {
   const companies = useOptions<any>(`/lookups/companies${editing ? '?all=1' : ''}`);
   const contracts = useOptions<any>(form.values.company_id ? `/lookups/contracts?company=${form.values.company_id}` : null);
   const cities = useOptions<any>('/lookups/cities');
+  const branches = useOrgOptions('branches', editing);
+  const designations = useOrgOptions('designations', editing);
   const nationalities = useOptions<string>('/lookups/nationalities');
   const vehicles = useOptions<any>('/riders-vehicle-options');
   const licenses = useOptions<any>(can('transport_licenses.view', 'driver_cards.view') ? '/transport-licenses/options' : null);
@@ -194,6 +198,8 @@ export default function RiderForm() {
           </Card>
           <Card title={t('riders.sec.operations')}>
             <Grid>
+              <SelectInput form={form} name="branch_id" label={t('riders.branch')} options={branches} empty={editing ? false : t('riders.default_branch')} />
+              <SelectInput form={form} name="designation_id" label={t('riders.designation')} options={designations} empty={editing ? false : t('riders.default_designation')} />
               <SelectInput form={form} name="company_id" label={t('riders.operating_company')} options={companies.map((c: any) => ({ value: c.id, label: c.is_active ? c.name : `${c.name} (${t('common.disabled')})` }))} />
               <SelectInput form={form} name="contract_id" label={t('riders.contract')} disabled={!form.values.company_id} hint={!form.values.company_id ? t('riders.choose_company_first') : undefined}
                 options={contracts.map((c: any) => ({ value: c.id, label: c.name }))} />

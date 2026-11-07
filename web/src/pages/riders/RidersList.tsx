@@ -5,18 +5,21 @@ import { useAuth } from '../../auth';
 import { fmtNum, useI18n } from '../../i18n';
 import { Alert, Button, IconButton, PageHeader, StatCard, StatGrid, toneIf, useAction, useUi } from '../../ui/kit';
 import { DataTable, FilterBar, FilterDate, FilterSelect, useList, type Column } from '../../ui/table';
-import { ExportButton, useCityName, useOptions, useRules } from '../../ui/common';
+import { ExportButton, localName, useCityName, useOptions, useRules } from '../../ui/common';
 import { DOC_TYPES, DocMark, MissingDocs, RiderStatus } from './shared';
+import { useOrgOptions } from '../system/Branches';
 import { PausedMark, PlanCounter } from '../../ui/plan';
 
 export default function RidersList() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const rules = useRules(); // statuses come from the server (GET /meta/rules)
   const { can } = useAuth();
   const nav = useNavigate();
   const run = useAction();
   const { confirm } = useUi();
   const city = useCityName();
+  const branches = useOrgOptions('branches', true);
+  const designations = useOrgOptions('designations', true);
   const list = useList('/riders');
   const companies = useOptions<any>('/lookups/companies');
   const contracts = useOptions<any>(`/lookups/contracts${list.query.company && list.query.company !== 'none' ? `?company=${list.query.company}` : ''}`);
@@ -45,6 +48,7 @@ export default function RidersList() {
     { key: 'phone', header: t('riders.phone'), render: (r) => <span className="num">{r.phone ?? '—'}</span> },
     { key: 'company', header: t('riders.company'), render: (r) => r.company_name ?? '—' },
     { key: 'city', header: t('riders.city'), render: (r) => (r.city_ar ? city(r) : '—') },
+    { key: 'branch', header: t('riders.branch'), render: (r) => <div>{localName(lang, r.branch_ar, r.branch_en)}<div className="text-xs text-zinc-500">{r.designation_ar ? localName(lang, r.designation_ar, r.designation_en) : ''}</div></div> },
     { key: 'vehicle', header: t('riders.vehicle'), render: (r) => <span className="whitespace-nowrap">{r.vehicle_plate ?? '—'}</span> },
     { key: 'status', header: t('riders.status'), render: (r) => <RiderStatus s={r.status} /> },
     { key: 'actions', header: t('common.actions'), render: (r) => (
@@ -78,6 +82,8 @@ export default function RidersList() {
       <FilterBar list={list} placeholder={t('riders.search_hint')}>
         <FilterSelect list={list} name="company" label={t('riders.company')} options={companies.map((c: any) => ({ value: c.id, label: c.name }))} />
         <FilterSelect list={list} name="contract" label={t('riders.contract')} options={contracts.map((c: any) => ({ value: c.id, label: c.name }))} />
+        <FilterSelect list={list} name="branch" label={t('riders.branch')} options={branches} />
+        <FilterSelect list={list} name="designation" label={t('riders.designation')} options={designations} />
         <FilterSelect list={list} name="city" label={t('riders.city')} options={cities.map((c: any) => ({ value: c.id, label: city(c) }))} />
         <FilterSelect list={list} name="status" label={t('riders.status')} options={(rules?.statuses.rider ?? []).map((v) => ({ value: v, label: t(`rider.status.${v}`) }))} />
         <FilterSelect list={list} name="vehicle" label={t('riders.vehicle')} options={[{ value: 'yes', label: t('riders.has_vehicle') }, { value: 'no', label: t('riders.no_vehicle') }]} />

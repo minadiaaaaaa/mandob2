@@ -3,6 +3,7 @@ import { exec, one, q, tx } from '../db.js';
 import { clean, eq, fail, fieldError, inList, list, listAll, sendExport, today, where, type Query, type Spec, mustExist } from '../http.js';
 import { can } from '../auth.js';
 import { audit } from '../audit.js';
+import { withRiderDefaults } from '../domain/branches.js';
 import { cellBool, cellDate, cellNum, cellStr, importRoutes, type ImportDef } from '../importer.js';
 
 export const applicantsRouter = Router();
@@ -169,10 +170,10 @@ applicantsRouter.post('/applicants/:id/hire', can('applicants.hire'), can('rider
   const city = req.body.city_id ? Number(req.body.city_id) : a.city_id;
   const day = await today();
   await tx(async () => {
-    await exec('INSERT INTO riders SET ?', [{
+    await exec('INSERT INTO riders SET ?', [await withRiderDefaults({
       id: riderId, full_name: a.full_name, name_en: a.name_en, national_id: a.national_id, nationality: a.nationality, birth_date: a.birth_date,
       phone: a.phone, city_id: city, status: 'active', hire_date: day, notes: [a.notes, `Application #${a.id}`].filter(Boolean).join(' — ').slice(0, 500),
-    }]);
+    })]);
     await exec("UPDATE applicants SET status = 'hired', rider_id = ?, reviewed_by = ?, reviewed_at = UTC_TIMESTAMP() WHERE id = ?", [riderId, req.user!.id, a.id]);
   });
   await audit(req, { action: 'applicant.hire', entity_type: 'applicant', entity_id: a.id, after: { rider_id: riderId } });

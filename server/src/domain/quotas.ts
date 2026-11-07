@@ -17,6 +17,7 @@ const isOff = (kind: QuotaKind, v: unknown) => {
 // own, instead of the snapshot an earlier read in the same transaction would otherwise pin.
 export async function used(kind: QuotaKind, locking = false) {
   const quota = QUOTAS[kind];
+  // a locking read sees the latest rows (tenancy.ts filters a locked table in the WHERE, not in a snapshot read)
   const n = Number((await q<{ n: number }>(`SELECT COUNT(*) n FROM ${quota.table} WHERE ${quota.counted}${locking ? ' LOCK IN SHARE MODE' : ''}`))[0].n);
   // the company owner's own account is not one of the plan's staff places
   return quota.owner ? Math.max(0, n - 1) : n;
@@ -59,7 +60,7 @@ export function insertedCount(kind: QuotaKind, parameters: unknown[]) {
 setInsertGuard(async (table, parameters) => {
   const kind = kindOfTable(table);
   if (kind) await ensureQuota(kind, insertedCount(kind, parameters));
-});
+}, QUOTA_KINDS.map((k) => QUOTAS[k].table));
 
 // ---------- "data access paused": the records above a limit, after a plan ends or gets smaller ----------
 // Nothing is deleted. The oldest records up to the limit stay open; the newer ones are paused until the company

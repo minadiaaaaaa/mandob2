@@ -13,6 +13,8 @@ export const MATRIX: Record<string, Record<string, string[]>> = {
     drivers: ['view', 'create', 'update', 'delete'],
     renewals: ['view', 'create', 'update', 'delete', 'export', 'print', 'upload', 'download'],
     applicants: ['view', 'create', 'update', 'delete', 'export', 'import', 'hire'],
+    // platform IDs (phase 3): owner, worker, status; `transfer` moves the work to another rider
+    platform_ids: ['view', 'create', 'update', 'delete', 'transfer', 'export', 'import'],
     rider_portal: ['view_requests', 'review_requests', 'view_issues', 'manage_issues', 'manage_portal'],
     finance: ['view', 'import', 'manage'],
     absences: ['view', 'import', 'manage'],
@@ -63,7 +65,11 @@ export const MATRIX: Record<string, Record<string, string[]>> = {
     sessions: ['view', 'delete'],
     blocked_ips: ['view', 'create', 'update', 'delete'],
   },
-  lookups: { cities: ['view', 'create', 'update', 'delete', 'export', 'import'] },
+  lookups: {
+    cities: ['view', 'create', 'update', 'delete', 'export', 'import'],
+    branches: ['view', 'create', 'update', 'delete', 'activate', 'deactivate', 'export'],
+    designations: ['view', 'create', 'update', 'delete', 'activate', 'deactivate', 'export'],
+  },
   system: {
     organization: ['view', 'update', 'upload', 'download'],
     system_settings: ['view', 'update'],

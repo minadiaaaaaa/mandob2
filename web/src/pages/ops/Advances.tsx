@@ -7,6 +7,7 @@ import { fmtDate, fmtDateTime, fmtMoney, fmtNum, useI18n } from '../../i18n';
 import { Alert, Badge, Button, By, Card, Details, Field, IconButton, Loading, Modal, PageHeader, StatCard, StatGrid, toneIf, useAction, useUi, type Tone } from '../../ui/kit';
 import { Grid, RiderFilter, RiderInput, SaveBar, SelectInput, TextArea, TextInput, useForm } from '../../ui/forms';
 import { DataTable, FilterBar, FilterDate, FilterSelect, useList, type Column } from '../../ui/table';
+import { useOrgOptions } from '../system/Branches';
 import { ExportButton, latin, useOptions } from '../../ui/common';
 
 export const ADV_TONE: Record<string, Tone> = { pending: 'blue', approved: 'blue', rejected: 'grey', disbursed: 'amber', repaying: 'amber', settled: 'green', cancelled: 'grey' };
@@ -64,6 +65,7 @@ export function AdvancesList() {
   const run = useAction();
   const { confirm } = useUi();
   const list = useList('/advances');
+  const branches = useOrgOptions('branches', true);
   const companies = useOptions<any>('/lookups/companies');
   const s = list.stats ?? {};
   const quick = async (r: any, action: 'approve' | 'disburse') => {
@@ -102,6 +104,7 @@ export function AdvancesList() {
       </StatGrid>
       <FilterBar list={list} placeholder={t('adv.search_hint')}>
         <FilterSelect list={list} name="status" label={t('adv.status')} options={Object.keys(ADV_TONE).map((k) => ({ value: k, label: t(`adv.s.${k}`) }))} />
+        <FilterSelect list={list} name="branch" label={t('riders.branch')} options={branches} />
         <FilterSelect list={list} name="company" label={t('adv.company')} options={companies.map((c: any) => ({ value: c.id, label: c.name }))} />
         <FilterSelect list={list} name="overdue" label={t('adv.overdue_only')} options={[{ value: '1', label: t('common.yes') }]} />
         <RiderFilter list={list} name="rider" />
@@ -226,6 +229,7 @@ export function AdvancesDue() {
   const nav = useNavigate();
   const timing = useTiming();
   const list = useList('/advances/due');
+  const branches = useOrgOptions('branches', true);
   const companies = useOptions<any>('/lookups/companies');
   const inst = useInstallmentActions(list.reload);
   const s = list.stats ?? {};
@@ -255,6 +259,7 @@ export function AdvancesDue() {
         <StatCard label={t('adv.c.overdue_value')} value={fmtMoney(s.overdue_value)} tone={toneIf(s.overdue_value, 'red')} />
       </StatGrid>
       <FilterBar list={list} placeholder={t('adv.search_hint')}>
+        <FilterSelect list={list} name="branch" label={t('riders.branch')} options={branches} />
         <FilterSelect list={list} name="window" label={t('adv.window')} allLabel={t('adv.w.30')} options={[60, 90, 365].map((n) => ({ value: n, label: t(`adv.w.${n}`) }))} />
         <FilterSelect list={list} name="overdue" label={t('adv.overdue_only')} options={[{ value: '1', label: t('common.yes') }]} />
         <FilterSelect list={list} name="company" label={t('adv.company')} options={companies.map((c: any) => ({ value: c.id, label: c.name }))} />

@@ -5,6 +5,7 @@ import { fmtNum, useI18n } from '../../i18n';
 import { Badge, IconButton, PageHeader, StatCard, StatGrid, toneIf } from '../../ui/kit';
 import { DataTable, FilterBar, FilterNumber, FilterSelect, FilterToggles, useList, type Column } from '../../ui/table';
 import { ExportButton, Remaining, useCityName, useOptions, type ExpiryKind } from '../../ui/common';
+import { useOrgOptions } from '../system/Branches';
 import { DOC_MODULE, DOC_SLUG } from './shared';
 
 const STATE_TONE = { expired: 'red', near: 'amber', valid: 'green', none: 'grey' } as const;
@@ -18,6 +19,7 @@ export default function RiderDocuments() {
   const nav = useNavigate();
   const city = useCityName();
   const list = useList(type ? `/rider-documents/${type}` : null);
+  const branches = useOrgOptions('branches', true);
   const companies = useOptions<any>(can('riders.view') ? '/lookups/companies' : null);
   const cities = useOptions<any>(can('riders.view') ? '/lookups/cities' : null);
   if (!type) return null;
@@ -58,6 +60,7 @@ export default function RiderDocuments() {
         <StatCard label={t('docs.s.no_expiry')} value={fmtNum(s.none)} />
       </StatGrid>
       <FilterBar list={list} placeholder={t('docs.search_hint')}>
+        <FilterSelect list={list} name="branch" label={t('riders.branch')} options={branches} />
         <FilterToggles list={list} name="validity" options={[
             { value: 'expired', label: t('docs.state.expired'), tone: 'bg-red-600 text-white ring-red-600' },
             { value: 'near', label: t('docs.state.near'), tone: 'bg-amber-500 text-white ring-amber-500' },

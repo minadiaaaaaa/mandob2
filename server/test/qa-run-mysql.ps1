@@ -27,7 +27,7 @@ function Start-Api {
 }
 function Stop-Api { if ($script:api -and -not $script:api.HasExited) { Stop-Process -Id $script:api.Id -Force; Start-Sleep -Milliseconds 800 } }
 try {
-    Step 'U1-U3 unit tests' { npx tsx --test src/sql.test.ts src/tenancy.test.ts src/http.test.ts }
+    Step 'U1-U3 unit tests' { npx tsx --test src/sql.test.ts src/tenancy.test.ts src/http.test.ts src/importer.test.ts }
     Step 'U4 server typecheck' { npx tsc --noEmit -p . }
     Step 'U5 every route checks a permission or is an explained exception' { node test/route-guard.mjs }
     Step 'U4 web typecheck and build' { Push-Location ..\web; try { npx tsc --noEmit -p .; if ($LASTEXITCODE -eq 0) { node node_modules/vite/bin/vite.js build | Out-Null } } finally { Pop-Location } }
@@ -50,6 +50,8 @@ try {
     Step 'clear the portal guessing of saas-extra' { node --import tsx "--env-file=$qaEnv" test/support/clear-portal-attempts.ts }
     Stop-Api; Start-Api
     Step 'SaaS plans.mjs (phase 1)' { node test/plans.mjs http://127.0.0.1:4100 }
+    Step 'SaaS branches.mjs (phase 2)' { node test/branches.mjs http://127.0.0.1:4100 }
+    Step 'SaaS platform-ids.mjs (phase 3)' { node test/platform-ids.mjs http://127.0.0.1:4100 }
     if ($env:QA_BROWSER_PATH) {
         foreach ($s in @('browser-qa.mjs','browser-details.mjs','browser-write.mjs','browser-public.mjs')) { Step "browser $s" { node "test/$s" http://127.0.0.1:4100 } }
         Stop-Api; Start-Api

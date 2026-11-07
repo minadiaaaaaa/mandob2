@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { scopeTenant } from './tenancy.js';
+import { readFileSync } from 'node:fs';
+import { scopeTenant, TENANT_TABLES } from './tenancy.js';
 
 const s = (sql: string, t: number | null = 7) => scopeTenant(sql, t).sql.replace(/\s+/g, ' ').trim();
 const F = (t: string, a?: string) => `(SELECT * FROM \`${t}\` WHERE \`${t}\`.tenant_id = 7)${a === undefined ? ` AS \`${t}\`` : ''}`;
@@ -50,4 +51,21 @@ test('without a company, touching company data is detected', () => {
   assert.equal(scopeTenant('SELECT * FROM riders', null).touches, true);
   assert.equal(scopeTenant('UPDATE users SET a = 1', null).touches, true);
   assert.equal(scopeTenant('SELECT * FROM cities', null).touches, false);
+});
+
+// a table with a company column that is missing from TENANT_TABLES would be read across companies
+test('every table with tenant_id in schema.sql is scoped, and only those', () => {
+  const schema = readFileSync(new URL('./schema.sql', import.meta.url), 'utf8');
+  const withTenant = [...schema.matchAll(/CREATE TABLE IF NOT EXISTS `?(\w+)`?\s*\(([\s\S]*?)\n\);/g)].filter((m) => /\btenant_id\b/.test(m[2])).map((m) => m[1]);
+  assert.ok(withTenant.includes('branches') && withTenant.includes('designations'));
+  assert.deepEqual([...withTenant].sort(), [...TENANT_TABLES].sort());
+});
+
+// a derived table is read from the transaction's snapshot; a locking read must see the latest rows
+test('a locking SELECT on one company table filters it in the WHERE, not in a derived table', () => {
+  assert.equal(s('SELECT COUNT(*) n FROM riders WHERE status <> 1 LOCK IN SHARE MODE'), 'SELECT COUNT(*) n FROM riders WHERE ( status <> 1 ) AND `riders`.tenant_id = 7 LOCK IN SHARE MODE');
+  assert.equal(s('SELECT is_active FROM branches b WHERE id = 3 FOR UPDATE'), 'SELECT is_active FROM branches b WHERE ( id = 3 ) AND b.tenant_id = 7 FOR UPDATE');
+  assert.equal(s('SELECT id FROM tenants WHERE id = 7 FOR UPDATE'), 'SELECT id FROM tenants WHERE id = 7 FOR UPDATE');
+  // two company tables (a join): both stay derived tables
+  assert.ok(s('SELECT r.id FROM riders r JOIN branches b ON b.id = r.branch_id FOR UPDATE').includes('(SELECT * FROM `branches`'));
 });

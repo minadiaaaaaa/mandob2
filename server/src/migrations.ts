@@ -96,7 +96,41 @@ export const MIGRATIONS: Migration[] = [
       await q("UPDATE tenants SET plan_key = ?, status = 'active', period_ends_at = NULL, billing_cycle = 'monthly', updated_at = UTC_TIMESTAMP() WHERE status = 'expired'", [FREE_PLAN]);
     },
   },
+  {
+    // Phase 2: riders get a branch and a job title, vehicles a branch (tables in schema.sql). The keys include the
+    // company, so a record can only point at a branch of its own company. Filling the existing records with the
+    // company's main branch and "Driver" is done by ensureCompanyDefaults (domain/branches.ts) after the migrations.
+    id: 4, name: 'branches and designations',
+    up: async () => {
+      for (const [table, column, target] of BRANCH_LINKS) {
+        await addColumn(table, column, 'INT NULL');
+        await addIndex(table, `ix_t_${column}`, ['tenant_id', column]);
+        const name = `fk_${table}_${column}`;
+        if (!(await constraintExists(table, name)))
+          await executeScript(`ALTER TABLE ${identifier(table)} ADD CONSTRAINT ${identifier(name)} FOREIGN KEY (tenant_id, ${identifier(column)}) REFERENCES ${identifier(target)} (tenant_id, id)`);
+      }
+    },
+  },
+  {
+    // Phase 3: platform IDs and their transfer history (tables in schema.sql). Owner and worker point at a rider of
+    // the same company, and a transfer at a platform ID of the same company. The transfer rows keep the rider
+    // numbers without a key, so the history outlives nothing it should not: riders with history cannot be deleted
+    // (routes/riders.ts blockers), and the number stays readable either way.
+    id: 5, name: 'platform ids',
+    up: async () => {
+      for (const [table, column, target] of PLATFORM_ID_LINKS) {
+        const name = `fk_${table}_${column}`.slice(0, 64);
+        if (!(await constraintExists(table, name)))
+          await executeScript(`ALTER TABLE ${identifier(table)} ADD CONSTRAINT ${identifier(name)} FOREIGN KEY (tenant_id, ${identifier(column)}) REFERENCES ${identifier(target)} (tenant_id, id)`);
+      }
+    },
+  },
 ];
+// Links to riders added after the baseline (migration 2 keeps its own fixed list, RIDER_LINKS).
+export const PLATFORM_ID_LINKS: [string, string, string][] = [
+  ['platform_ids', 'owner_rider_id', 'riders'], ['platform_ids', 'worker_rider_id', 'riders'], ['platform_id_transfers', 'platform_id', 'platform_ids'],
+];
+const BRANCH_LINKS: [string, string, string][] =[['riders', 'branch_id', 'branches'], ['riders', 'designation_id', 'designations'], ['vehicles', 'branch_id', 'branches']];
 
 // Every column of the baseline schema that points at a rider.
 export const RIDER_LINKS: [string, string][] = [

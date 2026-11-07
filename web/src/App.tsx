@@ -20,6 +20,8 @@ import {
   AssignmentForm, AssignmentsList, AssignmentView, CoverForm, CoversBulk, CoversList, CoverView, FleetImport, FuelCardForm, FuelCardsBulk, FuelCardsList, FuelCardView,
   InsurerForm, InsurersList, InsurerView, OilBulk, OilChangeEdit, OilChangeView, OilHistory, OilRecord, OilSchedule, OilScheduleForm, OilScheduleView, PoliciesList, PolicyForm, PolicyView,
 } from './pages/fleet/Fleet2';
+import { BranchesPage, DesignationsPage } from './pages/system/Branches';
+import { PlatformIdsImport, PlatformIdsPage } from './pages/riders/PlatformIds';
 import { CompaniesList, CompanyForm, CompanyView, ContractForm, ContractsList, ContractView } from './pages/performance/Companies';
 import { BlockedIps, Profile, RoleEdit, RolesList, RoleView, SessionsList, UserForm, UsersList, UserView } from './pages/admin/Access';
 import { AttachmentsIndex, AuditLog, LoginAttempts, Settings } from './pages/system/System';
@@ -113,6 +115,8 @@ export default function App() {
         <Route path="rider-applicants/import" element={g('applicants.import', <ApplicantsImport />)} />
         <Route path="rider-applicants/:id" element={g('applicants.view', <ApplicantView />)} />
         <Route path="rider-applicants/:id/edit" element={g('applicants.update', <ApplicantForm />)} />
+        <Route path="platform-ids" element={g('platform_ids.view', <PlatformIdsPage />)} />
+        <Route path="platform-ids/import" element={g('platform_ids.import', <PlatformIdsImport />)} />
 
         <Route path="leaves" element={g('leaves.view', <LeavesList />)} />
         <Route path="leaves/new" element={g('leaves.create', <LeaveForm />)} />
@@ -239,6 +243,8 @@ export default function App() {
         <Route path="sessions" element={g('sessions.view', <SessionsList />)} />
         <Route path="blocked-ips" element={g('blocked_ips.view', <BlockedIps />)} />
 
+        <Route path="branches" element={g('branches.view', <BranchesPage />)} />
+        <Route path="designations" element={g('designations.view', <DesignationsPage />)} />
         <Route path="settings" element={g(['system_settings.view', 'organization.view', 'platform_settings.view', 'secrets.view'], <Settings />)} />
         <Route path="settings/:tab" element={g(['system_settings.view', 'organization.view', 'platform_settings.view', 'secrets.view'], <Settings />)} />
         <Route path="attachments" element={g('attachments.view', <AttachmentsIndex />)} />

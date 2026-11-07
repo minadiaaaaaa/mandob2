@@ -8,6 +8,7 @@ import { Alert, Badge, Button, Card, Checkbox, cx, Details, Field, IconButton, L
 import { Grid, RiderInput, SaveBar, TextInput, useForm } from '../../ui/forms';
 import { DataTable, FilterBar, FilterDate, FilterNumber, FilterSelect, useList, type Column, type ListState } from '../../ui/table';
 import { ImportWizard } from '../../ui/importer';
+import { useOrgOptions } from '../system/Branches';
 import { ExportButton, useCityName, useOptions } from '../../ui/common';
 
 // The measures, in the order the screens show them. Rates are fractions of one.
@@ -66,6 +67,7 @@ export function PerformanceList() {
   const city = useCityName();
   const today = iso(new Date());
   const list = useList('/performance', { from: today, to: today });
+  const branches = useOrgOptions('branches', true);
   const companies = useOptions<any>('/lookups/companies');
   const contracts = useOptions<any>(list.query.company ? `/lookups/contracts?company=${list.query.company}` : '/lookups/contracts');
   const cities = useOptions<any>('/lookups/cities');
@@ -91,6 +93,7 @@ export function PerformanceList() {
     <>
       <PageHeader title={t('perf.title')} actions={<>
         <Link to={`/admin/performance/riders?from=${list.query.from ?? ''}&to=${list.query.to ?? ''}`}><Button icon={<Users className="size-4" />}>{t('perf.scorecard')}</Button></Link>
+        {can('platform_ids.view') && <Link to="/admin/platform-ids?tab=shared"><Button icon={<Users className="size-4" />}>{t('pids.tab_shared')}</Button></Link>}
         <Button icon={<Columns3 className="size-4" />} onClick={() => setPicking(true)}>{t('perf.columns')} <span className="num text-zinc-500">{cols.length}/{OPTIONAL.length}</span></Button>
         {can('performance.export') && <ExportButton path="/performance/export" query={{ ...list.query, cols: cols.join(',') }} />}
         {can('performance.import') && <Link to="/admin/performance/import"><Button icon={<FileUp className="size-4" />}>{t('perf.import')}</Button></Link>}
@@ -105,6 +108,7 @@ export function PerformanceList() {
         <StatCard label={t('perf.s.not_compliant')} value={fmtNum(s.not_compliant)} tone={s.not_compliant ? 'red' : 'none'} />
       </StatGrid>
       <FilterBar list={list} placeholder={t('perf.search_hint')}>
+        <FilterSelect list={list} name="branch" label={t('riders.branch')} options={branches} />
         <FilterDate list={list} name="from" label={t('common.from')} />
         <FilterDate list={list} name="to" label={t('common.to')} />
         <QuickDays list={list} ranges={[['perf.r.today', 0, 0], ['perf.r.yesterday', 1, 1], ['perf.r.last7', 7, 1], ['perf.r.last30', 30, 1]]} />

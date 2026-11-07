@@ -21,13 +21,12 @@ export function useOptions<T = any>(path: string | null, deps: unknown[] = []) {
 }
 export const invalidateOptions = (prefix = '') => { for (const k of cache.keys()) if (k.startsWith(prefix)) cache.delete(k); };
 
+// A record's name in the reader's language: the Arabic one in Arabic and Urdu, otherwise English when there is one.
+export const localName = (lang: string, ar?: string | null, en?: string | null) => (lang === 'ar' || lang === 'ur' ? ar : en || ar) ?? '—';
 export function useCityName() {
   const { lang } = useI18n();
-  return useCallback((r: { city_ar?: string | null; city_en?: string | null; name_ar?: string; name_en?: string | null } | null | undefined) => {
-    if (!r) return '—';
-    const ar = r.city_ar ?? r.name_ar; const en = r.city_en ?? r.name_en;
-    return (lang === 'ar' || lang === 'ur' ? ar : en || ar) ?? '—';
-  }, [lang]);
+  return useCallback((r: { city_ar?: string | null; city_en?: string | null; name_ar?: string; name_en?: string | null } | null | undefined) =>
+    (r ? localName(lang, r.city_ar ?? r.name_ar, r.city_en ?? r.name_en) : '—'), [lang]);
 }
 
 // ---------- the business rules, as the server defines them (GET /meta/rules) ----------

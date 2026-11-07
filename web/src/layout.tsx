@@ -33,6 +33,7 @@ function useSections(): Section[] {
     { key: 'riders', label: t('nav.riders'), icon: <Users />, items: [
       i('/admin/riders', 'nav.rider_list', 'riders.view', undefined, true),
       i('/admin/rider-applicants', 'nav.applicants', 'applicants.view'),
+      i('/admin/platform-ids', 'nav.platform_ids', 'platform_ids.view'),
       i('/admin/riders/id-documents', 'docs.id', 'id_documents.view', ['id']),
       i('/admin/riders/driving-licenses', 'docs.license', 'driving_licenses.view', ['license']),
       i('/admin/riders/health-certificates', 'docs.health', 'health_certs.view', ['health']),
@@ -91,6 +92,8 @@ function useSections(): Section[] {
     { key: 'system', label: t('nav.system'), icon: <Settings />, items: [
       i('/admin/settings', 'nav.settings', ['system_settings.view', 'platform_settings.view', 'secrets.view'], undefined, true),
       i('/admin/settings/organization', 'nav.organization', 'organization.view'),
+      i('/admin/branches', 'nav.branches', 'branches.view'),
+      i('/admin/designations', 'nav.designations', 'designations.view'),
       i('/admin/attachments', 'nav.attachments', 'attachments.view'),
       i('/admin/email/templates', 'nav.email_templates', ['email_templates.view', 'smtp.view']),
       i('/admin/email/log', 'nav.email_log', 'email_log.view'),
@@ -121,7 +124,8 @@ function NavBadge({ keys, badges }: { keys?: string[]; badges: Badges }) {
 }
 
 // Pages about the whole platform appear only on the owner's account; a company's own subscription page only on companies.
-const OWNER_ONLY = (to: string) => to.startsWith('/admin/platform') || ['/admin/backups', '/admin/blocked-ips', '/admin/languages'].includes(to);
+// the owner's pages are /admin/platform and below it (not every path that starts with those letters, e.g. /admin/platform-ids)
+const OWNER_ONLY = (to: string) => to === '/admin/platform' || to.startsWith('/admin/platform/') ||['/admin/backups', '/admin/blocked-ips', '/admin/languages'].includes(to);
 const COMPANY_ONLY = (to: string) => to === '/admin/billing';
 
 // The main tab a path belongs to: the longest matching page, so /admin/live/report is not counted as /admin/live.

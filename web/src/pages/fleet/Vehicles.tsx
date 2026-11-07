@@ -9,7 +9,8 @@ import { Grid, SaveBar, SelectInput, TextArea, TextInput, useForm } from '../../
 import { DataTable, FilterBar, FilterSelect, useList, type Column } from '../../ui/table';
 import { Attachments, ScanUpload, type Scan } from '../../ui/files';
 import { ImportWizard } from '../../ui/importer';
-import { ExpiryDate, ExportButton, useCityName, useOptions } from '../../ui/common';
+import { ExpiryDate, ExportButton, localName, useCityName, useOptions } from '../../ui/common';
+import { MoveToBranch, useOrgOptions } from '../system/Branches';
 import { PausedMark, PlanCounter } from '../../ui/plan';
 
 export const VEHICLE_STATUS: Record<string, Tone> = { active: 'green', maintenance: 'amber', retired: 'grey' };
@@ -36,13 +37,14 @@ export function useDeleteWithBlockers() {
 }
 
 export function VehiclesList() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { can } = useAuth();
   const nav = useNavigate();
   const run = useAction();
   const { confirm } = useUi();
   const delWith = useDeleteWithBlockers();
   const list = useList('/vehicles');
+  const branches = useOrgOptions('branches', true);
   const s = list.stats ?? {};
   const f = list.data?.facets ?? { types: [], makers: [], registration_types: [] };
   const remove = async (ids: (string | number)[]) => {
@@ -54,6 +56,7 @@ export function VehiclesList() {
     { key: 'make', header: t('vehicles.make_model'), sort: 'make', render: (r) => <div>{[r.maker, r.model].filter(Boolean).join(' ') || '—'}{r.color && <div className="text-xs text-zinc-500">{r.color}</div>}</div> },
     { key: 'year', header: t('vehicles.year'), sort: 'year', render: (r) => <span className="num">{r.year ?? '—'}</span> },
     { key: 'ownership', header: t('vehicles.ownership'), sort: 'ownership', render: (r) => t(`vehicle.own.${r.ownership}`) },
+    { key: 'branch', header: t('vehicles.branch'), render: (r) => localName(lang, r.branch_ar, r.branch_en) },
     { key: 'rider', header: t('vehicles.current_rider'), render: (r) => { const rs = riderList(r.riders); return rs.length ? <div>{rs.map((x) => <div key={x.id}><Link to={`/admin/riders/${x.id}`} className="hover:text-brand">{x.name}</Link> <span className="text-xs text-zinc-500 num">#{x.id}</span></div>)}{rs.length > 1 && <Badge tone="amber">{rs.length}</Badge>}</div> : <span className="text-zinc-500">{t('vehicles.unassigned')}</span>; } },
     { key: 'card', header: t('vehicles.card'), sort: 'card', render: (r) => r.card_id ? <div><ExpiryDate date={r.card_expiry} days={r.card_days} kind="operation_card" /><div className="text-xs text-zinc-500 num">{r.card_number}{r.card_vehicles > 1 && ` · ${t('vehicles.n_vehicles', { n: r.card_vehicles })}`}</div></div> : <span className="text-zinc-500">{t('vehicles.no_card')}</span> },
     { key: 'status', header: t('vehicles.status'), sort: 'status', render: (r) => <VStatus s={r.status} /> },
@@ -87,6 +90,7 @@ export function VehiclesList() {
         <StatCard label={t('vehicles.cards_expired')} value={fmtNum(s.cards_expired)} tone={toneIf(s.cards_expired, 'red')} />
       </StatGrid>
       <FilterBar list={list} placeholder={t('vehicles.search_hint')}>
+        <FilterSelect list={list} name="branch" label={t('vehicles.branch')} options={branches} />
         <FilterSelect list={list} name="status" label={t('vehicles.status')} options={Object.keys(VEHICLE_STATUS).map((v) => ({ value: v, label: t(`vehicle.status.${v}`) }))} />
         <FilterSelect list={list} name="type" label={t('vehicles.type')} options={f.types.map((v: string) => ({ value: v, label: typeLabel(t, v) }))} />
         <FilterSelect list={list} name="ownership" label={t('vehicles.ownership')} options={['owned', 'rented'].map((v) => ({ value: v, label: t(`vehicle.own.${v}`) }))} />
@@ -95,14 +99,17 @@ export function VehiclesList() {
         <FilterSelect list={list} name="assignment" label={t('vehicles.assignment')} options={[{ value: 'assigned', label: t('vehicles.with_rider') }, { value: 'unassigned', label: t('vehicles.unassigned') }]} />
         <FilterSelect list={list} name="card" label={t('vehicles.card')} options={[{ value: 'yes', label: t('vehicles.has_card') }, { value: 'no', label: t('vehicles.no_card') }]} />
       </FilterBar>
-      <DataTable list={list} columns={columns} onRowClick={(r) => nav(`/admin/vehicles/${r.id}`)} selectable={can('vehicles.delete')}
-        bulk={<Button size="sm" variant="danger" onClick={() => remove([...list.selected])}>{t('common.delete_selected')}</Button>} />
+      <DataTable list={list} columns={columns} onRowClick={(r) => nav(`/admin/vehicles/${r.id}`)} selectable={can('vehicles.delete') || can('vehicles.update')}
+        bulk={<>
+          {can('vehicles.update') && <MoveToBranch ids={[...list.selected]} onDone={() => { list.setSelected(new Set()); list.reload(); }} />}
+          {can('vehicles.delete') && <Button size="sm" variant="danger" onClick={() => remove([...list.selected])}>{t('common.delete_selected')}</Button>}
+        </>} />
     </>
   );
 }
 
 const V_EMPTY = { plate: '', plate_en: '', vehicle_type: '', registration_type: '', maker: '', model: '', color: '', year: '', chassis: '', weight: '', capacity: '', ownership: 'owned', status: 'active', odometer: '',
-  current_card_id: '', current_registration_id: '' };
+  current_card_id: '', current_registration_id: '', branch_id: '' };
 
 export function VehicleForm() {
   const { id } = useParams();
@@ -119,6 +126,7 @@ export function VehicleForm() {
   const cards = useOptions<any>(can('operation_cards.view') ? '/operation-cards/options' : null);
   const regs = useOptions<any>(can('vehicle_registrations.view') ? '/vehicle-registrations/options' : null);
   const licenses = useOptions<any>(withCard ? '/transport-licenses/options' : null);
+  const branches = useOrgOptions('branches', !!id);
   useEffect(() => { if (id) get(`/vehicles/${id}`).then((v) => { setLoaded(v); form.reset(Object.fromEntries(Object.keys(V_EMPTY).map((k) => [k, v[k] ?? '']))); }); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!loaded) return <Loading />;
   if (saved) return (
@@ -155,6 +163,7 @@ export function VehicleForm() {
               <TextInput form={form} name="weight" label={t('vehicles.weight')} dir="ltr" />
               <TextInput form={form} name="capacity" label={t('vehicles.capacity')} dir="ltr" />
               <TextInput form={form} name="odometer" label={t('vehicles.odometer')} dir="ltr" />
+              <SelectInput form={form} name="branch_id" label={t('vehicles.branch')} options={branches} empty={id ? false : t('riders.default_branch')} />
               <SelectInput form={form} name="ownership" label={t('vehicles.ownership')} empty={false} options={['owned', 'rented'].map((v) => ({ value: v, label: t(`vehicle.own.${v}`) }))} />
               <SelectInput form={form} name="status" label={t('vehicles.status')} empty={false} options={Object.keys(VEHICLE_STATUS).map((v) => ({ value: v, label: t(`vehicle.status.${v}`) }))} />
             </Grid>
@@ -192,7 +201,7 @@ export function VehicleForm() {
 
 export function VehicleView() {
   const { id } = useParams();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { can } = useAuth();
   const nav = useNavigate();
   const run = useAction();
@@ -221,7 +230,7 @@ export function VehicleView() {
         <StatCard label={t('vehicles.odometer')} value={`${fmtNum(v.odometer)} km`} />
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title={t('vehicles.details')}><Details rows={[[t('vehicles.plate_en'), v.plate_en], [t('vehicles.registration_type'), v.registration_type], [t('vehicles.maker'), v.maker],
+        <Card title={t('vehicles.details')}><Details rows={[[t('vehicles.branch'), localName(lang, v.branch_ar, v.branch_en)], [t('vehicles.plate_en'), v.plate_en], [t('vehicles.registration_type'), v.registration_type], [t('vehicles.maker'), v.maker],
           [t('vehicles.model'), v.model], [t('vehicles.color'), v.color], [t('vehicles.year'), v.year], [t('vehicles.chassis'), v.chassis], [t('vehicles.weight'), v.weight], [t('vehicles.capacity'), v.capacity]]} /></Card>
         <Card title={t('vehicles.current_rider')}>
           {v.riders.length ? <ul className="space-y-2 text-sm">{v.riders.map((r: any) => <li key={r.id}><Link to={`/admin/riders/${r.id}`} className="font-medium text-brand hover:underline">{r.full_name}</Link> <span className="num text-zinc-500">#{r.id} · {r.phone ?? '—'} · {t('vehicles.since')} {r.start_date}</span></li>)}</ul>

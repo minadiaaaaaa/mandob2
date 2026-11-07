@@ -20,7 +20,7 @@ const spec = (day: string): Spec => ({
   select: `a.*, r.full_name, r.national_id, co.name company_name, ${SUMS.replaceAll('{d}', day)}`,
   search: ['a.number', 'r.full_name', 'r.national_id', 'CAST(r.id AS CHAR)'],
   filters: {
-    status: inList('a.status'), company: eq('r.company_id'), rider: eq('a.rider_id'),
+    status: inList('a.status'), branch: eq('r.branch_id'), company: eq('r.company_id'), rider: eq('a.rider_id'),
     overdue: () => `EXISTS (SELECT 1 FROM advance_installments i WHERE i.advance_id = a.id AND i.status IN ('due','partial') AND i.due_date < '${day}')`,
     from: (v) => ['a.request_date >= ?', [v]], to: (v) => ['a.request_date <= ?', [v]],
   },
@@ -59,7 +59,7 @@ const dueSpec = (day: string, horizon: string): Spec => ({
   filters: {
     // overdue instalments always appear, whatever the window
     open: () => `i.status IN ('due','partial') AND i.due_date <= '${horizon}'`,
-    overdue: () => `i.due_date < '${day}'`, company: eq('r.company_id'), rider: eq('a.rider_id'),
+    overdue: () => `i.due_date < '${day}'`, branch: eq('r.branch_id'), company: eq('r.company_id'), rider: eq('a.rider_id'),
   },
   sorts: { due: 'i.due_date, i.id' }, defaultSort: 'due',
 });

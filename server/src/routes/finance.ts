@@ -3,6 +3,7 @@ import { exec, one, q } from '../db.js';
 import { addDays, clean, fail, langOf, latinDigits, list, listAll, sendExport, today, tr, where, type Query, type Spec } from '../http.js';
 import { can } from '../auth.js';
 import { audit } from '../audit.js';
+import { withRiderDefaults } from '../domain/branches.js';
 import { cellDate, cellNum, cellStr, importRoutes, type Ctx, type ImportDef, type Parsed } from '../importer.js';
 
 // Chapter 8: fines, wallet and monthly billing — the delivery company's figures, read-only except a fine's status.
@@ -21,7 +22,7 @@ async function riderKnown(id: number, ctx: Ctx) {
 async function ensureRider(id: number, ctx: Ctx) {
   if (await riderKnown(id, ctx)) return true;
   if (!ctx.options.create_riders) return false;
-  await exec("INSERT IGNORE INTO riders (id, full_name, status, notes) VALUES (?, ?, 'active', ?)", [id, `Rider ${id}`, 'Created by a finance import — complete the details.']);
+  await exec('INSERT IGNORE INTO riders SET ?', [await withRiderDefaults({ id, full_name: `Rider ${id}`, status: 'active', notes: 'Created by a finance import — complete the details.' }, ctx.cache)]);
   ctx.cache.set(`rider:${id}`, true);
   ctx.result.new_riders = (ctx.result.new_riders ?? 0) + 1;
   return true;

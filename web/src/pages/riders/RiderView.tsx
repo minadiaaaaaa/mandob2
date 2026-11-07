@@ -6,15 +6,16 @@ import { useAuth } from '../../auth';
 import { fmtDateTime, useI18n } from '../../i18n';
 import { Alert, Badge, Button, Card, Details, IconButton, Loading, PageHeader, useAction, useErrorText, useUi } from '../../ui/kit';
 import { Attachments } from '../../ui/files';
-import { Remaining, useCityName, type ExpiryKind } from '../../ui/common';
+import { Remaining, localName, useCityName, type ExpiryKind } from '../../ui/common';
 import { DOC_MODULE, DOC_TYPES, RiderStatus, type DocType } from './shared';
 import { RiderOpsCards } from './RiderCards';
+import { RiderPlatformIds } from './PlatformIds';
 
 export default function RiderView() {
   // the profile shares the /admin/riders/:slug route with the document screens
   const params = useParams();
   const id = params.id ?? params.slug;
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { can } = useAuth();
   const nav = useNavigate();
   const run = useAction();
@@ -89,6 +90,7 @@ export default function RiderView() {
         </Card>
         <Card title={t('riders.sec.operations')}>
           <Details rows={[
+            [t('riders.branch'), localName(lang, r.branch_ar, r.branch_en), true], [t('riders.designation'), localName(lang, r.designation_ar, r.designation_en), true],
             [t('riders.operating_company'), r.company_name, true], [t('riders.contract'), r.contract_name, true], [t('riders.city'), r.city_ar ? city(r) : null, true],
             [t('riders.hire_date'), r.hire_date],
             [t('riders.vehicle'), r.vehicle_plate ? <Link className="text-brand hover:underline" to={`/admin/vehicles/${r.vehicle_id}`}>{r.vehicle_plate} · {[r.vehicle_maker, r.vehicle_model].filter(Boolean).join(' ')}</Link> : t('riders.no_vehicle'), true],
@@ -96,6 +98,7 @@ export default function RiderView() {
           ]} />
         </Card>
       </div>
+      {can('platform_ids.view') && <div className="mt-4"><Card title={t('pids.rider_section')}><RiderPlatformIds riderId={r.id} /></Card></div>}
       <div className="mt-4">
         <Card title={t('riders.sec.documents')}>
           <div className="space-y-4">

@@ -3,6 +3,7 @@ import { exec, one, q } from '../db.js';
 import { addDays, clean, daysBetween, eq, fail, fieldError, latinDigits, list, listAll, sendExport, today, where, type Col, type Query, type Spec, mustExist } from '../http.js';
 import { can } from '../auth.js';
 import { audit } from '../audit.js';
+import { withRiderDefaults } from '../domain/branches.js';
 import { cellDate, cellNum, cellStr, importRoutes, type Ctx, type ImportDef, type Parsed } from '../importer.js';
 
 // Chapter 6: daily performance (6.1), the scorecard over a period (6.2) and the monthly ratings (6.4).
@@ -45,7 +46,7 @@ const perfSpec: Spec = {
   search: [(s) => (/^\d+$/.test(s) ? ['p.rider_id = ?', [Number(s)]] : ['(r.full_name LIKE ? OR r.alias LIKE ? OR k.name LIKE ? OR ci.name_ar LIKE ? OR ci.name_en LIKE ?)', Array(5).fill(`%${s}%`)])],
   filters: {
     from: (v) => ['p.work_date >= ?', [v]], to: (v) => ['p.work_date <= ?', [v]],
-    company: eq('r.company_id'), contract: (v) => ['COALESCE(p.contract_id, r.contract_id) = ?', [v]], city: eq('r.city_id'), rider: eq('p.rider_id'),
+    branch: eq('r.branch_id'), company: eq('r.company_id'), contract: (v) => ['COALESCE(p.contract_id, r.contract_id) = ?', [v]], city: eq('r.city_id'), rider: eq('p.rider_id'),
     tga: eq('p.tga_status'),
     band: (v) => ({ critical: 'p.completed < 10', warning: 'p.completed >= 10 AND p.completed < 15', good: 'p.completed >= 15' } as Record<string, string>)[v] ?? null,
     del_min: (v) => ['p.completed >= ?', [Number(latinDigits(v))]], del_max: (v) => ['p.completed <= ?', [Number(latinDigits(v))]],
@@ -155,7 +156,7 @@ async function ensureRider(id: number, ctx: Ctx, note: string) {
   if (!ctx.cache.has(key)) ctx.cache.set(key, !!(await one('SELECT 1 FROM riders WHERE id = ?', [id])));
   if (ctx.cache.get(key)) return true;
   if (!ctx.options.create_riders) return false;
-  await exec("INSERT IGNORE INTO riders (id, full_name, status, notes) VALUES (?, ?, 'active', ?)", [id, `Rider ${id}`, note]);
+  await exec('INSERT IGNORE INTO riders SET ?', [await withRiderDefaults({ id, full_name: `Rider ${id}`, status: 'active', notes: note }, ctx.cache)]);
   ctx.cache.set(key, true);
   ctx.result.riders_created = (ctx.result.riders_created ?? 0) + 1;
   return true;
@@ -319,7 +320,7 @@ const ratingSpec = (month: string): Spec => ({
   from: 'FROM monthly_ratings m JOIN riders r ON r.id = m.rider_id',
   select: 'm.*, r.full_name',
   search: [(s) => (/^\d+$/.test(s) ? ['m.rider_id = ?', [Number(s)]] : ['(r.full_name LIKE ? OR m.contract LIKE ?)', [`%${s}%`, `%${s}%`]])],
-  filters: { month: () => ['m.month = ?', [month]], segment: eq('m.segment') },
+  filters: { month: () => ['m.month = ?', [month]], segment: eq('m.segment'), branch: eq('r.branch_id') },
   sorts: { final: 'm.final_score', rider: 'r.full_name' },
   defaultSort: '-final',
 });

@@ -15,27 +15,27 @@ const ORG = "(SELECT value FROM settings WHERE `key` = 'org.name')";
 export function alertsUnion(day: string) {
   return `
     SELECT d.doc_type kind, 'rider' owner_type, d.id record_id, d.rider_id ref_id, r.full_name owner,
-      CASE WHEN d.doc_type = 'id' THEN r.national_id ELSE d.doc_number END number, d.issue_date, d.expiry_date
+      CASE WHEN d.doc_type = 'id' THEN r.national_id ELSE d.doc_number END number, d.issue_date, d.expiry_date, r.branch_id
     FROM rider_documents d JOIN riders r ON r.id = d.rider_id WHERE d.is_current = 1 AND d.expiry_date IS NOT NULL
     UNION ALL
     SELECT 'operation_card', 'vehicle', oc.id, oc.id,
       (SELECT GROUP_CONCAT(v.plate ORDER BY v.plate SEPARATOR ' · ') FROM operation_card_vehicles x JOIN vehicles v ON v.id = x.vehicle_id WHERE x.card_id = oc.id AND x.is_current = 1),
-      oc.number, oc.issue_date, oc.expiry_date
+      oc.number, oc.issue_date, oc.expiry_date, NULL
     FROM operation_cards oc WHERE oc.status <> 'cancelled'
     UNION ALL
-    SELECT 'vehicle_registration', 'vehicle', g.id, g.id, v.plate, g.serial, g.issue_date, g.expiry_date
+    SELECT 'vehicle_registration', 'vehicle', g.id, g.id, v.plate, g.serial, g.issue_date, g.expiry_date, v.branch_id
     FROM vehicle_registrations g JOIN vehicles v ON v.id = g.vehicle_id WHERE g.is_current = 1 AND g.expiry_date IS NOT NULL
     UNION ALL
-    SELECT 'vehicle_insurance', 'vehicle', vi.id, vi.id, v.plate, COALESCE(vi.sub_policy, p.number), vi.start_date, vi.expiry_date
+    SELECT 'vehicle_insurance', 'vehicle', vi.id, vi.id, v.plate, COALESCE(vi.sub_policy, p.number), vi.start_date, vi.expiry_date, v.branch_id
     FROM vehicle_insurance vi JOIN vehicles v ON v.id = vi.vehicle_id JOIN insurance_policies p ON p.id = vi.policy_id WHERE vi.is_current = 1 AND vi.status <> 'cancelled'
     UNION ALL
-    SELECT 'insurance_policy', 'organization', p.id, p.id, ic.name_ar, p.number, p.issue_date, p.expiry_date
+    SELECT 'insurance_policy', 'organization', p.id, p.id, ic.name_ar, p.number, p.issue_date, p.expiry_date, NULL
     FROM insurance_policies p JOIN insurance_companies ic ON ic.id = p.company_id WHERE p.status <> 'cancelled'
     UNION ALL
-    SELECT 'oil_change', 'vehicle', s.id, s.vehicle_id, v.plate, NULL, s.last_change, DATE_ADD(s.last_change, INTERVAL s.interval_days DAY)
+    SELECT 'oil_change', 'vehicle', s.id, s.vehicle_id, v.plate, NULL, s.last_change, DATE_ADD(s.last_change, INTERVAL s.interval_days DAY), v.branch_id
     FROM oil_schedules s JOIN vehicles v ON v.id = s.vehicle_id
     UNION ALL
-    SELECT 'transport_license', 'organization', t.id, t.id, ${ORG}, t.number, t.issue_date, t.expiry_date FROM transport_licenses t`;
+    SELECT 'transport_license', 'organization', t.id, t.id, ${ORG}, t.number, t.issue_date, t.expiry_date, NULL FROM transport_licenses t`;
 }
 const ALERT_KINDS = ['id', 'license', 'health', 'driver_card', 'ajeer', 'operation_card', 'vehicle_registration', 'vehicle_insurance', 'insurance_policy', 'oil_change', 'transport_license'];
 const windowOf = (q: Query) => ([7, 30, 60, 90].includes(Number(q.window)) ? Number(q.window) : 30);
@@ -49,6 +49,7 @@ function alertsSpec(day: string, win: number): Spec {
     filters: {
       kind: eq('a.kind'),
       owner_type: eq('a.owner_type'),
+      branch: eq('a.branch_id'),
       status: (v) => ({ expired: `${days} < 0`, near: `${days} BETWEEN 0 AND ${win}`, valid: `${days} > ${win}` } as Record<string, string>)[v] ?? null,
       // choosing a window shows what expires within it, together with what has already expired
       window: () => `${days} <= ${win}`,

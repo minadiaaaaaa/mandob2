@@ -104,19 +104,21 @@ export async function q<T = any>(sql: string, parameters: unknown[] = []): Promi
   return (Array.isArray(rows) ? rows : []) as T[];
 }
 export async function one<T = any>(sql: string, parameters: unknown[] = []): Promise<T | undefined> { return (await q<T>(sql, parameters))[0]; }
-// Plan limits: new riders, vehicles, staff accounts, delivery platforms and contracts are checked here, whichever
-// screen, import or sync adds them (the tables are those of domain/plans.ts QUOTAS).
+// Plan limits: every new counted record (rider, vehicle, staff account, platform, contract, branch, designation…) is
+// checked here, whichever screen, import or sync adds it. quotas.ts hands over the check together with the counted
+// tables of domain/plans.ts QUOTAS, so a new quota cannot be left out; only inserts into those tables are wrapped in
+// a transaction for the check.
 type InsertGuard = (table: string, parameters: unknown[]) => Promise<void>;
-let insertGuard: InsertGuard | null = null;
-export function setInsertGuard(fn: InsertGuard) { insertGuard = fn; }
-const LIMITED = /^\s*INSERT\s+(?:IGNORE\s+)?INTO\s+`?(riders|vehicles|users|companies|contracts)`?[\s(]/i;
+let insertGuard: { check: InsertGuard; tables: Set<string> } | null = null;
+export function setInsertGuard(check: InsertGuard, tables: string[]) { insertGuard = { check, tables: new Set(tables) }; }
+const INSERT_INTO = /^\s*INSERT\s+(?:IGNORE\s+)?INTO\s+`?(\w+)`?[\s(]/i;
 export const inTransaction = () => !!txConn.getStore();
 export async function exec(sql: string, parameters: unknown[] = []): Promise<{ affectedRows: number; insertId: number }> {
-  const limited = insertGuard && currentTenant() ? LIMITED.exec(sql) : null;
-  if (limited) {
+  const table = insertGuard && currentTenant() ? INSERT_INTO.exec(sql)?.[1].toLowerCase() : undefined;
+  if (table && insertGuard!.tables.has(table)) {
     // the check and the insert share one transaction, so the company stays locked until the row is written
     if (!inTransaction()) return tx(() => exec(sql, parameters));
-    await insertGuard!(limited[1].toLowerCase(), parameters);
+    await insertGuard!.check(table, parameters);
   }
   const [result] = await runner().query(compile(sql, parameters));
   const header = result as mysql.ResultSetHeader;

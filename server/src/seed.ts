@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { companiesMissingDefaults, ensureCompanyDefaults } from './domain/branches.js';
 import { DATA_DIR, ROOT, exec, q, executeScript, withTenant, asPlatform, setSetting, setting } from './db.js';
 import { hashPassword } from './auth.js';
 import { runMigrations } from './migrations.js';
@@ -177,6 +178,8 @@ export async function bootstrap() {
   if (fresh) await install(() => {}); else await upgrade();
   // every change after the schema.sql baseline, once per database (see migrations.ts)
   await runMigrations();
+  // every company's main branch and built-in job titles, and a branch on records from before phase 2
+  for (const t of await companiesMissingDefaults()) await ensureCompanyDefaults(t);
   await withTenant(0, async () => {
     if (fresh) {
       if (!(await setting('platform.name'))) await setSetting('platform.name', process.env.PLATFORM_NAME || 'مندوب');
