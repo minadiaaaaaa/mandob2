@@ -70,6 +70,7 @@ export default function RidersList() {
       </>} />
       <StatGrid>
         <StatCard label={t('riders.s.total')} value={fmtNum(s.total)} />
+        <StatCard label={t('health.w.working')} value={fmtNum(s.working)} tone="green" /><StatCard label={t('health.w.ready')} value={fmtNum(s.ready)} tone="blue" /><StatCard label={t('health.w.on_leave')} value={fmtNum(s.on_leave)} />
         <StatCard label={t('rider.status.active')} value={fmtNum(s.active)} tone="green" onClick={() => statusFilter('active')} active={list.query.status === 'active'} />
         <StatCard label={t('rider.status.inactive')} value={fmtNum(s.inactive)} onClick={() => statusFilter('inactive')} active={list.query.status === 'inactive'} />
         <StatCard label={t('rider.status.suspended')} value={fmtNum(s.suspended)} tone={toneIf(s.suspended, 'amber')} onClick={() => statusFilter('suspended')} active={list.query.status === 'suspended'} />

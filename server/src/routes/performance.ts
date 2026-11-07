@@ -1,5 +1,5 @@
 import { Router, type Request } from 'express';
-import { exec, one, q } from '../db.js';
+import { exec, one, q, setSetting, setting } from '../db.js';
 import { addDays, clean, daysBetween, eq, fail, fieldError, latinDigits, list, listAll, sendExport, today, where, type Col, type Query, type Spec, mustExist } from '../http.js';
 import { can } from '../auth.js';
 import { audit } from '../audit.js';
@@ -62,7 +62,7 @@ performanceRouter.get('/performance', can('performance.view'), async (req, res) 
     COALESCE(SUM(p.actual_hours),0) hours, COALESCE(SUM(p.lost_hours),0) lost, AVG(p.attendance_rate) attendance, AVG(p.acceptance_rate) acceptance,
     COALESCE(SUM(p.tga_status IS NOT NULL AND LOWER(p.tga_status) <> 'compliant'),0) not_compliant ${perfSpec.from}${w.sql}`, w.params);
   const tga = (await q<any>('SELECT DISTINCT tga_status v FROM daily_performance WHERE tga_status IS NOT NULL ORDER BY v')).map((r) => r.v);
-  res.json({ ...(await list(perfSpec, query)), stats, facets: { tga } });
+  res.json({ ...(await list(perfSpec, query)), stats, facets: { tga }, targets: await dailyTargets() });
 });
 
 // Colours: the same thresholds on the screen and in the file.
@@ -374,7 +374,9 @@ performanceRouter.get('/ratings/rider/:id', can('ratings.view'), async (req, res
 const ratingImport: ImportDef = {
   name: 'ratings', perm: 'ratings.import', matchOn: 'rat.match_on', options: ['create_riders'], maxRows: 50000,
   columns: {
-    rider_id: ['riders.rider_id', 'rider_id', 'rider id'], month: ['rat.month', 'month'], segment: ['rat.segment', 'segment'],
+    rider_id: ['riders.rider_id', 'rider_id', 'rider id', 'courier id', 'driver id'], month: ['rat.month', 'month', 'period'],
+    // HungerStation's "Delivery Quality Segment" file names the segment this way
+    segment: ['rat.segment', 'segment', 'delivery quality segment', 'dq segment', 'quality segment'],
     final_score: ['rat.final', 'final score', 'final_score'], on_time: ['rat.on_time', 'on time', 'otd', 'on_time'], fail_rate_score: ['rat.fail_rate', 'fail rate score', 'fr'],
     gross_orders: ['rat.gross', 'gross orders', 'gross'], completed: ['rat.completed', 'completed', 'completed orders'], completed_in_time: ['rat.in_time', 'completed in time'],
     failed_by_rider: ['rat.failed', 'failed by rider', 'rider failed'], verification_requests: ['rat.ver_requests', 'verification requests'],
@@ -424,3 +426,16 @@ const ratingImport: ImportDef = {
 };
 performanceRouter.use('/ratings/import', importRoutes(ratingImport));
 export { ratingImport };
+
+// ---------- daily targets (phase 8): what a good day is, per company; the screens colour each day against it ----------
+export async function dailyTargets() {
+  const n = async (k: string, d: number) => { const v = Number(await setting(`perf.target_${k}`)); return Number.isFinite(v) && v > 0 ? v : d; };
+  return { orders: await n('orders', 15), hours: await n('hours', 8), declined: await n('declined', 2) };
+}
+performanceRouter.get('/performance-targets', can('performance.view'), async (_req, res) => res.json(await dailyTargets()));
+performanceRouter.put('/performance-targets', can('performance.update'), async (req, res) => {
+  const v = clean(req.body, { orders: { req: true, type: 'int', min: 1, max: 500 }, hours: { req: true, type: 'num', min: 0.5, max: 24 }, declined: { req: true, type: 'int', min: 0, max: 100 } });
+  for (const [k, val] of Object.entries(v)) await setSetting(`perf.target_${k}`, String(val));
+  await audit(req, { action: 'performance.targets', after: v });
+  res.json({ ok: true });
+});

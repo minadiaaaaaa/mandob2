@@ -8,7 +8,7 @@
 // A query that touches a company table without a company (and outside platform mode) is refused.
 
 export const TENANT_TABLES = new Set([
-  'advance_installments', 'advances', 'applicants', 'attachments', 'audit_log', 'billing', 'branches', 'branding_photos', 'companies', 'contracts',
+  'advance_installments', 'advances', 'applicants', 'attachments', 'audit_log', 'billing', 'bookmarks', 'branches', 'branding_photos', 'companies', 'contracts',
   'cron_runs', 'daily_performance', 'designations', 'email_log', 'fin_accounts', 'fin_assets', 'fin_categories', 'fin_entries', 'fin_obligation_dues', 'fin_obligations', 'fin_stock_items', 'fin_stock_moves', 'fin_suppliers', 'email_templates', 'error_log', 'fines', 'fuel_cards', 'insurance_companies',
   'insurance_policies', 'invoice_buyers', 'invoice_lines', 'invoices', 'leaves', 'live_board', 'live_days', 'live_points', 'login_attempts', 'monthly_ratings', 'notification_prefs',
   'notifications', 'oil_changes', 'payroll_lines', 'payroll_sheets', 'oil_schedules', 'operation_card_vehicles', 'operation_cards', 'platform_id_transfers', 'platform_ids', 'rating_cutoffs', 'renewals',

@@ -3,6 +3,7 @@ import { AlertTriangle, Bell, Bike, Car, CircleCheck, CircleSlash, FileWarning, 
 import { get } from '../api';
 import { fmtDateTime, fmtNum, useI18n } from '../i18n';
 import { Alert, Button, Card, cx, Loading, PageHeader } from '../ui/kit';
+import { CompanyOverview } from './DashboardCompany';
 import { Bars, Columns, Donut, Gauge, Line } from '../ui/charts';
 
 const DOT: Record<string, string> = { critical: 'bg-red-500', error: 'bg-red-500', warning: 'bg-amber-500' };
@@ -56,6 +57,7 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+      <CompanyOverview c={d.company} f={d.finance} />
       <h2 className="mb-2 text-sm font-semibold text-zinc-500">{t('dash.key_figures')}</h2>
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
         <Figure icon={<Car />} value={fmtNum(f?.vehicles.total)} label={t('dash.f.vehicles')} tone="grey" />

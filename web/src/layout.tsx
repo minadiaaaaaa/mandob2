@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Activity, BarChart3, BellRing, Building, CalendarDays, Car, ChevronDown, Globe, KeyRound, LayoutDashboard, LogOut, Menu, Moon, Settings, Sun, User, Users, Wallet, X,
-} from 'lucide-react';
+  Activity, BarChart3, BellRing, Building, CalendarDays, Car, ChevronDown, Globe, KeyRound, LayoutDashboard, LogOut, Menu, Moon, Settings, Sun, User, Users, Wallet, Wrench, X } from 'lucide-react';
 import { get, patch, post } from './api';
 import { useAuth } from './auth';
 import { useI18n } from './i18n';
@@ -90,6 +89,13 @@ function useSections(): Section[] {
       i('/admin/reports', 'nav.reports', 'reports.view'),
       i('/admin/notifications', 'nav.notifications', 'notifications.view', undefined, true),
       i('/admin/notifications/preferences', 'nav.notification_prefs', 'notification_prefs.view'),
+    ] },
+    { key: 'tools', label: t('nav.tools'), icon: <Wrench />, items: [
+      i('/admin/print-lists/riders', 'nav.print_riders', 'riders.print'),
+      i('/admin/print-lists/vehicles', 'nav.print_vehicles', 'vehicles.view'),
+      i('/admin/id-cards', 'nav.id_cards', 'riders.print'),
+      i('/admin/data-management', 'nav.data_management', ['riders.import', 'vehicles.import', 'platform_ids.import', 'finance.import']),
+      i('/admin/bookmarks', 'nav.bookmarks', 'dashboard.view'),
     ] },
     { key: 'admin', label: t('nav.administration'), icon: <KeyRound />, items: [
       i('/admin/users', 'nav.users', 'users.view'),

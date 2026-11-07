@@ -14,7 +14,10 @@ export const systemRouter = Router();
 // ---------- organization details & platform settings: plain key/value groups ----------
 const ORG_RULES: Record<string, any> = {
   system_name: { max: 150 }, version: { max: 20 }, name: { max: 255 }, name_en: { max: 255 }, unified_number: { type: 'digits', max: 30 },
-  cr_number: { max: 30 }, tax_number: { type: 'digits', max: 15, minLen: 15 }, support_email: { type: 'email' }, support_phone: { max: 30 },
+  cr_number: { max: 30 }, tax_number: { type: 'digits', max: 15, minLen: 15 },
+  // phase 8: the rest of the company's legal file (LogisTap's company profile)
+  cr_expiry: { type: 'date' }, city_cr_number: { max: 30 }, city_cr_expiry: { type: 'date' }, vat_cert_expiry: { type: 'date' }, gosi_number: { max: 30 },
+  qiwa_number: { max: 30 }, labor_office_number: { max: 30 }, support_email: { type: 'email' }, support_phone: { max: 30 },
   website: { max: 255 }, address: { max: 500 }, default_language: { enum: ['ar', 'en', 'bn', 'ur'] }, timezone: { max: 60 }, currency: { max: 3 },
   date_format: { enum: ['YYYY-MM-DD', 'DD/MM/YYYY', 'MM/DD/YYYY', 'DD-MM-YYYY', 'D MMM YYYY'] }, maintenance: { type: 'bool' }, maintenance_message: { max: 500 },
 };

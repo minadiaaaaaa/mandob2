@@ -180,6 +180,14 @@ export const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    // Phase 8: a company's request to close its account (the platform owner decides). Saved links are new tables.
+    id: 10, name: 'closure requests',
+    up: async () => {
+      await addColumn('tenants', 'closure_requested_at', 'DATETIME NULL');
+      await addColumn('tenants', 'closure_reason', 'VARCHAR(500) NULL');
+    },
+  },
 ];
 export const INVOICE_LINKS: [string, string, string][] = [
   ['invoices', 'buyer_id', 'invoice_buyers'], ['invoices', 'original_id', 'invoices'], ['invoice_lines', 'invoice_id', 'invoices'],

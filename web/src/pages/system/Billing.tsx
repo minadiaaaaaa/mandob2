@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { Lock } from 'lucide-react';
-import { ApiError, api, get } from '../../api';
+import { ApiError, api, del, get, post } from '../../api';
 import { useAuth } from '../../auth';
 import { useI18n } from '../../i18n';
 import { FEATURE_KEYS, LATER_KEYS, QUOTA_KEYS, planLimit, type FeatureKey, type LimitKey, type Plan, type QuotaKey } from '../../plans';
@@ -206,6 +206,34 @@ export default function BillingPage() {
           </div>
         )}
       </Modal>
+      <CloseCompany />
     </div>
+  );
+}
+
+// Closing the company's account: asked here, decided by the platform owner (routes/tools.ts).
+function CloseCompany() {
+  const { t } = useI18n();
+  const { can } = useAuth();
+  const run = useAction();
+  const [d, setD] = useState<any | null>(null);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [reason, setReason] = useState('');
+  const load = () => get('/company/closure').then(setD).catch(() => setD(null));
+  useEffect(() => { load(); }, []);
+  if (!d || !can('subscription.manage')) return null;
+  const send = async () => { if (await run(() => post('/company/closure', { confirm_name: name, reason }), t('close.sent'))) { setOpen(false); load(); } };
+  const cancel = async () => { if (await run(() => del('/company/closure'), t('close.cancelled'))) load(); };
+  return (
+    <Card title={t('close.title')} className="mt-6">
+      {d.closure_requested_at ? <div className="space-y-2 text-sm"><Alert tone="amber" title={t('close.pending')}>{d.closure_reason}</Alert>
+        <Button size="sm" onClick={cancel}>{t('close.cancel')}</Button></div>
+        : !open ? <div className="flex flex-wrap items-center justify-between gap-2 text-sm"><span className="text-zinc-600 dark:text-zinc-400">{t('close.intro')}</span><Button size="sm" variant="danger" onClick={() => setOpen(true)}>{t('close.request')}</Button></div>
+        : <div className="space-y-3 text-sm"><Alert tone="red">{t('close.warn')}</Alert>
+          <Field label={t('close.type_name', { name: d.name })}><input className="input" value={name} onChange={(e) => setName(e.target.value)} /></Field>
+          <Field label={t('close.reason')}><textarea className="input" rows={2} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
+          <div className="flex gap-2"><Button onClick={() => setOpen(false)}>{t('common.cancel')}</Button><Button variant="danger" disabled={name.trim() !== String(d.name).trim() || !reason.trim()} onClick={send}>{t('close.request')}</Button></div></div>}
+    </Card>
   );
 }

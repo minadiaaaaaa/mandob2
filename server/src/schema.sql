@@ -429,6 +429,29 @@ CREATE TABLE IF NOT EXISTS fin_stock_moves (
   KEY ix_t_item (tenant_id, item_id, move_date)
 );
 
+-- ======================================================================== smaller tools (phase 8)
+-- A user's own saved links (only they see them).
+CREATE TABLE IF NOT EXISTS bookmarks (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL,
+  user_id INT NOT NULL,
+  title VARCHAR(150) NOT NULL,
+  url VARCHAR(500) NOT NULL,
+  note VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY ix_t_user (tenant_id, user_id)
+);
+-- Links the platform owner shares with every company (platform-wide, no tenant).
+CREATE TABLE IF NOT EXISTS community_links (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(150) NOT NULL,
+  url VARCHAR(500) NOT NULL,
+  note VARCHAR(255) NULL,
+  sort INT NOT NULL DEFAULT 0,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ======================================================================== tax invoices (phase 7)
 -- The companies the company invoices (a delivery platform, usually), with what a tax invoice must show of them.
 CREATE TABLE IF NOT EXISTS invoice_buyers (

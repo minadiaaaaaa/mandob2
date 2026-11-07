@@ -152,7 +152,12 @@ ridersRouter.get('/riders', can('riders.view'), async (req, res) => {
   const data = await list(spec, query);
   // Cards follow the search and the company, contract, city, status and vehicle filters only.
   const w = where(spec, query, ['vehicle_type', 'documents', 'missing', 'nationality', 'language', 'has_phone', 'hired_from', 'hired_to']);
+  // working / ready / on leave as the dashboard counts them (domain/health.ts); the day is a checked YYYY-MM-DD
+  const dayNow = await today();
+  const onLeave = `EXISTS (SELECT 1 FROM leaves lv WHERE lv.rider_id = r.id AND lv.status = 'approved' AND '${dayNow}' BETWEEN lv.start_date AND lv.end_date)`;
   const [stats] = await q(`SELECT COUNT(*) total, COALESCE(SUM(r.status = 'active'),0) active, COALESCE(SUM(r.status = 'inactive'),0) inactive,
+    COALESCE(SUM(r.status = 'active' AND va.id IS NOT NULL),0) working, COALESCE(SUM(r.status = 'active' AND va.id IS NULL AND NOT ${onLeave}),0) ready,
+    COALESCE(SUM(r.status = 'active' AND ${onLeave}),0) on_leave,
     COALESCE(SUM(r.status = 'suspended'),0) suspended, COALESCE(SUM(r.status = 'terminated'),0) \`terminated\`, COALESCE(SUM(va.id IS NOT NULL),0) with_vehicle,
     COALESCE(SUM(r.company_id IS NULL),0) no_company, COALESCE(SUM(r.contract_id IS NULL),0) no_contract ${spec.from}${w.sql}`, w.params);
   res.json({ ...data, rows: await markPaused('riders', data.rows as { id: unknown }[]), stats });

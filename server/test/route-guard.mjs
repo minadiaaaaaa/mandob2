@@ -13,6 +13,7 @@ const EXCEPTIONS = [
   [/^\/lookups\//, "option lists for forms: requireUser, scoped to the company"],
   [/^\/meta\//, "badges and business rules: requireUser, filtered by the user's permissions"],
   [/^\/notifications\/mine$/, "the user's own notifications: requireUser"],
+  [/^\/bookmarks(\/:id)?$/, "the user's own saved links: requireUser, every query has the user's id (tools.ts)"],
   [/^\/plan\/usage$/, "the plan counters every screen shows (37/50): requireUser, the user's own company only"],
   [/^\/scans\//, "temporary uploads: requireUser, each scan bound to its uploader (scans.ts)"],
   [/^\/sync\/ingest$/, "the browser extension: its own company token, checked in the handler (sync.ts)"],

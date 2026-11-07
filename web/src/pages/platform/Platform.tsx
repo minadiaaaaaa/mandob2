@@ -7,7 +7,7 @@ import { Badge, Button, Card, Field, Loading, PageHeader, SidePanel, StatCard, S
 import { STATE_TONE } from '../system/Billing';
 import { FEATURE_KEYS, LATER_KEYS, LIMIT_KEYS, limitColumn, planLimit, type LimitKey, type Plan } from '../../plans';
 
-type Company = {
+type Company = { closure_requested_at?: string | null; closure_reason?: string | null;
   id: number; slug: string; name: string; name_en: string | null; phone: string | null; email: string | null; owner_email: string | null; plan_key: string;
   status: string; state: string; days_left: number; ends_at: string | null; billing_cycle: string; trial_ends_at: string | null; period_ends_at: string | null;
   extra_riders: number; extra_users: number; extra_vehicles: number; owner_note: string | null; created_at: string; last_login_at: string | null;
@@ -109,7 +109,7 @@ function Companies({ plans }: { plans: Plan[] }) {
             <thead><tr className="border-b border-zinc-100 dark:border-zinc-800">{['platform.company', 'billing.plan', 'billing.status', 'billing.days_left', 'billing.riders', 'billing.vehicles', 'billing.users', 'platform.last_login'].map((k) => <th key={k} className={th}>{t(k)}</th>)}</tr></thead>
             <tbody>{rows.map((c) => (
               <tr key={c.id} onClick={() => open(c)} className="cursor-pointer border-b border-zinc-50 last:border-0 hover:bg-zinc-50 dark:border-zinc-800/60 dark:hover:bg-zinc-800/40">
-                <td className={td}><div className="font-medium">{c.name}</div><div className="text-xs text-zinc-500" dir="ltr">{c.owner_email}</div></td>
+                <td className={td}><div className="font-medium">{c.name} {c.closure_requested_at && <Badge tone="red">{t('close.badge')}</Badge>}</div><div className="text-xs text-zinc-500" dir="ltr">{c.owner_email}</div>{c.closure_reason && <div className="text-xs text-red-600">{c.closure_reason}</div>}</td>
                 <td className={td}>{pname(c.plan_key)}</td>
                 <td className={td}><Badge tone={STATE_TONE[c.state]}>{t(`billing.state.${c.state}`)}</Badge></td>
                 <td className={cx(td, 'num')}>{c.days_left}</td>

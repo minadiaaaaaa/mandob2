@@ -27,6 +27,7 @@ import { ExitedPage, RiderPapersPage } from './pages/riders/Employees';
 import { CompanyFinancePage } from './pages/finance/CompanyFinance';
 import { PayrollPage, PayrollSheetPage, SettlementPage } from './pages/finance/Payroll';
 import { InvoiceEditPage, InvoiceViewPage, InvoicesPage } from './pages/finance/Invoices';
+import { BookmarksPage, DataManagementPage, IdCardsPage, PrintListsPage } from './pages/tools/Tools';
 import { CompaniesList, CompanyForm, CompanyView, ContractForm, ContractsList, ContractView } from './pages/performance/Companies';
 import { BlockedIps, Profile, RoleEdit, RolesList, RoleView, SessionsList, UserForm, UsersList, UserView } from './pages/admin/Access';
 import { AttachmentsIndex, AuditLog, LoginAttempts, Settings } from './pages/system/System';
@@ -130,6 +131,11 @@ export default function App() {
         <Route path="invoices" element={g('invoices.view', <InvoicesPage />)} />
         <Route path="invoices/:id" element={g('invoices.view', <InvoiceViewPage />)} />
         <Route path="invoices/:id/edit" element={g('invoices.update', <InvoiceEditPage />)} />
+        <Route path="print-lists/riders" element={g('riders.print', <PrintListsPage kind="riders" />)} />
+        <Route path="print-lists/vehicles" element={g('vehicles.view', <PrintListsPage kind="vehicles" />)} />
+        <Route path="id-cards" element={g('riders.print', <IdCardsPage />)} />
+        <Route path="data-management" element={<DataManagementPage />} />
+        <Route path="bookmarks" element={<BookmarksPage />} />
         <Route path="platform-ids/import" element={g('platform_ids.import', <PlatformIdsImport />)} />
 
         <Route path="leaves" element={g('leaves.view', <LeavesList />)} />

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { CalendarRange, Columns3, Eye, FileUp, Pencil, Plus, RefreshCw, Trash2, Users } from 'lucide-react';
-import { del, get, patch, post } from '../../api';
+import { CalendarRange, Columns3, Eye, FileUp, Pencil, Plus, Printer, RefreshCw, Target, Trash2, Users } from 'lucide-react';
+import { del, get, patch, post, put } from '../../api';
 import { useAuth } from '../../auth';
 import { fmtDateTime, fmtNum, useI18n } from '../../i18n';
 import { Alert, Badge, Button, Card, Checkbox, cx, Details, Field, IconButton, Loading, PageHeader, SidePanel, StatCard, StatGrid, toneText, useAction, useUi, type Tone } from '../../ui/kit';
@@ -24,14 +24,18 @@ const DEFAULT_COLS = ['company_name', 'city', 'contract_name', 'vehicle', 'tga_s
 
 // Rates are truncated, not rounded, so 95% never sits on a cell below 95%.
 export const pct = (v: unknown) => (v == null ? '—' : `${(Math.floor(Number(v) * 1000) / 10).toFixed(1)}%`);
+// The company's daily targets (server: dailyTargets), kept here so every coloured cell follows them.
+export const TARGETS = { orders: 15, hours: 8, declined: 2 };
+export const setTargets = (t?: { orders: number; hours: number; declined: number }) => { if (t) Object.assign(TARGETS, t); };
 export const toneFor = (k: string, v: unknown): Tone => {
   if (v == null || v === '') return 'none';
   const n = Number(v);
   switch (k) {
-    case 'completed': return n < 10 ? 'red' : n < 15 ? 'amber' : 'green';
+    case 'completed': return n >= TARGETS.orders ? 'green' : n >= TARGETS.orders * (2 / 3) ? 'amber' : 'red';
+    case 'declined': return n > TARGETS.declined ? 'red' : 'none';
     case 'attendance_rate': return n < 0.7 ? 'red' : n < 0.95 ? 'amber' : 'green';
     case 'acceptance_rate': return n < 0.85 ? 'red' : n < 0.95 ? 'amber' : 'green';
-    case 'actual_hours': case 'avg_hours': return n < 6 ? 'red' : n < 8 ? 'amber' : 'green';
+    case 'actual_hours': case 'avg_hours': return n >= TARGETS.hours ? 'green' : n >= TARGETS.hours * 0.75 ? 'amber' : 'red';
     case 'lost_hours': return n >= 2.5 ? 'red' : n >= 1 ? 'amber' : 'none';
     case 'no_shows': return n > 0 ? 'red' : 'none';
     case 'tga_status': return String(v).toLowerCase() === 'compliant' ? 'green' : 'amber';
@@ -73,6 +77,10 @@ export function PerformanceList() {
   const cities = useOptions<any>('/lookups/cities');
   const [cols, setCols] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('lsp.perf.cols') ?? '') ?? DEFAULT_COLS; } catch { return DEFAULT_COLS; } });
   const [picking, setPicking] = useState(false);
+  const [targeting, setTargeting] = useState(false);
+  const tf = useForm<Record<string, any>>({ orders: '', hours: '', declined: '' });
+  setTargets(list.data?.targets);
+  const saveTargets = async () => { const r = await tf.submit(() => put('/performance-targets', tf.values)); if (r) { setTargeting(false); list.reload(); } };
   useEffect(() => { try { localStorage.setItem('lsp.perf.cols', JSON.stringify(cols)); } catch { /* ignore */ } }, [cols]);
   const s = list.stats ?? {};
   const remove = async (ids: (string | number)[]) => {
@@ -94,7 +102,9 @@ export function PerformanceList() {
       <PageHeader title={t('perf.title')} actions={<>
         <Link to={`/admin/performance/riders?from=${list.query.from ?? ''}&to=${list.query.to ?? ''}`}><Button icon={<Users className="size-4" />}>{t('perf.scorecard')}</Button></Link>
         {can('platform_ids.view') && <Link to="/admin/platform-ids?tab=shared"><Button icon={<Users className="size-4" />}>{t('pids.tab_shared')}</Button></Link>}
+        <Button icon={<Target className="size-4" />} onClick={() => { tf.reset({ orders: TARGETS.orders, hours: TARGETS.hours, declined: TARGETS.declined }); setTargeting(true); }}>{t('perf.target')}: <span className="num">{TARGETS.orders} · {TARGETS.hours}h · ≤{TARGETS.declined}</span></Button>
         <Button icon={<Columns3 className="size-4" />} onClick={() => setPicking(true)}>{t('perf.columns')} <span className="num text-zinc-500">{cols.length}/{OPTIONAL.length}</span></Button>
+        <Button icon={<Printer className="size-4" />} onClick={() => window.print()}>{t('pay.print')}</Button>
         {can('performance.export') && <ExportButton path="/performance/export" query={{ ...list.query, cols: cols.join(',') }} />}
         {can('performance.import') && <Link to="/admin/performance/import"><Button icon={<FileUp className="size-4" />}>{t('perf.import')}</Button></Link>}
         {can('sync.run') && <Link to="/admin/sync"><Button icon={<RefreshCw className="size-4" />}>{t('perf.sync_hs')}</Button></Link>}
@@ -128,6 +138,15 @@ export function PerformanceList() {
         <Button size="sm" variant="ghost" onClick={() => setCols([])}>{t('perf.cols_none')}</Button></>}>
         <ul className="space-y-2">{OPTIONAL.map((k) => <li key={k}><Checkbox checked={cols.includes(k)} onChange={(v) => setCols(v ? OPTIONAL.filter((x) => x === k || cols.includes(x)) : cols.filter((x) => x !== k))}
           label={<span>{t(`perf.m.${k === 'city' ? 'city_ar' : k}`)}<span className="block text-xs text-zinc-500">{t(`perf.h.${k}`)}</span></span>} /></li>)}</ul>
+      </SidePanel>
+      <SidePanel open={targeting} onClose={() => setTargeting(false)} title={t('perf.target_title')}
+        footer={<><Button onClick={() => setTargeting(false)}>{t('common.cancel')}</Button>{can('performance.update') && <Button variant="primary" disabled={tf.busy} onClick={saveTargets}>{t('common.save')}</Button>}</>}>
+        <p className="mb-3 text-sm text-zinc-600 dark:text-zinc-400">{t('perf.target_intro')}</p>
+        <Grid>
+          <TextInput form={tf} name="orders" type="number" label={t('perf.target_orders')} dir="ltr" disabled={!can('performance.update')} />
+          <TextInput form={tf} name="hours" type="number" label={t('perf.target_hours')} dir="ltr" disabled={!can('performance.update')} />
+          <TextInput form={tf} name="declined" type="number" label={t('perf.target_declined')} dir="ltr" disabled={!can('performance.update')} />
+        </Grid>
       </SidePanel>
     </>
   );

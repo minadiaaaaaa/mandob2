@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Bell, CarFront, Check, ChevronLeft, ChevronRight, Eye, FileClock, HandCoins, RefreshCw, Settings2, Trash2, Users, ExternalLink } from 'lucide-react';
+import { Bell, CarFront, Check, ChevronLeft, ChevronRight, Eye, FileClock, HandCoins, RefreshCw, Settings2, Trash2, Users, ExternalLink, Printer } from 'lucide-react';
 import { del, get, post, put } from '../../api';
 import { useAuth } from '../../auth';
 import { fmtDateTime, fmtNum, useI18n } from '../../i18n';
@@ -90,6 +90,7 @@ export function ReportView() {
         <Link to="/admin/reports"><Button variant="ghost">{t('rep.all')}</Button></Link>
         <Button icon={<RefreshCw className="size-4" />} onClick={load}>{t('common.refresh')}</Button>
         {can('reports.export') && <span title={t('rep.export_hint')}><ExportButton path={`/reports/${name}/export`} query={query} label={t('rep.export')} /></span>}
+        {can('reports.print') && <Button icon={<Printer className="size-4" />} onClick={() => window.print()}>{t('pay.print')}</Button>}
       </>} />
       <StatGrid>{Object.entries(s).map(([k, v]) => <StatCard key={k} label={t(k)} value={typeof v === 'string' ? `${fmtNum(Number(v), 2)} SAR` : fmtNum(v as number)} />)}</StatGrid>
       <Card title={t('rep.search')} className="mb-4">

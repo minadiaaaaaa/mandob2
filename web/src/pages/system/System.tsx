@@ -96,6 +96,9 @@ function OrgTab() {
       </div></Card>
       <Card title={t('org.sec.legal')}><div className="grid gap-4 sm:grid-cols-3">
         {f('unified_number', 'org.unified_number', { hint: t('org.unified_hint') })}{f('cr_number', 'org.cr_number')}{f('tax_number', 'org.tax_number', { hint: t('org.tax_hint') })}
+        {f('cr_expiry', 'org.cr_expiry', { type: 'date' })}{f('city_cr_number', 'org.city_cr_number')}{f('city_cr_expiry', 'org.city_cr_expiry', { type: 'date' })}
+        {f('vat_cert_expiry', 'org.vat_cert_expiry', { type: 'date' })}{f('gosi_number', 'org.gosi_number')}{f('qiwa_number', 'org.qiwa_number')}
+        {f('labor_office_number', 'org.labor_office_number')}
       </div></Card>
       <Card title={t('org.sec.contact')}><div className="grid gap-4 sm:grid-cols-2">
         {f('support_email', 'org.support_email', { type: 'email' })}{f('support_phone', 'org.support_phone', { hint: t('org.phone_hint') })}

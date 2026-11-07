@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { exec, one, q, settingInt } from '../db.js';
 import { addDays, clean, eq, fail, langOf, list, listAll, sendExport, today, tr, where, type Query, type Spec } from '../http.js';
-import { can, requireUser } from '../auth.js';
+import { can, has, requireUser } from '../auth.js';
+import { companyDashboard } from '../domain/health.js';
+import { financeOverview } from '../domain/companyFinance.js';
 import { audit } from '../audit.js';
 import { alertsUnion } from './docs.js';
 import { notifyRider, notifyUsers } from '../notify.js';
@@ -57,7 +59,15 @@ dashboardRouter.get('/dashboard', can('dashboard.view'), async (req, res) => {
   };
   const events = await part(async () => q(`SELECT id, created_at, action, actor_name, entity_type, entity_id, details, severity FROM audit_log ORDER BY id DESC LIMIT ?`,
     [await settingInt('dashboard.recent_activity_limit', 12)]));
-  res.json({ alerts, figures, charts, events });
+  // phase 8: the company's health, profile, cards, riders and vehicles sections, and money (for those who see finance)
+  const company = await part(() => companyDashboard(Number(req.user!.tenant_id), day, t3));
+  const finance = has(req, 'company_finance.view') ? await part(async () => {
+    const o = await financeOverview(day);
+    const [p] = await q<any>("SELECT COUNT(*) n, COALESCE(SUM(amount), 0) amount FROM advances WHERE status IN ('pending','approved')");
+    const upcoming = await q("SELECT d.id, d.due_date, d.amount, o.title FROM fin_obligation_dues d JOIN fin_obligations o ON o.id = d.obligation_id WHERE d.status = 'due' AND d.due_date >= ? ORDER BY d.due_date LIMIT 5", [day]);
+    return { ...o, pending_employee: { n: Number(p.n), amount: Number(p.amount) }, upcoming };
+  }) : null;
+  res.json({ alerts, figures, charts, events, company, finance });
 });
 
 // ======================================================================== 9.2 reports
