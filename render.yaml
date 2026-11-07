@@ -1,0 +1,39 @@
+# Staging on Render's free plan (Render › New › Blueprint, pick this repository and branch).
+# One web service runs the API and serves the built web app. The database is outside Render (for example Aiven's
+# free MySQL): fill the values marked "sync: false" in the Render dashboard, never in this file.
+# Free plan limits: the service sleeps after 15 minutes without visits (the first visit then takes about a minute),
+# and its disk is not kept between deploys, so uploaded files (server/data) are lost on every deploy. Staging only.
+services:
+  - type: web
+    name: mandoob-staging
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: >-
+      npx --yes pnpm@12.18.0 -C server install --frozen-lockfile --prod=false &&
+      npx --yes pnpm@12.18.0 -C web install --frozen-lockfile --prod=false &&
+      npx --yes pnpm@12.18.0 -C web build
+    startCommand: cd server && node --import tsx src/index.ts
+    healthCheckPath: /api/public/plans
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: HOST
+        value: 0.0.0.0
+      - key: TRUST_PROXY
+        value: "1"
+      - key: PLATFORM_NAME
+        value: Mandoob Staging
+      # Encrypts stored private keys. Generated once by Render and kept; changing it makes those keys unreadable.
+      - key: APP_KEY
+        generateValue: true
+      # mysql://user:password@host:port/defaultdb?ssl=1 (percent-encode special characters in the password)
+      - key: DATABASE_URL
+        sync: false
+      # The database's CA certificate (Aiven › service › Overview › CA certificate), pasted as text
+      - key: DB_SSL_CA
+        sync: false
+      - key: OWNER_EMAIL
+        sync: false
+      - key: OWNER_PASSWORD
+        sync: false

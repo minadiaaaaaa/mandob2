@@ -32,7 +32,8 @@ export function dbConfig(): DbConfig | null {
 // ANSI_QUOTES lets "double quoted" names work as identifiers alongside `backticks`.
 const SQL_MODE = 'ANSI_QUOTES,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 function options(config: DbConfig, withDatabase = true): mysql.PoolOptions {
-  const ca = process.env.DB_SSL_CA_FILE ? readFileSync(process.env.DB_SSL_CA_FILE, 'utf8') : undefined;
+  // The CA as a file, or as the PEM text itself (hosts such as Render only take environment values).
+  const ca = process.env.DB_SSL_CA_FILE ? readFileSync(process.env.DB_SSL_CA_FILE, 'utf8') : process.env.DB_SSL_CA?.replace(/\\n/g, '\n') || undefined;
   return {
     host: config.host, port: config.port, user: config.user, password: config.password,
     ...(withDatabase ? { database: config.database } : {}),
