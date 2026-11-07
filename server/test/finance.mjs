@@ -43,7 +43,8 @@ const signup = async (tag) => {
 };
 const num = (x) => Number(x);
 const a = await signup("fin-a"), b = await signup("fin-b");
-const today = new Date().toISOString().slice(0, 10), month = today.slice(0, 7);
+// the company's calendar day (new companies use Asia/Riyadh), not the UTC one
+const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh" }).format(new Date()), month = today.slice(0, 7);
 const upload = async (c, entity_type, entity_id, attachment_type) => {
   const fd = new FormData();
   fd.append("entity_type", entity_type); fd.append("entity_id", String(entity_id)); if (attachment_type) fd.append("attachment_type", attachment_type);

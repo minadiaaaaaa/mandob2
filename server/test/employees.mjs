@@ -40,7 +40,8 @@ const signup = async (tag) => {
 };
 const a = await signup("emp-a"), b = await signup("emp-b");
 const rid = 6000000 + Math.floor(Math.random() * 900000);
-const today = new Date().toISOString().slice(0, 10);
+// the company's calendar day (new companies use Asia/Riyadh), not the UTC one
+const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh" }).format(new Date());
 
 // --- visa, sponsor and passport on the rider
 must(await a.api("POST", "/riders", { id: rid, full_name: "Visa Rider", hire_date: "2026-01-10", visa_number: "V-778", visa_type: "work", visa_expiry: "2027-03-01", sponsor_name: "Himmat Co", sponsor_number: "700123", passport_number: "BX12345", passport_expiry: "2030-01-01" }), "rider");
