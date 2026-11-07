@@ -1,6 +1,6 @@
 import { unreadIssues } from './issues.js';
 import { Router, type Request } from 'express';
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DATA_DIR, exec, one, q, setSetting, settingInt, tx } from '../db.js';
@@ -80,8 +80,16 @@ systemRouter.patch('/settings/system', can('system_settings.update'), async (req
 
 // ---------- private keys: values are encrypted at rest and never shown ----------
 const KEY_FILE = join(DATA_DIR, 'app.key');
+// APP_KEY is 32 bytes in base64 or 64 hex characters (what hosts such as Render generate). Any other text is turned
+// into a 32-byte key with SHA-256, so a key of another shape still works and stays the same between starts.
+export function keyFrom(text: string) {
+  if (/^[0-9a-f]{64}$/i.test(text)) return Buffer.from(text, 'hex');
+  const b64 = Buffer.from(text, 'base64');
+  if (b64.length === 32 && b64.toString('base64').replace(/=+$/, '') === text.replace(/=+$/, '')) return b64;
+  return createHash('sha256').update(text, 'utf8').digest();
+}
 export function appKey() {
-  if (process.env.APP_KEY) return Buffer.from(process.env.APP_KEY, 'base64');
+  if (process.env.APP_KEY) return keyFrom(process.env.APP_KEY.trim());
   if (!existsSync(KEY_FILE)) writeFileSync(KEY_FILE, randomBytes(32).toString('base64'), { mode: 0o600 });
   return Buffer.from(readFileSync(KEY_FILE, 'utf8').trim(), 'base64');
 }
