@@ -1,0 +1,12 @@
+**/node_modules
+web/dist
+server/data
+.git
+.env
+.env.*
+!.env.example
+.vercel
+.wrangler
+.qa-reports
+*.log
+*.pdf
